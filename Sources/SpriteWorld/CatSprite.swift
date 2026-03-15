@@ -42,7 +42,8 @@ public class CatSprite: SKSpriteNode {
 
     public init() {
         let texture = TextureManager.shared.texture(for: "cat_sleep")
-        super.init(texture: texture, color: .clear, size: CGSize(width: 32, height: 32))
+        // 12x12 pixel art scaled 4x = 48x48
+        super.init(texture: texture, color: .clear, size: CGSize(width: 48, height: 48))
         self.name = "office_cat"
         self.zPosition = 100
         startSleeping()

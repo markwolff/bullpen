@@ -46,12 +46,12 @@ public class AgentSprite: SKSpriteNode {
         self.nameLabel = SKLabelNode()
         self.statusIndicator = SKShapeNode(circleOfRadius: 4)
 
-        // Load texture from TextureManager
+        // Load texture from TextureManager — 16x24 pixel art scaled 3x = 48x72
         let textureName = Self.textureName(for: agentInfo.agentType, state: agentInfo.state)
         let texture = TextureManager.shared.texture(for: textureName)
-        let placeholderSize = CGSize(width: 32, height: 48)
+        let spriteSize = CGSize(width: 48, height: 72)
 
-        super.init(texture: texture, color: .clear, size: placeholderSize)
+        super.init(texture: texture, color: .clear, size: spriteSize)
 
         self.name = "agent_\(agentInfo.id)"
         self.colorBlendFactor = 0
@@ -64,10 +64,10 @@ public class AgentSprite: SKSpriteNode {
     }
 
     private func setupChildNodes() {
-        // Name label below the sprite
+        // Name label below the sprite — pixel font style
         nameLabel.text = agentInfo.name
-        nameLabel.fontName = "Helvetica-Bold"
-        nameLabel.fontSize = 10
+        nameLabel.fontName = "Menlo-Bold"
+        nameLabel.fontSize = 11
         nameLabel.fontColor = .white
         nameLabel.position = CGPoint(x: 0, y: -size.height / 2 - 14)
         nameLabel.horizontalAlignmentMode = .center

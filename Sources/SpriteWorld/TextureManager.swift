@@ -83,7 +83,7 @@ public final class TextureManager: @unchecked Sendable {
 
     // MARK: - Public API
 
-    /// Returns a texture for the given name, loading from atlas or generating a placeholder.
+    /// Returns a texture for the given name, using pixel art generator first.
     public func texture(for name: String) -> SKTexture {
         lock.lock()
         defer { lock.unlock() }
@@ -92,14 +92,21 @@ public final class TextureManager: @unchecked Sendable {
             return cached
         }
 
-        // Try loading from atlas
+        // Priority 1: Generate pixel art (Stardew Valley style)
+        if let pixelArt = generatePixelArt(for: name) {
+            pixelArt.filteringMode = .nearest
+            cache[name] = pixelArt
+            return pixelArt
+        }
+
+        // Priority 2: Try loading from atlas
         if let atlasTexture = loadFromAtlas(name: name) {
             atlasTexture.filteringMode = .nearest
             cache[name] = atlasTexture
             return atlasTexture
         }
 
-        // Try loading from bundled PNG resource
+        // Priority 3: Try loading from bundled PNG resource
         if let bundleTexture = loadFromBundle(name: name) {
             bundleTexture.filteringMode = .nearest
             cache[name] = bundleTexture
@@ -114,54 +121,16 @@ public final class TextureManager: @unchecked Sendable {
     }
 
     /// Returns animation frames for a given agent prefix and state.
-    /// Frame names follow the pattern: `{prefix}_{state}_{frameIndex}`
-    /// Falls back to placeholder frames with slightly varying colors.
+    /// Uses pixel art generator for consistent Stardew Valley style.
     public func animationFrames(prefix: String, state: AgentState) -> [SKTexture] {
         let frameCount = Self.frameCount(for: state)
-        let baseColor = Self.colorForTextureName("\(prefix)_\(state.rawValue)")
-        let size = CGSize(width: 32, height: 48)
 
-        var frames: [SKTexture] = []
-        for i in 0..<frameCount {
-            let frameName = "\(prefix)_\(state.rawValue)_\(i)"
+        // Use the base state texture from pixel art for all frames
+        // (the pixel art is static per state, animation comes from the scene)
+        let baseName = "\(prefix)_\(state.rawValue)"
+        let baseTexture = texture(for: baseName)
 
-            lock.lock()
-            if let cached = cache[frameName] {
-                lock.unlock()
-                frames.append(cached)
-                continue
-            }
-            lock.unlock()
-
-            // Try loading from atlas
-            if let atlasTexture = loadFromAtlas(name: frameName) {
-                atlasTexture.filteringMode = .nearest
-                lock.lock()
-                cache[frameName] = atlasTexture
-                lock.unlock()
-                frames.append(atlasTexture)
-            } else if let bundleTexture = loadFromBundle(name: frameName) {
-                bundleTexture.filteringMode = .nearest
-                lock.lock()
-                cache[frameName] = bundleTexture
-                lock.unlock()
-                frames.append(bundleTexture)
-            } else {
-                // Fall back to base state texture (without frame index) from bundle
-                let baseName = "\(prefix)_\(state.rawValue)"
-                let tex = loadFromBundle(name: baseName) ?? {
-                    let variation = CGFloat(i) * 0.08
-                    let variedColor = Self.varyColor(baseColor, by: variation)
-                    return Self.placeholderTexture(size: size, color: variedColor)
-                }()
-                tex.filteringMode = .nearest
-                lock.lock()
-                cache[frameName] = tex
-                lock.unlock()
-                frames.append(tex)
-            }
-        }
-        return frames
+        return Array(repeating: baseTexture, count: frameCount)
     }
 
     /// Returns the expected frame count for a given state.
@@ -198,6 +167,50 @@ public final class TextureManager: @unchecked Sendable {
         let texture = SKTexture(image: image)
         texture.filteringMode = .nearest
         return texture
+    }
+
+    // MARK: - Pixel Art Generation
+
+    /// Generates a Stardew Valley-style pixel art texture for the given name.
+    private func generatePixelArt(for name: String) -> SKTexture? {
+        let gen = PixelArtGenerator.shared
+
+        // Tiles
+        if name == Self.tileFloor { return gen.floorTile() }
+        if name == Self.tileWall { return gen.wallTile() }
+
+        // Furniture
+        if name == Self.furnitureDesk { return gen.desk() }
+        if name == Self.furnitureChair { return gen.chair() }
+        if name == Self.furnitureMonitorOff { return gen.monitorOff() }
+        if name == Self.furnitureMonitorOn { return gen.monitorOn() }
+        if name == Self.furnitureLamp { return gen.lamp() }
+        if name == Self.furnitureCoffeeMug { return gen.coffeeMug() }
+
+        // Decorations
+        if name == Self.decorationPlant { return gen.plant() }
+        if name == Self.decorationWindow { return gen.windowDecoration() }
+        if name == Self.decorationWhiteboard { return gen.whiteboard() }
+        if name == Self.decorationClock { return gen.clock() }
+
+        // Cat
+        if name == Self.catIdle { return gen.catIdle() }
+        if name == Self.catSleep { return gen.catSleep() }
+        if name == Self.catWalk { return gen.catWalk() }
+
+        // Characters - Claude
+        if name.hasPrefix("char_claude_") {
+            let state = String(name.dropFirst("char_claude_".count))
+            return gen.claudeCharacter(state: state)
+        }
+
+        // Characters - Codex
+        if name.hasPrefix("char_codex_") {
+            let state = String(name.dropFirst("char_codex_".count))
+            return gen.codexCharacter(state: state)
+        }
+
+        return nil
     }
 
     // MARK: - Private Helpers

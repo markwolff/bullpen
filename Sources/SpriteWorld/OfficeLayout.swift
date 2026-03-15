@@ -28,24 +28,24 @@ public struct OfficeLayout: Sendable {
     /// Area where agents can walk (simplified as a rect for now)
     public let walkableArea: CGRect
 
-    /// Creates the default office layout.
+    /// Creates the default office layout with Stardew Valley-proportioned desk spacing.
     public static func defaultLayout() -> OfficeLayout {
         let sceneSize = CGSize(width: 1024, height: 768)
 
-        // TODO: Design a more interesting office layout
-        // For now, arrange desks in two rows
+        // Desks arranged in two rows with wider spacing for larger sprites
         var desks: [DeskPosition] = []
-        let deskSpacing: CGFloat = 180
-        let rowY: [CGFloat] = [500, 250]
+        let deskSpacing: CGFloat = 220
+        let rowY: [CGFloat] = [370, 170]
+        let startX: CGFloat = 170
 
         var deskID = 0
         for y in rowY {
             for col in 0..<4 {
-                let x = 200 + CGFloat(col) * deskSpacing
+                let x = startX + CGFloat(col) * deskSpacing
                 desks.append(DeskPosition(
                     id: deskID,
                     position: CGPoint(x: x, y: y),
-                    chairPosition: CGPoint(x: x, y: y - 40)
+                    chairPosition: CGPoint(x: x, y: y - 60)
                 ))
                 deskID += 1
             }

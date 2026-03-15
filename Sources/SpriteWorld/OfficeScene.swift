@@ -58,6 +58,7 @@ public class OfficeScene: SKScene {
     /// Public for testing purposes.
     public func setupOffice() {
         setupTiledBackground()
+        setupRug()
         setupDesks()
         setupDecorations()
         setupTitleLabel()
@@ -67,27 +68,36 @@ public class OfficeScene: SKScene {
 
     // MARK: - 6.4: Tiled Background
 
-    /// Tiles the background with repeating tile-sized nodes.
+    /// Tiles the background with repeating pixel-art tiles, scaled up for chunky look.
     private func setupTiledBackground() {
-        let tileSize: CGFloat = 32
+        // Pixel art tiles are 16x16, scaled 3x for a chunky Stardew Valley look
+        let tileDisplaySize: CGFloat = 48
 
-        // Wall (top 1/3) — tile-sized nodes
+        // Wall (top 1/3) — warm plaster tiles
         let wallTexture = TextureManager.shared.texture(for: TextureManager.tileWall)
         let wallHeight = layout.sceneSize.height / 3
         let wallBottom = layout.sceneSize.height - wallHeight
 
-        var x: CGFloat = tileSize / 2
+        var x: CGFloat = tileDisplaySize / 2
         while x < layout.sceneSize.width {
-            var y = wallBottom + tileSize / 2
+            var y = wallBottom + tileDisplaySize / 2
             while y < layout.sceneSize.height {
-                let tile = SKSpriteNode(texture: wallTexture, size: CGSize(width: tileSize, height: tileSize))
+                let tile = SKSpriteNode(texture: wallTexture, size: CGSize(width: tileDisplaySize, height: tileDisplaySize))
                 tile.position = CGPoint(x: x, y: y)
                 tile.zPosition = -10
                 addChild(tile)
-                y += tileSize
+                y += tileDisplaySize
             }
-            x += tileSize
+            x += tileDisplaySize
         }
+
+        // Baseboard trim at the wall-floor boundary
+        let trimColor = SKColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1.0)
+        let trim = SKShapeNode(rect: CGRect(x: 0, y: wallBottom - 3, width: layout.sceneSize.width, height: 6))
+        trim.fillColor = trimColor
+        trim.strokeColor = .clear
+        trim.zPosition = -8
+        addChild(trim)
 
         // Add a single named wall node for test compatibility
         let wall = SKSpriteNode(
@@ -102,21 +112,21 @@ public class OfficeScene: SKScene {
         wall.zPosition = -11
         addChild(wall)
 
-        // Floor (bottom 2/3) — tile-sized nodes
+        // Floor (bottom 2/3) — wood plank tiles
         let floorTexture = TextureManager.shared.texture(for: TextureManager.tileFloor)
         let floorHeight = layout.sceneSize.height * 2 / 3
 
-        x = tileSize / 2
+        x = tileDisplaySize / 2
         while x < layout.sceneSize.width {
-            var y: CGFloat = tileSize / 2
+            var y: CGFloat = tileDisplaySize / 2
             while y < floorHeight {
-                let tile = SKSpriteNode(texture: floorTexture, size: CGSize(width: tileSize, height: tileSize))
+                let tile = SKSpriteNode(texture: floorTexture, size: CGSize(width: tileDisplaySize, height: tileDisplaySize))
                 tile.position = CGPoint(x: x, y: y)
                 tile.zPosition = -10
                 addChild(tile)
-                y += tileSize
+                y += tileDisplaySize
             }
-            x += tileSize
+            x += tileDisplaySize
         }
 
         // Add a single named floor node for test compatibility
@@ -131,89 +141,107 @@ public class OfficeScene: SKScene {
         floor.name = "floor"
         floor.zPosition = -11
         addChild(floor)
+    }
 
-        // Floor grain lines (thin horizontal lines) — task 4.3
-        let grainColor = SKColor(red: 0.659, green: 0.596, blue: 0.510, alpha: 0.3)
-        let grainSpacing: CGFloat = 20
-        var grainY = grainSpacing
-        while grainY < floorHeight {
-            let grainLine = SKShapeNode(
-                rect: CGRect(
-                    x: 0,
-                    y: grainY - 0.5,
-                    width: layout.sceneSize.width,
-                    height: 1
-                )
-            )
-            grainLine.fillColor = grainColor
-            grainLine.strokeColor = .clear
-            grainLine.name = "floorGrain"
-            grainLine.zPosition = -9
-            addChild(grainLine)
-            grainY += grainSpacing
+    // MARK: - Cozy Rug
+
+    /// Adds a warm-colored area rug in the center of the office.
+    private func setupRug() {
+        let rugWidth: CGFloat = 700
+        let rugHeight: CGFloat = 280
+        let rugCenter = CGPoint(x: layout.sceneSize.width / 2, y: 270)
+
+        // Rug border (darker)
+        let rugBorder = SKShapeNode(rectOf: CGSize(width: rugWidth + 12, height: rugHeight + 12), cornerRadius: 8)
+        rugBorder.fillColor = SKColor(red: 0.55, green: 0.25, blue: 0.18, alpha: 0.6)
+        rugBorder.strokeColor = .clear
+        rugBorder.position = rugCenter
+        rugBorder.zPosition = -8
+        addChild(rugBorder)
+
+        // Rug body (warm red/terracotta)
+        let rug = SKShapeNode(rectOf: CGSize(width: rugWidth, height: rugHeight), cornerRadius: 4)
+        rug.fillColor = SKColor(red: 0.65, green: 0.32, blue: 0.22, alpha: 0.45)
+        rug.strokeColor = .clear
+        rug.position = rugCenter
+        rug.zPosition = -7
+        addChild(rug)
+
+        // Rug pattern — simple diamond shapes
+        let patternColor = SKColor(red: 0.72, green: 0.40, blue: 0.28, alpha: 0.35)
+        for dx in stride(from: -280.0, through: 280.0, by: 140.0) {
+            for dy in stride(from: -80.0, through: 80.0, by: 80.0) {
+                let diamond = SKShapeNode(rectOf: CGSize(width: 20, height: 20))
+                diamond.fillColor = patternColor
+                diamond.strokeColor = .clear
+                diamond.zRotation = .pi / 4
+                diamond.position = CGPoint(x: rugCenter.x + CGFloat(dx), y: rugCenter.y + CGFloat(dy))
+                diamond.zPosition = -6
+                addChild(diamond)
+            }
         }
     }
 
     // MARK: - 6.3: Furniture Textures
 
-    /// Sets up desks with texture-based rendering.
+    /// Sets up desks with pixel art textures scaled up for Stardew Valley feel.
     private func setupDesks() {
         let tm = TextureManager.shared
 
         for desk in layout.desks {
-            // Desk — use texture
+            // Desk — 24x16 pixel art scaled 4x = 96x64 display
             let deskTexture = tm.texture(for: TextureManager.furnitureDesk)
-            let deskNode = SKSpriteNode(texture: deskTexture, size: CGSize(width: 60, height: 40))
+            let deskNode = SKSpriteNode(texture: deskTexture, size: CGSize(width: 96, height: 64))
             deskNode.position = desk.position
             deskNode.name = "desk_\(desk.id)"
             deskNode.zPosition = 1
             addChild(deskNode)
 
-            // Chair — pushed back 5 points for empty desk ambient state (8.5)
+            // Chair — 12x16 pixel art scaled 3x = 36x48 display
             let chairTexture = tm.texture(for: TextureManager.furnitureChair)
-            let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 20, height: 20))
-            chairNode.position = CGPoint(x: 0, y: -45)
+            let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 36, height: 48))
+            chairNode.position = CGPoint(x: 0, y: -60)
             chairNode.name = "chair_\(desk.id)"
             deskNode.addChild(chairNode)
 
-            // Monitor (off by default)
+            // Monitor — 12x10 pixel art scaled 3x = 36x30 display
             let monitorTexture = tm.texture(for: TextureManager.furnitureMonitorOff)
-            let monitorNode = SKSpriteNode(texture: monitorTexture, size: CGSize(width: 20, height: 14))
-            monitorNode.position = CGPoint(x: 0, y: 8)
+            let monitorNode = SKSpriteNode(texture: monitorTexture, size: CGSize(width: 36, height: 30))
+            monitorNode.position = CGPoint(x: 0, y: 20)
             monitorNode.name = "monitor_\(desk.id)"
             monitorNode.zPosition = 2
             deskNode.addChild(monitorNode)
 
-            // Monitor glow node (initially invisible) — task 4.11
-            let glowNode = SKShapeNode(rectOf: CGSize(width: 30, height: 24), cornerRadius: 4)
+            // Monitor glow node (initially invisible)
+            let glowNode = SKShapeNode(rectOf: CGSize(width: 44, height: 36), cornerRadius: 4)
             glowNode.fillColor = .clear
             glowNode.strokeColor = .clear
-            glowNode.position = CGPoint(x: 0, y: 8)
+            glowNode.position = CGPoint(x: 0, y: 20)
             glowNode.name = "monitorGlow_\(desk.id)"
             glowNode.zPosition = 3
             glowNode.alpha = 0
             deskNode.addChild(glowNode)
 
-            // Coffee mug on each desk (6.17)
+            // Coffee mug — 8x8 pixel art scaled 3x = 24x24 display
             let mugTexture = tm.texture(for: TextureManager.furnitureCoffeeMug)
-            let mugNode = SKSpriteNode(texture: mugTexture, size: CGSize(width: 10, height: 12))
-            mugNode.position = CGPoint(x: 22, y: 5)
+            let mugNode = SKSpriteNode(texture: mugTexture, size: CGSize(width: 24, height: 24))
+            mugNode.position = CGPoint(x: 34, y: 10)
             mugNode.name = "coffeeMug_\(desk.id)"
             mugNode.zPosition = 2
             deskNode.addChild(mugNode)
 
-            // Steam emitter on coffee mug (6.15) with horizontal wobble (8.3)
+            // Steam emitter
             let steam = createSteamEmitter()
-            steam.position = CGPoint(x: 22, y: 12)
+            steam.position = CGPoint(x: 34, y: 24)
             steam.name = "steamEmitter_\(desk.id)"
             steam.zPosition = 4
             deskNode.addChild(steam)
 
-            // Lamp on alternating desks (6.17)
+            // Lamp on alternating desks — 8x16 pixel art scaled 3x = 24x48
             if desk.id % 2 == 0 {
                 let lampTexture = tm.texture(for: TextureManager.furnitureLamp)
-                let lampNode = SKSpriteNode(texture: lampTexture, size: CGSize(width: 16, height: 32))
-                lampNode.position = CGPoint(x: -22, y: 10)
+                let lampNode = SKSpriteNode(texture: lampTexture, size: CGSize(width: 24, height: 48))
+                lampNode.position = CGPoint(x: -34, y: 16)
                 lampNode.name = "lamp_\(desk.id)"
                 lampNode.zPosition = 2
                 deskNode.addChild(lampNode)
@@ -247,57 +275,77 @@ public class OfficeScene: SKScene {
 
     // MARK: - 6.17: Decorations
 
-    /// Adds static decoration nodes to the office.
+    /// Adds static decoration nodes to the office — scaled up pixel art.
     private func setupDecorations() {
         let tm = TextureManager.shared
 
-        // 2 plants at corners
+        // Plants at corners — 12x20 pixel art scaled 4x = 48x80
         let plantTexture = tm.texture(for: TextureManager.decorationPlant)
 
-        let plant1 = SKSpriteNode(texture: plantTexture, size: CGSize(width: 24, height: 40))
-        plant1.position = CGPoint(x: 40, y: layout.sceneSize.height - 80)
+        let plant1 = SKSpriteNode(texture: plantTexture, size: CGSize(width: 48, height: 80))
+        plant1.position = CGPoint(x: 50, y: layout.sceneSize.height - 100)
         plant1.name = "decoration_plant_0"
         plant1.zPosition = 2
         addChild(plant1)
 
-        let plant2 = SKSpriteNode(texture: plantTexture, size: CGSize(width: 24, height: 40))
-        plant2.position = CGPoint(x: layout.sceneSize.width - 40, y: layout.sceneSize.height - 80)
+        let plant2 = SKSpriteNode(texture: plantTexture, size: CGSize(width: 48, height: 80))
+        plant2.position = CGPoint(x: layout.sceneSize.width - 50, y: layout.sceneSize.height - 100)
         plant2.name = "decoration_plant_1"
         plant2.zPosition = 2
         addChild(plant2)
 
-        // Window on back wall
+        // Additional plants on the floor for coziness
+        let plant3 = SKSpriteNode(texture: plantTexture, size: CGSize(width: 40, height: 68))
+        plant3.position = CGPoint(x: 40, y: 80)
+        plant3.name = "decoration_plant_2"
+        plant3.zPosition = 2
+        addChild(plant3)
+
+        let plant4 = SKSpriteNode(texture: plantTexture, size: CGSize(width: 40, height: 68))
+        plant4.position = CGPoint(x: layout.sceneSize.width - 40, y: 80)
+        plant4.name = "decoration_plant_3"
+        plant4.zPosition = 2
+        addChild(plant4)
+
+        // Window on back wall — 20x16 pixel art scaled 5x = 100x80
         let windowTexture = tm.texture(for: TextureManager.decorationWindow)
-        let windowNode = SKSpriteNode(texture: windowTexture, size: CGSize(width: 80, height: 50))
-        windowNode.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - 60)
+        let windowNode = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
+        windowNode.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - 80)
         windowNode.name = "decoration_window"
         windowNode.zPosition = 2
         addChild(windowNode)
 
-        // Whiteboard on side wall
+        // Second window
+        let windowNode2 = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
+        windowNode2.position = CGPoint(x: layout.sceneSize.width * 0.8, y: layout.sceneSize.height - 80)
+        windowNode2.name = "decoration_window_2"
+        windowNode2.zPosition = 2
+        addChild(windowNode2)
+
+        // Whiteboard — 24x16 pixel art scaled 5x = 120x80
         let whiteboardTexture = tm.texture(for: TextureManager.decorationWhiteboard)
-        let whiteboardNode = SKSpriteNode(texture: whiteboardTexture, size: CGSize(width: 100, height: 60))
-        whiteboardNode.position = CGPoint(x: 100, y: layout.sceneSize.height - 140)
+        let whiteboardNode = SKSpriteNode(texture: whiteboardTexture, size: CGSize(width: 120, height: 80))
+        whiteboardNode.position = CGPoint(x: layout.sceneSize.width * 0.2, y: layout.sceneSize.height - 80)
         whiteboardNode.name = "decoration_whiteboard"
         whiteboardNode.zPosition = 2
         addChild(whiteboardNode)
 
-        // Clock on wall
+        // Clock — 10x10 pixel art scaled 4x = 40x40
         let clockTexture = tm.texture(for: TextureManager.decorationClock)
-        let clockNode = SKSpriteNode(texture: clockTexture, size: CGSize(width: 20, height: 20))
-        clockNode.position = CGPoint(x: layout.sceneSize.width - 100, y: layout.sceneSize.height - 40)
+        let clockNode = SKSpriteNode(texture: clockTexture, size: CGSize(width: 40, height: 40))
+        clockNode.position = CGPoint(x: layout.sceneSize.width - 100, y: layout.sceneSize.height - 30)
         clockNode.name = "decoration_clock"
         clockNode.zPosition = 2
         addChild(clockNode)
     }
 
-    /// Sets up the title label.
+    /// Sets up the title label with a cozy pixel-font feel.
     private func setupTitleLabel() {
         let titleLabel = SKLabelNode(text: "The Bullpen")
-        titleLabel.fontName = "Helvetica-Bold"
-        titleLabel.fontSize = 18
-        titleLabel.fontColor = SKColor(white: 0.4, alpha: 1.0)
-        titleLabel.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - 30)
+        titleLabel.fontName = "Menlo-Bold"
+        titleLabel.fontSize = 14
+        titleLabel.fontColor = SKColor(red: 0.45, green: 0.35, blue: 0.25, alpha: 1.0)
+        titleLabel.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - 20)
         titleLabel.zPosition = 10
         addChild(titleLabel)
     }
