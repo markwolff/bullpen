@@ -33,10 +33,7 @@ let package = Package(
         .target(
             name: "SpriteWorld",
             dependencies: ["Models", "Services"],
-            path: "Sources/SpriteWorld",
-            resources: [
-                .copy("Resources"),
-            ]
+            path: "Sources/SpriteWorld"
         ),
         .target(
             name: "Services",

@@ -56,6 +56,9 @@ public final class TextureManager: @unchecked Sendable {
     public static let decorationWindow = "decoration_window"
     public static let decorationWhiteboard = "decoration_whiteboard"
     public static let decorationClock = "decoration_clock"
+    public static let decorationBookshelf = "decoration_bookshelf"
+    public static let decorationBulletinBoard = "decoration_bulletin_board"
+    public static let decorationWaterCooler = "decoration_water_cooler"
 
     // Tile textures
     public static let tileFloor = "tile_floor"
@@ -77,6 +80,7 @@ public final class TextureManager: @unchecked Sendable {
         furnitureDesk, furnitureChair, furnitureMonitorOff, furnitureMonitorOn,
         furnitureLamp, furnitureCoffeeMug,
         decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
+        decorationBookshelf, decorationBulletinBoard, decorationWaterCooler,
         tileFloor, tileWall,
         catIdle, catSleep, catWalk,
     ]
@@ -106,13 +110,6 @@ public final class TextureManager: @unchecked Sendable {
             return atlasTexture
         }
 
-        // Priority 3: Try loading from bundled PNG resource
-        if let bundleTexture = loadFromBundle(name: name) {
-            bundleTexture.filteringMode = .nearest
-            cache[name] = bundleTexture
-            return bundleTexture
-        }
-
         // Fall back to placeholder
         let placeholder = Self.generatePlaceholder(for: name)
         placeholder.filteringMode = .nearest
@@ -121,16 +118,42 @@ public final class TextureManager: @unchecked Sendable {
     }
 
     /// Returns animation frames for a given agent prefix and state.
-    /// Uses pixel art generator for consistent Stardew Valley style.
+    /// Each frame is a distinct pixel art variation for fluid animation.
     public func animationFrames(prefix: String, state: AgentState) -> [SKTexture] {
         let frameCount = Self.frameCount(for: state)
+        let gen = PixelArtGenerator.shared
 
-        // Use the base state texture from pixel art for all frames
-        // (the pixel art is static per state, animation comes from the scene)
-        let baseName = "\(prefix)_\(state.rawValue)"
-        let baseTexture = texture(for: baseName)
+        var frames: [SKTexture] = []
+        for i in 0..<frameCount {
+            let cacheKey = "\(prefix)_\(state.rawValue)_frame\(i)"
 
-        return Array(repeating: baseTexture, count: frameCount)
+            lock.lock()
+            if let cached = cache[cacheKey] {
+                lock.unlock()
+                frames.append(cached)
+                continue
+            }
+            lock.unlock()
+
+            let texture: SKTexture
+            let stateStr = state.rawValue
+            if prefix == "char_claude" {
+                texture = gen.claudeCharacter(state: stateStr, frame: i)
+            } else if prefix == "char_codex" {
+                texture = gen.codexCharacter(state: stateStr, frame: i)
+            } else {
+                // Fallback: use the base state texture
+                texture = self.texture(for: "\(prefix)_\(stateStr)")
+            }
+
+            texture.filteringMode = .nearest
+            lock.lock()
+            cache[cacheKey] = texture
+            lock.unlock()
+            frames.append(texture)
+        }
+
+        return frames
     }
 
     /// Returns the expected frame count for a given state.
@@ -192,11 +215,28 @@ public final class TextureManager: @unchecked Sendable {
         if name == Self.decorationWindow { return gen.windowDecoration() }
         if name == Self.decorationWhiteboard { return gen.whiteboard() }
         if name == Self.decorationClock { return gen.clock() }
+        if name == Self.decorationBookshelf { return gen.bookshelf() }
+        if name == Self.decorationBulletinBoard { return gen.bulletinBoard() }
+        if name == Self.decorationWaterCooler { return gen.waterCooler() }
 
-        // Cat
+        // Cat (frame variants use the parameterized methods directly)
         if name == Self.catIdle { return gen.catIdle() }
         if name == Self.catSleep { return gen.catSleep() }
         if name == Self.catWalk { return gen.catWalk() }
+
+        // Cat frame variants (cat_idle_frame0, cat_walk_frame1, etc.)
+        if name.hasPrefix("cat_idle_frame") {
+            let frameStr = String(name.dropFirst("cat_idle_frame".count))
+            return gen.catIdle(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("cat_sleep_frame") {
+            let frameStr = String(name.dropFirst("cat_sleep_frame".count))
+            return gen.catSleep(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("cat_walk_frame") {
+            let frameStr = String(name.dropFirst("cat_walk_frame".count))
+            return gen.catWalk(frame: Int(frameStr) ?? 0)
+        }
 
         // Characters - Claude
         if name.hasPrefix("char_claude_") {
@@ -224,15 +264,6 @@ public final class TextureManager: @unchecked Sendable {
             }
         }
         return nil
-    }
-
-    /// Attempts to load a texture from a bundled PNG resource.
-    private func loadFromBundle(name: String) -> SKTexture? {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources") else {
-            return nil
-        }
-        guard let image = NSImage(contentsOf: url) else { return nil }
-        return SKTexture(image: image)
     }
 
     /// Generates a placeholder texture with a color derived from the texture name.

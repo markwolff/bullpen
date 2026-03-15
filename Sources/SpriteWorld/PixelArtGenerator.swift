@@ -315,7 +315,7 @@ public final class PixelArtGenerator: Sendable {
     }
 
     private func drawCharacter(_ ctx: CGContext, hoodie: NSColor, hoodieDark: NSColor,
-                                skin: NSColor, eyeColor: NSColor, eyeDark: NSColor, state: String) {
+                                skin: NSColor, eyeColor: NSColor, eyeDark: NSColor, state: String, frame: Int = 0) {
         // Head (6x5 at top center)
         fill(ctx, rect: r(5, 16, 6, 5), color: skin)
         fill(ctx, rect: r(5, 21, 6, 2), color: skin) // forehead
@@ -359,37 +359,210 @@ public final class PixelArtGenerator: Sendable {
         fill(ctx, rect: r(4, 0, 4, 2), color: Self.RGB(0x483828))
         fill(ctx, rect: r(8, 0, 4, 2), color: Self.RGB(0x483828))
 
-        // State-specific details
+        // State-specific details with frame variations
         switch state {
         case "thinking":
+            // Hand on chin
             fill(ctx, rect: r(10, 16, 2, 1), color: skin)
-            fill(ctx, rect: r(2, 22, 1, 1), color: Self.lampYellow)
-            fill(ctx, rect: r(13, 23, 1, 1), color: Self.lampYellow)
+            // Sparkle positions shift per frame
+            let sparkleOffsets: [(Int, Int)] = [(2, 22), (13, 23), (1, 23), (14, 22)]
+            let idx = frame % sparkleOffsets.count
+            fill(ctx, rect: r(sparkleOffsets[idx].0, sparkleOffsets[idx].1, 1, 1), color: Self.lampYellow)
+            // Second sparkle toggles on odd frames
+            if frame % 2 == 1 {
+                let idx2 = (idx + 2) % sparkleOffsets.count
+                fill(ctx, rect: r(sparkleOffsets[idx2].0, sparkleOffsets[idx2].1, 1, 1), color: Self.lampYellow)
+            }
         case "writing", "writingCode":
-            fill(ctx, rect: r(2, 9, 2, 1), color: hoodie)
-            fill(ctx, rect: r(12, 9, 2, 1), color: hoodie)
-            fill(ctx, rect: r(2, 9, 1, 1), color: skin)
-            fill(ctx, rect: r(13, 9, 1, 1), color: skin)
+            // Alternating arm positions per frame — typing motion
+            if frame % 2 == 0 {
+                fill(ctx, rect: r(2, 9, 2, 1), color: hoodie)
+                fill(ctx, rect: r(12, 10, 2, 1), color: hoodie)
+                fill(ctx, rect: r(2, 9, 1, 1), color: skin)
+                fill(ctx, rect: r(13, 10, 1, 1), color: skin)
+            } else {
+                fill(ctx, rect: r(2, 10, 2, 1), color: hoodie)
+                fill(ctx, rect: r(12, 9, 2, 1), color: hoodie)
+                fill(ctx, rect: r(2, 10, 1, 1), color: skin)
+                fill(ctx, rect: r(13, 9, 1, 1), color: skin)
+            }
         case "reading", "readingFiles":
-            fill(ctx, rect: r(6, 20, 2, 1), color: eyeColor)
+            // Eyes scan left/right across frames
+            let eyeShift = frame % 3
+            fill(ctx, rect: r(6 + eyeShift, 20, 2, 1), color: eyeColor)
         case "command", "runningCommand":
-            fill(ctx, rect: r(7, 18, 2, 1), color: Self.RGB(0x80FF80))
+            // Terminal cursor blinks
+            if frame % 2 == 0 {
+                fill(ctx, rect: r(7, 18, 2, 1), color: Self.RGB(0x80FF80))
+            } else {
+                fill(ctx, rect: r(7, 18, 2, 1), color: Self.RGB(0x40C040))
+            }
         case "searching":
-            fill(ctx, rect: r(7, 19, 1, 1), color: eyeColor)
-            fill(ctx, rect: r(10, 19, 1, 1), color: eyeColor)
+            // Eyes shift side to side
+            let searchShift = frame % 4
+            let leftEyeX = searchShift < 2 ? 7 : 6
+            let rightEyeX = searchShift < 2 ? 10 : 9
+            fill(ctx, rect: r(leftEyeX, 19, 1, 1), color: eyeColor)
+            fill(ctx, rect: r(rightEyeX, 19, 1, 1), color: eyeColor)
         case "waiting", "waitingForInput":
+            // Question mark dots animate
             fill(ctx, rect: r(12, 22, 2, 1), color: Self.RGB(0xFFFFFF))
-            fill(ctx, rect: r(13, 23, 1, 1), color: Self.RGB(0xFFFFFF))
+            if frame % 4 < 2 {
+                fill(ctx, rect: r(13, 23, 1, 1), color: Self.RGB(0xFFFFFF))
+            }
         case "error":
-            fill(ctx, rect: r(6, 19, 2, 2), color: Self.RGB(0xFF4040))
-            fill(ctx, rect: r(9, 19, 2, 2), color: Self.RGB(0xFF4040))
-            fill(ctx, rect: r(12, 21, 1, 2), color: Self.RGB(0x80C0FF))
+            // Red eyes with flicker intensity
+            let redEye = frame % 2 == 0 ? Self.RGB(0xFF4040) : Self.RGB(0xE02020)
+            fill(ctx, rect: r(6, 19, 2, 2), color: redEye)
+            fill(ctx, rect: r(9, 19, 2, 2), color: redEye)
+            // Sweat drop on odd frames
+            if frame % 2 == 1 {
+                fill(ctx, rect: r(12, 21, 1, 2), color: Self.RGB(0x80C0FF))
+            }
         case "finished":
             fill(ctx, rect: r(6, 19, 2, 1), color: hoodieDark)
             fill(ctx, rect: r(9, 19, 2, 1), color: hoodieDark)
             fill(ctx, rect: r(7, 17, 2, 1), color: Self.RGB(0xE08070))
+        case "idle":
+            // Subtle breathing — body shifts 1px on even frames
+            if frame % 4 >= 2 {
+                // "Exhale" — tiny highlight shift on hoodie
+                fill(ctx, rect: r(5, 12, 6, 1), color: hoodieDark)
+            }
         default:
             break
+        }
+    }
+
+    // MARK: - Additional Decoration Textures
+
+    /// Bookshelf decoration — 20x16 pixel art
+    func bookshelf() -> SKTexture {
+        drawTexture(width: 20, height: 16) { [self] ctx in
+            // Shelf frame (dark wood)
+            fill(ctx, rect: r(0, 0, 20, 16), color: Self.woodDark)
+            fill(ctx, rect: r(1, 1, 18, 14), color: Self.woodMid)
+
+            // Middle shelf
+            fill(ctx, rect: r(0, 7, 20, 1), color: Self.woodDark)
+
+            // Top row books
+            fill(ctx, rect: r(2, 9, 2, 5), color: Self.RGB(0xC04040)) // red
+            fill(ctx, rect: r(4, 10, 2, 4), color: Self.RGB(0x4080C0)) // blue
+            fill(ctx, rect: r(6, 9, 3, 5), color: Self.RGB(0x40A060)) // green
+            fill(ctx, rect: r(9, 10, 2, 4), color: Self.RGB(0xE0A040)) // gold
+            fill(ctx, rect: r(11, 9, 2, 5), color: Self.RGB(0x8060A0)) // purple
+            fill(ctx, rect: r(14, 10, 3, 4), color: Self.RGB(0xD07040)) // brown
+
+            // Bottom row books
+            fill(ctx, rect: r(2, 2, 3, 4), color: Self.RGB(0x4060A0)) // navy
+            fill(ctx, rect: r(5, 1, 2, 5), color: Self.RGB(0xD0A060)) // tan
+            fill(ctx, rect: r(7, 2, 2, 4), color: Self.RGB(0xA04040)) // maroon
+            fill(ctx, rect: r(10, 1, 3, 5), color: Self.RGB(0x60A080)) // teal
+            fill(ctx, rect: r(13, 2, 2, 4), color: Self.RGB(0xC08040)) // orange
+            fill(ctx, rect: r(16, 1, 2, 5), color: Self.RGB(0x606080)) // slate
+
+            // Book spines (highlight lines)
+            fill(ctx, rect: r(3, 12, 1, 1), color: Self.RGB(0xE06060))
+            fill(ctx, rect: r(7, 12, 1, 1), color: Self.RGB(0x60C080))
+            fill(ctx, rect: r(11, 4, 1, 1), color: Self.RGB(0x80C0A0))
+        }
+    }
+
+    /// Bulletin board decoration — 20x14 pixel art
+    func bulletinBoard() -> SKTexture {
+        drawTexture(width: 20, height: 14) { [self] ctx in
+            // Cork board background
+            fill(ctx, rect: r(0, 0, 20, 14), color: Self.RGB(0xA08050))
+            fill(ctx, rect: r(1, 1, 18, 12), color: Self.RGB(0xC8A868))
+
+            // Wood frame
+            fill(ctx, rect: r(0, 0, 20, 1), color: Self.woodDark)
+            fill(ctx, rect: r(0, 13, 20, 1), color: Self.woodDark)
+            fill(ctx, rect: r(0, 0, 1, 14), color: Self.woodDark)
+            fill(ctx, rect: r(19, 0, 1, 14), color: Self.woodDark)
+
+            // Pinned notes
+            fill(ctx, rect: r(3, 7, 5, 4), color: Self.RGB(0xFFF8A0)) // yellow sticky
+            fill(ctx, rect: r(5, 11, 1, 1), color: Self.RGB(0xE04040)) // red pin
+            fill(ctx, rect: r(4, 8, 3, 1), color: Self.RGB(0xB0A060)) // text line
+
+            fill(ctx, rect: r(10, 3, 4, 5), color: Self.RGB(0xA0D0FF)) // blue note
+            fill(ctx, rect: r(12, 8, 1, 1), color: Self.RGB(0x40A040)) // green pin
+            fill(ctx, rect: r(11, 5, 2, 1), color: Self.RGB(0x6090C0)) // text
+
+            fill(ctx, rect: r(3, 2, 4, 3), color: Self.RGB(0xFFB0C0)) // pink note
+            fill(ctx, rect: r(4, 5, 1, 1), color: Self.RGB(0xE0E040)) // yellow pin
+
+            fill(ctx, rect: r(15, 8, 3, 4), color: Self.RGB(0xE0E0E0)) // white card
+            fill(ctx, rect: r(16, 12, 1, 1), color: Self.RGB(0x4040E0)) // blue pin
+        }
+    }
+
+    /// Water cooler decoration — 10x20 pixel art
+    func waterCooler() -> SKTexture {
+        drawTexture(width: 10, height: 20) { [self] ctx in
+            // Bottle (top)
+            fill(ctx, rect: r(3, 12, 4, 8), color: Self.RGB(0xC0E0F8))
+            fill(ctx, rect: r(4, 13, 2, 6), color: Self.RGB(0xA8D0F0)) // water
+            fill(ctx, rect: r(4, 19, 2, 1), color: Self.RGB(0xD8E8F8)) // cap
+
+            // Dispenser body
+            fill(ctx, rect: r(1, 4, 8, 8), color: Self.RGB(0xE8E8E8))
+            fill(ctx, rect: r(2, 5, 6, 6), color: Self.RGB(0xD0D0D0))
+
+            // Taps
+            fill(ctx, rect: r(3, 7, 1, 1), color: Self.RGB(0x4080D0)) // cold
+            fill(ctx, rect: r(6, 7, 1, 1), color: Self.RGB(0xD04040)) // hot
+
+            // Drip tray
+            fill(ctx, rect: r(2, 4, 6, 1), color: Self.RGB(0xA0A0A0))
+
+            // Stand/legs
+            fill(ctx, rect: r(2, 0, 2, 4), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(6, 0, 2, 4), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(1, 0, 8, 1), color: Self.RGB(0x707070)) // base
+        }
+    }
+
+    // MARK: - Animation Frame Variants
+
+    /// Generates a character texture with per-frame pixel variations for animation.
+    /// `frame` is 0-based; frame 0 is the base pose.
+    func claudeCharacter(state: String, frame: Int) -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            self.drawCharacter(ctx, hoodie: Self.claudeHoodie, hoodieDark: Self.claudeHoodieDark,
+                         skin: Self.claudeSkin, eyeColor: Self.claudeEye, eyeDark: Self.claudeEyeDark,
+                         state: state, frame: frame)
+        }
+    }
+
+    func codexCharacter(state: String, frame: Int) -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            self.drawCharacter(ctx, hoodie: Self.codexHoodie, hoodieDark: Self.codexHoodieDark,
+                         skin: Self.codexSkin, eyeColor: Self.codexEye, eyeDark: Self.codexEye,
+                         state: state, frame: frame)
+        }
+    }
+
+    /// Cat walk with alternating leg frames.
+    func catWalk(frame: Int) -> SKTexture {
+        drawTexture(width: 12, height: 12) { [self] ctx in
+            self.drawCat(ctx, sleeping: false, walking: true, walkFrame: frame)
+        }
+    }
+
+    /// Cat idle with subtle ear/tail twitch.
+    func catIdle(frame: Int) -> SKTexture {
+        drawTexture(width: 12, height: 12) { [self] ctx in
+            self.drawCat(ctx, sleeping: false, idleFrame: frame)
+        }
+    }
+
+    /// Cat sleep with breathing animation.
+    func catSleep(frame: Int) -> SKTexture {
+        drawTexture(width: 12, height: 12) { [self] ctx in
+            self.drawCat(ctx, sleeping: true, sleepFrame: frame)
         }
     }
 
@@ -413,7 +586,8 @@ public final class PixelArtGenerator: Sendable {
         }
     }
 
-    private func drawCat(_ ctx: CGContext, sleeping: Bool, walking: Bool = false) {
+    private func drawCat(_ ctx: CGContext, sleeping: Bool, walking: Bool = false,
+                          walkFrame: Int = 0, idleFrame: Int = 0, sleepFrame: Int = 0) {
         // Body
         fill(ctx, rect: r(2, 2, 8, 5), color: Self.catOrange)
         fill(ctx, rect: r(3, 3, 6, 3), color: Self.catOrangeDark)
@@ -451,21 +625,37 @@ public final class PixelArtGenerator: Sendable {
         fill(ctx, rect: r(10, 6, 2, 1), color: Self.catOrange)
         fill(ctx, rect: r(11, 7, 1, 1), color: Self.catOrangeDark)
 
-        // Legs
+        // Legs with frame-based animation
         if walking {
-            fill(ctx, rect: r(3, 0, 2, 2), color: Self.catOrange)
-            fill(ctx, rect: r(7, 1, 2, 2), color: Self.catOrange)
+            // Alternate front/back leg positions for walk cycle
+            if walkFrame % 2 == 0 {
+                fill(ctx, rect: r(3, 0, 2, 2), color: Self.catOrange)
+                fill(ctx, rect: r(7, 1, 2, 2), color: Self.catOrange)
+                fill(ctx, rect: r(3, 0, 2, 1), color: Self.catEar)
+                fill(ctx, rect: r(7, 1, 2, 1), color: Self.catEar)
+            } else {
+                fill(ctx, rect: r(3, 1, 2, 2), color: Self.catOrange)
+                fill(ctx, rect: r(7, 0, 2, 2), color: Self.catOrange)
+                fill(ctx, rect: r(3, 1, 2, 1), color: Self.catEar)
+                fill(ctx, rect: r(7, 0, 2, 1), color: Self.catEar)
+            }
         } else {
             fill(ctx, rect: r(3, 0, 2, 2), color: Self.catOrange)
             fill(ctx, rect: r(7, 0, 2, 2), color: Self.catOrange)
+            fill(ctx, rect: r(3, 0, 2, 1), color: Self.catEar)
+            fill(ctx, rect: r(7, 0, 2, 1), color: Self.catEar)
         }
 
-        // Paws
-        fill(ctx, rect: r(3, 0, 2, 1), color: Self.catEar)
-        if walking {
-            fill(ctx, rect: r(7, 1, 2, 1), color: Self.catEar)
-        } else {
-            fill(ctx, rect: r(7, 0, 2, 1), color: Self.catEar)
+        // Idle ear/tail twitch on specific frames
+        if !walking && !sleeping && idleFrame % 3 == 1 {
+            // Ear twitch — left ear flicks up 1px
+            fill(ctx, rect: r(3, 12, 1, 1), color: Self.catOrange)
+        }
+
+        // Sleeping breathing — tail curls tighter on even frames
+        if sleeping && sleepFrame % 2 == 1 {
+            fill(ctx, rect: r(10, 6, 1, 1), color: Self.catOrange)
+            fill(ctx, rect: r(11, 7, 1, 1), color: .clear)
         }
     }
 

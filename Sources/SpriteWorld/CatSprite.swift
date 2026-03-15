@@ -151,9 +151,10 @@ public class CatSprite: SKSpriteNode {
             xScale = abs(xScale)
         }
 
-        // Walk animation (2-frame)
-        let frame0 = TextureManager.shared.texture(for: TextureManager.catIdle)
-        let frame1 = TextureManager.shared.texture(for: "cat_walk")
+        // Walk animation (2 distinct walk frames with alternating legs)
+        let tm = TextureManager.shared
+        let frame0 = tm.texture(for: "cat_walk_frame0")
+        let frame1 = tm.texture(for: "cat_walk_frame1")
         let walkAnim = SKAction.animate(with: [frame0, frame1], timePerFrame: 0.3)
         run(SKAction.repeatForever(walkAnim), withKey: "walkAnimation")
 
@@ -214,28 +215,47 @@ public class CatSprite: SKSpriteNode {
 
     // MARK: - Particles
 
-    /// Adds ZZZ emitter for sleeping state.
+    /// Adds visible ZZZ text animation for sleeping state.
     private func addZZZEmitter() {
         removeZZZEmitter()
-        let emitter = SKEmitterNode()
-        emitter.particleBirthRate = 0.5
-        emitter.particleLifetime = 2.0
-        emitter.particleColor = SKColor(white: 1.0, alpha: 0.6)
-        emitter.particleColorAlphaSpeed = -0.3
-        emitter.particleSpeed = 8
-        emitter.emissionAngle = .pi / 2
-        emitter.emissionAngleRange = .pi / 6
-        emitter.particleScale = 0.3
-        emitter.particleScaleSpeed = 0.1
-        emitter.position = CGPoint(x: 0, y: size.height / 2 + 4)
-        emitter.name = "cat_zzz"
-        emitter.zPosition = 101
-        addChild(emitter)
+
+        let container = SKNode()
+        container.name = "cat_zzz"
+        container.zPosition = 101
+        container.position = CGPoint(x: 0, y: size.height / 2 + 4)
+        addChild(container)
+
+        // Spawn "Z" letters that drift upward and grow
+        let spawnZ = SKAction.run { [weak self] in
+            guard let self = self else { return }
+            guard let zzz = self.childNode(withName: "cat_zzz") else { return }
+
+            let z = SKLabelNode(text: "Z")
+            z.fontName = "Menlo-Bold"
+            z.fontSize = 10
+            z.fontColor = SKColor(white: 1.0, alpha: 0.7)
+            z.position = CGPoint(x: CGFloat.random(in: -2...2), y: 0)
+            zzz.addChild(z)
+
+            let drift = SKAction.moveBy(x: CGFloat.random(in: 4...10), y: 20, duration: 2.5)
+            let grow = SKAction.scale(to: 1.4, duration: 2.5)
+            let fade = SKAction.fadeOut(withDuration: 2.5)
+            let group = SKAction.group([drift, grow, fade])
+            z.run(SKAction.sequence([group, SKAction.removeFromParent()]))
+        }
+
+        let delay = SKAction.wait(forDuration: 1.8, withRange: 0.6)
+        let sequence = SKAction.sequence([spawnZ, delay])
+        container.run(SKAction.repeatForever(sequence), withKey: "zzz_spawner")
     }
 
     /// Removes the ZZZ emitter.
     private func removeZZZEmitter() {
-        childNode(withName: "cat_zzz")?.removeFromParent()
+        if let zzz = childNode(withName: "cat_zzz") {
+            zzz.removeAllActions()
+            zzz.removeAllChildren()
+            zzz.removeFromParent()
+        }
     }
 
     /// Shows a heart particle above the cat that fades after 2 seconds.

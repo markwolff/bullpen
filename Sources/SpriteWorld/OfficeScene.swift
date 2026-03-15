@@ -337,6 +337,30 @@ public class OfficeScene: SKScene {
         clockNode.name = "decoration_clock"
         clockNode.zPosition = 2
         addChild(clockNode)
+
+        // Bookshelf — 20x16 pixel art scaled 4x = 80x64, on the wall between desks
+        let bookshelfTexture = tm.texture(for: TextureManager.decorationBookshelf)
+        let bookshelfNode = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 80, height: 64))
+        bookshelfNode.position = CGPoint(x: layout.sceneSize.width * 0.42, y: layout.sceneSize.height - 80)
+        bookshelfNode.name = "decoration_bookshelf"
+        bookshelfNode.zPosition = 2
+        addChild(bookshelfNode)
+
+        // Bulletin board — 20x14 pixel art scaled 4x = 80x56, on the wall
+        let bulletinTexture = tm.texture(for: TextureManager.decorationBulletinBoard)
+        let bulletinNode = SKSpriteNode(texture: bulletinTexture, size: CGSize(width: 80, height: 56))
+        bulletinNode.position = CGPoint(x: layout.sceneSize.width * 0.62, y: layout.sceneSize.height - 75)
+        bulletinNode.name = "decoration_bulletin_board"
+        bulletinNode.zPosition = 2
+        addChild(bulletinNode)
+
+        // Water cooler — 10x20 pixel art scaled 4x = 40x80, on the floor near wall
+        let coolerTexture = tm.texture(for: TextureManager.decorationWaterCooler)
+        let coolerNode = SKSpriteNode(texture: coolerTexture, size: CGSize(width: 40, height: 80))
+        coolerNode.position = CGPoint(x: layout.sceneSize.width - 60, y: layout.sceneSize.height * 2 / 3 - 10)
+        coolerNode.name = "decoration_water_cooler"
+        coolerNode.zPosition = 2
+        addChild(coolerNode)
     }
 
     /// Sets up the title label with a cozy pixel-font feel.
@@ -352,11 +376,12 @@ public class OfficeScene: SKScene {
 
     // MARK: - 8.1-8.5: Ambient Animations
 
-    /// Sets up all ambient animations: clock second hand, plant sway, window daylight.
+    /// Sets up all ambient animations: clock second hand, plant sway, window daylight, dust motes.
     private func setupAmbientAnimations() {
         setupClockSecondHand()
         setupPlantSway()
         applyWindowDaylight(hour: currentHour())
+        setupDustMotes()
     }
 
     /// 8.1: Adds a ticking second hand to the wall clock.
@@ -390,6 +415,37 @@ public class OfficeScene: SKScene {
             let sway = SKAction.sequence([swayLeft, swayRight])
             plantNode.run(SKAction.repeatForever(sway), withKey: "sway")
         }
+    }
+
+    /// Floating dust motes that drift through sunbeams near the windows.
+    private func setupDustMotes() {
+        let hour = currentHour()
+        // Only show dust motes during daytime (6am-6pm) when sunlight streams in
+        guard hour >= 6 && hour < 18 else { return }
+
+        let emitter = SKEmitterNode()
+        emitter.particleBirthRate = 0.8
+        emitter.particleLifetime = 8.0
+        emitter.particleLifetimeRange = 4.0
+        emitter.particleColor = SKColor(white: 1.0, alpha: 0.25)
+        emitter.particleColorAlphaSpeed = -0.03
+        emitter.particleSpeed = 3
+        emitter.particleSpeedRange = 2
+        emitter.emissionAngle = -.pi / 6 // drift slightly downward-right
+        emitter.emissionAngleRange = .pi / 4
+        emitter.particleScale = 0.15
+        emitter.particleScaleRange = 0.1
+        emitter.particleScaleSpeed = 0.01
+        emitter.particleAlpha = 0.25
+        emitter.particleAlphaRange = 0.15
+        emitter.xAcceleration = 0.5
+        emitter.yAcceleration = -0.3
+        // Spread across the upper portion of the scene near windows
+        emitter.particlePositionRange = CGVector(dx: layout.sceneSize.width * 0.6, dy: layout.sceneSize.height * 0.3)
+        emitter.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height * 0.75)
+        emitter.name = "dust_motes"
+        emitter.zPosition = 50
+        addChild(emitter)
     }
 
     /// 8.4: Returns the daylight color for a given hour (0-23).
