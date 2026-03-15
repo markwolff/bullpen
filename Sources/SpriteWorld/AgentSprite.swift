@@ -23,6 +23,21 @@ public class AgentSprite: SKSpriteNode {
     /// Visual state indicator (colored dot or square)
     public let statusIndicator: SKShapeNode
 
+    /// The current animation state (for transition logic)
+    private var currentAnimationState: AgentState?
+
+    /// Timestamp when the agent entered the idle state
+    private var idleStartTime: TimeInterval?
+
+    /// The ZZZ emitter node for sleeping idle agents
+    private var zzzNode: SKNode?
+
+    /// Timer tracking for ZZZ generation
+    private var lastZTime: TimeInterval = 0
+
+    /// Particle emitter attached for the current state (sparkle, spark, confetti)
+    private var stateEmitter: SKEmitterNode?
+
     // MARK: - Initialization
 
     public init(agentInfo: AgentInfo) {
@@ -31,13 +46,15 @@ public class AgentSprite: SKSpriteNode {
         self.nameLabel = SKLabelNode()
         self.statusIndicator = SKShapeNode(circleOfRadius: 4)
 
-        // Use state-based color for the sprite body
+        // Load texture from TextureManager
+        let textureName = Self.textureName(for: agentInfo.agentType, state: agentInfo.state)
+        let texture = TextureManager.shared.texture(for: textureName)
         let placeholderSize = CGSize(width: 32, height: 48)
-        let bodyColor = AgentSprite.colorForState(agentInfo.state)
 
-        super.init(texture: nil, color: bodyColor, size: placeholderSize)
+        super.init(texture: texture, color: .clear, size: placeholderSize)
 
         self.name = "agent_\(agentInfo.id)"
+        self.colorBlendFactor = 0
         setupChildNodes()
     }
 
@@ -77,9 +94,6 @@ public class AgentSprite: SKSpriteNode {
 
         let stateColor = AgentSprite.colorForState(newInfo.state)
 
-        // Update sprite body color to reflect state
-        self.color = stateColor
-
         // Update status indicator color and shape — task 4.8
         statusIndicator.fillColor = stateColor
         updateStatusIndicatorShape(for: newInfo.state)
@@ -89,7 +103,7 @@ public class AgentSprite: SKSpriteNode {
 
         // Trigger animation change if state changed
         if oldState != newInfo.state {
-            playAnimation(for: newInfo.state)
+            transitionToState(newInfo.state, from: oldState)
 
             // Pulse animation on state change — task 4.8
             pulseStatusIndicator()
@@ -120,88 +134,235 @@ public class AgentSprite: SKSpriteNode {
         statusIndicator.run(SKAction.sequence([scaleUp, scaleDown]), withKey: "pulse")
     }
 
-    // MARK: - Animations
+    // MARK: - State Transitions (6.14)
 
-    /// Plays the appropriate animation for the given agent state.
+    /// Handles state transition with cross-fade blending (except error which is instant).
+    private func transitionToState(_ newState: AgentState, from oldState: AgentState) {
+        // Remove idle ZZZ if leaving idle
+        if oldState == .idle {
+            removeZZZ()
+            idleStartTime = nil
+        }
+
+        // Remove previous state emitter
+        removeStateEmitter()
+
+        // Error transitions are instant (no fade)
+        if newState == .error || oldState == .error {
+            playAnimation(for: newState)
+            currentAnimationState = newState
+            return
+        }
+
+        // Cross-fade transition: fade out → swap → fade in (0.3s total)
+        let fadeOut = SKAction.fadeAlpha(to: 0, duration: 0.15)
+        let swap = SKAction.run { [weak self] in
+            self?.playAnimation(for: newState)
+            self?.currentAnimationState = newState
+        }
+        let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.15)
+        run(SKAction.sequence([fadeOut, swap, fadeIn]), withKey: "stateTransition")
+    }
+
+    // MARK: - Animations (6.5–6.13)
+
+    /// Plays the appropriate texture-frame animation for the given agent state.
     public func playAnimation(for state: AgentState) {
         removeAction(forKey: "stateAnimation")
+        removeStateEmitter()
+        currentAnimationState = state
+
+        let frames = framesForState(state)
 
         switch state {
         case .idle:
-            playIdleAnimation()
+            // 6.5: 4 frames, timePerFrame 2.0, loop forever
+            let animate = SKAction.animate(with: frames, timePerFrame: 2.0)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
+            idleStartTime = CACurrentMediaTime()
 
         case .thinking:
-            playThinkingAnimation()
+            // 6.6: 4 frames, timePerFrame 2.0, loop forever + sparkle emitter
+            let animate = SKAction.animate(with: frames, timePerFrame: 2.0)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
+            addSparkleEmitter()
 
         case .writingCode:
-            playTypingAnimation()
+            // 6.7: 2 frames, timePerFrame 0.125 (8 FPS), loop forever
+            let animate = SKAction.animate(with: frames, timePerFrame: 0.125)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
 
         case .readingFiles:
-            playReadingAnimation()
+            // 6.8: 3 frames, timePerFrame ~3.33, loop forever
+            let animate = SKAction.animate(with: frames, timePerFrame: 3.33)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
 
         case .runningCommand:
-            playTypingAnimation()
+            // 6.9: 2 frames, timePerFrame 0.5 (1 FPS), loop forever
+            let animate = SKAction.animate(with: frames, timePerFrame: 0.5)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
 
         case .searching:
-            playThinkingAnimation()
+            // 6.10: 4 frames, timePerFrame 1.0 (1 FPS, 4s cycle), loop forever
+            let animate = SKAction.animate(with: frames, timePerFrame: 1.0)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
 
         case .waitingForInput:
-            playIdleAnimation()
+            // 6.11: 4 frames, timePerFrame 0.5 (2 FPS, 2s cycle), loop forever
+            let animate = SKAction.animate(with: frames, timePerFrame: 0.5)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
 
         case .error:
-            playErrorAnimation()
+            // 6.12: 2 frames, timePerFrame 0.5 (2 FPS), loop forever + red spark emitter. INSTANT.
+            let animate = SKAction.animate(with: frames, timePerFrame: 0.5)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
+            addSparkEmitter()
 
         case .finished:
-            playIdleAnimation()
+            // 6.13: 4 frames, plays ONCE, timePerFrame 1.0 (4s total) + confetti burst
+            let animate = SKAction.animate(with: frames, timePerFrame: 1.0)
+            run(animate, withKey: "stateAnimation")
+            addConfettiEmitter()
         }
     }
 
-    private func playIdleAnimation() {
-        // Gentle bobbing
-        let bobUp = SKAction.moveBy(x: 0, y: 2, duration: 1.0)
-        bobUp.timingMode = .easeInEaseOut
-        let bobDown = bobUp.reversed()
-        let bob = SKAction.sequence([bobUp, bobDown])
-        run(SKAction.repeatForever(bob), withKey: "stateAnimation")
+    /// Returns animation frames for the current agent type and given state.
+    private func framesForState(_ state: AgentState) -> [SKTexture] {
+        let prefix = agentInfo.agentType == .claudeCode ? "char_claude" : "char_codex"
+        return TextureManager.shared.animationFrames(prefix: prefix, state: state)
     }
 
-    private func playThinkingAnimation() {
-        // Slight rocking side to side
-        let rotateLeft = SKAction.rotate(byAngle: 0.05, duration: 0.5)
-        rotateLeft.timingMode = .easeInEaseOut
-        let rotateRight = SKAction.rotate(byAngle: -0.1, duration: 1.0)
-        rotateRight.timingMode = .easeInEaseOut
-        let rotateCenter = SKAction.rotate(byAngle: 0.05, duration: 0.5)
-        rotateCenter.timingMode = .easeInEaseOut
-        let rock = SKAction.sequence([rotateLeft, rotateRight, rotateCenter])
-        run(SKAction.repeatForever(rock), withKey: "stateAnimation")
+    // MARK: - Particle Emitters (6.6, 6.12, 6.13)
+
+    /// Removes the current state-specific particle emitter.
+    private func removeStateEmitter() {
+        stateEmitter?.removeFromParent()
+        stateEmitter = nil
     }
 
-    private func playTypingAnimation() {
-        // Quick little jitter to simulate typing
-        let jitterLeft = SKAction.moveBy(x: -1, y: 0, duration: 0.05)
-        let jitterRight = SKAction.moveBy(x: 2, y: 0, duration: 0.1)
-        let jitterBack = SKAction.moveBy(x: -1, y: 0, duration: 0.05)
-        let pause = SKAction.wait(forDuration: 0.1)
-        let jitter = SKAction.sequence([jitterLeft, jitterRight, jitterBack, pause])
-        run(SKAction.repeatForever(jitter), withKey: "stateAnimation")
+    /// 6.6: Sparkle emitter for thinking state
+    private func addSparkleEmitter() {
+        let emitter = SKEmitterNode()
+        emitter.particleBirthRate = 5
+        emitter.particleLifetime = 1.5
+        emitter.particleColor = SKColor(red: 0.941, green: 0.753, blue: 0.251, alpha: 1.0) // Gold
+        emitter.particleColorAlphaSpeed = -0.7
+        emitter.particleSpeed = 20
+        emitter.particleSpeedRange = 10
+        emitter.emissionAngle = .pi / 2
+        emitter.emissionAngleRange = .pi / 4
+        emitter.particleScale = 0.3
+        emitter.particleScaleSpeed = -0.15
+        emitter.position = CGPoint(x: 0, y: size.height / 2 + 8)
+        emitter.name = "sparkleEmitter"
+        emitter.zPosition = 5
+        emitter.targetNode = self
+        addChild(emitter)
+        stateEmitter = emitter
     }
 
-    private func playReadingAnimation() {
-        // Slow nodding
-        let nodDown = SKAction.moveBy(x: 0, y: -1, duration: 0.8)
-        nodDown.timingMode = .easeInEaseOut
-        let nodUp = nodDown.reversed()
-        let nod = SKAction.sequence([nodDown, nodUp, SKAction.wait(forDuration: 0.5)])
-        run(SKAction.repeatForever(nod), withKey: "stateAnimation")
+    /// 6.12: Red spark emitter for error state
+    private func addSparkEmitter() {
+        let emitter = SKEmitterNode()
+        emitter.particleBirthRate = 8
+        emitter.particleLifetime = 0.8
+        emitter.particleColor = SKColor(red: 0.878, green: 0.314, blue: 0.314, alpha: 1.0) // Red
+        emitter.particleColorAlphaSpeed = -1.0
+        emitter.particleSpeed = 30
+        emitter.particleSpeedRange = 15
+        emitter.emissionAngle = .pi / 2
+        emitter.emissionAngleRange = .pi
+        emitter.particleScale = 0.25
+        emitter.particleScaleSpeed = -0.2
+        emitter.position = CGPoint(x: 0, y: size.height / 2 + 4)
+        emitter.name = "sparkEmitter"
+        emitter.zPosition = 5
+        emitter.targetNode = self
+        addChild(emitter)
+        stateEmitter = emitter
     }
 
-    private func playErrorAnimation() {
-        // Flash red
-        let flashRed = SKAction.colorize(with: .red, colorBlendFactor: 0.8, duration: 0.2)
-        let flashBack = SKAction.colorize(withColorBlendFactor: 0, duration: 0.2)
-        let flash = SKAction.sequence([flashRed, flashBack])
-        run(SKAction.repeat(flash, count: 3), withKey: "stateAnimation")
+    /// 6.13: Confetti burst emitter for finished state (auto-removes after 2s)
+    private func addConfettiEmitter() {
+        let emitter = SKEmitterNode()
+        emitter.particleBirthRate = 40
+        emitter.numParticlesToEmit = 40
+        emitter.particleLifetime = 2.0
+        emitter.particleLifetimeRange = 0.5
+        emitter.particleColor = .green
+        emitter.particleColorBlendFactor = 1.0
+        emitter.particleColorSequence = nil
+        emitter.particleColorRedRange = 1.0
+        emitter.particleColorGreenRange = 1.0
+        emitter.particleColorBlueRange = 1.0
+        emitter.particleColorAlphaSpeed = -0.5
+        emitter.particleSpeed = 60
+        emitter.particleSpeedRange = 30
+        emitter.emissionAngle = .pi / 2
+        emitter.emissionAngleRange = .pi
+        emitter.particleScale = 0.3
+        emitter.particleScaleSpeed = -0.1
+        emitter.yAcceleration = -40
+        emitter.position = CGPoint(x: 0, y: size.height / 2 + 10)
+        emitter.name = "confettiEmitter"
+        emitter.zPosition = 5
+        emitter.targetNode = self
+        addChild(emitter)
+        stateEmitter = emitter
+
+        // Auto-remove after 2 seconds
+        emitter.run(SKAction.sequence([
+            SKAction.wait(forDuration: 2.0),
+            SKAction.removeFromParent()
+        ]))
+    }
+
+    // MARK: - Idle ZZZ Particles (6.16)
+
+    /// Called from the scene's update loop to check idle duration.
+    public func updateIdleZZZ(currentTime: TimeInterval) {
+        guard agentInfo.state == .idle, let startTime = idleStartTime else {
+            return
+        }
+
+        let idleDuration = currentTime - startTime
+        guard idleDuration > 60.0 else { return }
+
+        // Spawn a new Z every 2 seconds
+        if currentTime - lastZTime >= 2.0 {
+            lastZTime = currentTime
+            spawnZLetter()
+        }
+    }
+
+    /// Spawns a single "Z" letter node that drifts upward and fades.
+    private func spawnZLetter() {
+        if zzzNode == nil {
+            let container = SKNode()
+            container.name = "zzzContainer"
+            container.zPosition = 6
+            addChild(container)
+            zzzNode = container
+        }
+
+        let zLabel = SKLabelNode(text: "Z")
+        zLabel.fontName = "Helvetica-Bold"
+        zLabel.fontSize = 14
+        zLabel.fontColor = SKColor(white: 1.0, alpha: 0.8)
+        zLabel.position = CGPoint(x: CGFloat.random(in: -4...4), y: size.height / 2 + 16)
+        zzzNode?.addChild(zLabel)
+
+        let drift = SKAction.moveBy(x: CGFloat.random(in: -6...6), y: 30, duration: 2.0)
+        let fade = SKAction.fadeOut(withDuration: 2.0)
+        let group = SKAction.group([drift, fade])
+        zLabel.run(SKAction.sequence([group, SKAction.removeFromParent()]))
+    }
+
+    /// Removes ZZZ particles immediately.
+    private func removeZZZ() {
+        zzzNode?.removeAllChildren()
+        zzzNode?.removeFromParent()
+        zzzNode = nil
     }
 
     // MARK: - Movement
@@ -235,6 +396,12 @@ public class AgentSprite: SKSpriteNode {
 
     // MARK: - Helpers
 
+    /// Returns the texture name for a given agent type and state.
+    public static func textureName(for agentType: AgentType, state: AgentState) -> String {
+        let prefix = agentType == .claudeCode ? "char_claude" : "char_codex"
+        return "\(prefix)_\(state.rawValue)"
+    }
+
     /// Returns a color representing the agent's current state.
     /// Uses exact hex colors from VISION.md — task 4.7
     public static func colorForState(_ state: AgentState) -> SKColor {
@@ -258,5 +425,20 @@ public class AgentSprite: SKSpriteNode {
         case .finished:
             SKColor(red: 0.439, green: 0.439, blue: 0.439, alpha: 1.0) // #707070
         }
+    }
+
+    /// Whether this sprite currently has a state-specific particle emitter.
+    public var hasStateEmitter: Bool {
+        stateEmitter != nil && stateEmitter?.parent != nil
+    }
+
+    /// Returns the name of the current state emitter, if any.
+    public var stateEmitterName: String? {
+        stateEmitter?.name
+    }
+
+    /// Whether this sprite is performing a cross-fade transition.
+    public var isTransitioning: Bool {
+        action(forKey: "stateTransition") != nil
     }
 }

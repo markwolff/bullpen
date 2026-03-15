@@ -1,0 +1,295 @@
+import SpriteKit
+import Models
+
+/// Manages loading and caching of textures for sprites.
+/// Tries to load from texture atlases first, falls back to programmatic
+/// placeholder textures (colored rectangles) when PNGs are not available.
+public final class TextureManager: @unchecked Sendable {
+
+    /// Shared singleton instance
+    public static let shared = TextureManager()
+
+    /// Atlas names matching the asset manifest
+    public static let atlasNames = ["claude", "codex", "furniture", "decorations", "tiles", "cat"]
+
+    /// Cached textures keyed by name
+    private var cache: [String: SKTexture] = [:]
+
+    /// Lock for thread safety
+    private let lock = NSLock()
+
+    private init() {}
+
+    // MARK: - Texture Name Constants
+
+    // Agent textures (per type, per state)
+    public static let charClaudeIdle = "char_claude_idle"
+    public static let charClaudeThinking = "char_claude_thinking"
+    public static let charClaudeWritingCode = "char_claude_writingCode"
+    public static let charClaudeReadingFiles = "char_claude_readingFiles"
+    public static let charClaudeRunningCommand = "char_claude_runningCommand"
+    public static let charClaudeSearching = "char_claude_searching"
+    public static let charClaudeWaitingForInput = "char_claude_waitingForInput"
+    public static let charClaudeError = "char_claude_error"
+    public static let charClaudeFinished = "char_claude_finished"
+
+    public static let charCodexIdle = "char_codex_idle"
+    public static let charCodexThinking = "char_codex_thinking"
+    public static let charCodexWritingCode = "char_codex_writingCode"
+    public static let charCodexReadingFiles = "char_codex_readingFiles"
+    public static let charCodexRunningCommand = "char_codex_runningCommand"
+    public static let charCodexSearching = "char_codex_searching"
+    public static let charCodexWaitingForInput = "char_codex_waitingForInput"
+    public static let charCodexError = "char_codex_error"
+    public static let charCodexFinished = "char_codex_finished"
+
+    // Furniture textures
+    public static let furnitureDesk = "furniture_desk"
+    public static let furnitureChair = "furniture_chair"
+    public static let furnitureMonitorOff = "furniture_monitor_off"
+    public static let furnitureMonitorOn = "furniture_monitor_on"
+    public static let furnitureLamp = "furniture_lamp"
+    public static let furnitureCoffeeMug = "furniture_coffee_mug"
+
+    // Decoration textures
+    public static let decorationPlant = "decoration_plant"
+    public static let decorationWindow = "decoration_window"
+    public static let decorationWhiteboard = "decoration_whiteboard"
+    public static let decorationClock = "decoration_clock"
+
+    // Tile textures
+    public static let tileFloor = "tile_floor"
+    public static let tileWall = "tile_wall"
+
+    // Cat texture
+    public static let catIdle = "cat_idle"
+
+    /// All known texture names for validation
+    public static let allTextureNames: [String] = [
+        charClaudeIdle, charClaudeThinking, charClaudeWritingCode, charClaudeReadingFiles,
+        charClaudeRunningCommand, charClaudeSearching, charClaudeWaitingForInput,
+        charClaudeError, charClaudeFinished,
+        charCodexIdle, charCodexThinking, charCodexWritingCode, charCodexReadingFiles,
+        charCodexRunningCommand, charCodexSearching, charCodexWaitingForInput,
+        charCodexError, charCodexFinished,
+        furnitureDesk, furnitureChair, furnitureMonitorOff, furnitureMonitorOn,
+        furnitureLamp, furnitureCoffeeMug,
+        decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
+        tileFloor, tileWall,
+        catIdle,
+    ]
+
+    // MARK: - Public API
+
+    /// Returns a texture for the given name, loading from atlas or generating a placeholder.
+    public func texture(for name: String) -> SKTexture {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let cached = cache[name] {
+            return cached
+        }
+
+        // Try loading from atlas
+        if let atlasTexture = loadFromAtlas(name: name) {
+            atlasTexture.filteringMode = .nearest
+            cache[name] = atlasTexture
+            return atlasTexture
+        }
+
+        // Fall back to placeholder
+        let placeholder = Self.generatePlaceholder(for: name)
+        placeholder.filteringMode = .nearest
+        cache[name] = placeholder
+        return placeholder
+    }
+
+    /// Returns animation frames for a given agent prefix and state.
+    /// Frame names follow the pattern: `{prefix}_{state}_{frameIndex}`
+    /// Falls back to placeholder frames with slightly varying colors.
+    public func animationFrames(prefix: String, state: AgentState) -> [SKTexture] {
+        let frameCount = Self.frameCount(for: state)
+        let baseColor = Self.colorForTextureName("\(prefix)_\(state.rawValue)")
+        let size = CGSize(width: 32, height: 48)
+
+        var frames: [SKTexture] = []
+        for i in 0..<frameCount {
+            let frameName = "\(prefix)_\(state.rawValue)_\(i)"
+
+            lock.lock()
+            if let cached = cache[frameName] {
+                lock.unlock()
+                frames.append(cached)
+                continue
+            }
+            lock.unlock()
+
+            // Try loading from atlas
+            if let atlasTexture = loadFromAtlas(name: frameName) {
+                atlasTexture.filteringMode = .nearest
+                lock.lock()
+                cache[frameName] = atlasTexture
+                lock.unlock()
+                frames.append(atlasTexture)
+            } else {
+                // Generate placeholder with slight color variation per frame
+                let variation = CGFloat(i) * 0.08
+                let variedColor = Self.varyColor(baseColor, by: variation)
+                let tex = Self.placeholderTexture(size: size, color: variedColor)
+                tex.filteringMode = .nearest
+                lock.lock()
+                cache[frameName] = tex
+                lock.unlock()
+                frames.append(tex)
+            }
+        }
+        return frames
+    }
+
+    /// Returns the expected frame count for a given state.
+    public static func frameCount(for state: AgentState) -> Int {
+        switch state {
+        case .idle: 4
+        case .thinking: 4
+        case .writingCode: 2
+        case .readingFiles: 3
+        case .runningCommand: 2
+        case .searching: 4
+        case .waitingForInput: 4
+        case .error: 2
+        case .finished: 4
+        }
+    }
+
+    /// Clears the texture cache (useful for testing).
+    public func clearCache() {
+        lock.lock()
+        cache.removeAll()
+        lock.unlock()
+    }
+
+    // MARK: - Placeholder Generation
+
+    /// Creates a placeholder texture of the given size and color.
+    public static func placeholderTexture(size: CGSize, color: SKColor) -> SKTexture {
+        let image = NSImage(size: size, flipped: false) { rect in
+            color.setFill()
+            rect.fill()
+            return true
+        }
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .nearest
+        return texture
+    }
+
+    // MARK: - Private Helpers
+
+    /// Attempts to load a texture from a SpriteKit texture atlas.
+    private func loadFromAtlas(name: String) -> SKTexture? {
+        for atlasName in Self.atlasNames {
+            let atlas = SKTextureAtlas(named: atlasName)
+            if atlas.textureNames.contains(name) {
+                return atlas.textureNamed(name)
+            }
+        }
+        return nil
+    }
+
+    /// Generates a placeholder texture with a color derived from the texture name.
+    private static func generatePlaceholder(for name: String) -> SKTexture {
+        let size: CGSize
+        let color: SKColor
+
+        if name.hasPrefix("char_") {
+            size = CGSize(width: 32, height: 48)
+            color = colorForTextureName(name)
+        } else if name.hasPrefix("furniture_") {
+            size = furnitureSize(for: name)
+            color = colorForTextureName(name)
+        } else if name.hasPrefix("decoration_") {
+            size = decorationSize(for: name)
+            color = colorForTextureName(name)
+        } else if name.hasPrefix("tile_") {
+            size = CGSize(width: 32, height: 32)
+            color = colorForTextureName(name)
+        } else if name.hasPrefix("cat_") {
+            size = CGSize(width: 24, height: 24)
+            color = SKColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1.0) // Orange cat
+        } else {
+            size = CGSize(width: 32, height: 32)
+            color = .gray
+        }
+
+        return placeholderTexture(size: size, color: color)
+    }
+
+    /// Returns the appropriate size for furniture textures.
+    private static func furnitureSize(for name: String) -> CGSize {
+        switch name {
+        case furnitureDesk: CGSize(width: 60, height: 40)
+        case furnitureChair: CGSize(width: 20, height: 20)
+        case furnitureMonitorOff, furnitureMonitorOn: CGSize(width: 20, height: 14)
+        case furnitureLamp: CGSize(width: 16, height: 32)
+        case furnitureCoffeeMug: CGSize(width: 10, height: 12)
+        default: CGSize(width: 32, height: 32)
+        }
+    }
+
+    /// Returns the appropriate size for decoration textures.
+    private static func decorationSize(for name: String) -> CGSize {
+        switch name {
+        case decorationPlant: CGSize(width: 24, height: 40)
+        case decorationWindow: CGSize(width: 80, height: 50)
+        case decorationWhiteboard: CGSize(width: 100, height: 60)
+        case decorationClock: CGSize(width: 20, height: 20)
+        default: CGSize(width: 32, height: 32)
+        }
+    }
+
+    /// Derives a placeholder color from a texture name.
+    private static func colorForTextureName(_ name: String) -> SKColor {
+        if name.contains("claude") {
+            return SKColor(red: 0.82, green: 0.56, blue: 0.30, alpha: 1.0) // Warm tan
+        } else if name.contains("codex") {
+            return SKColor(red: 0.30, green: 0.65, blue: 0.30, alpha: 1.0) // Green
+        } else if name.contains("desk") {
+            return SKColor(red: 0.55, green: 0.35, blue: 0.20, alpha: 1.0) // Brown
+        } else if name.contains("chair") {
+            return SKColor(red: 0.30, green: 0.30, blue: 0.30, alpha: 1.0) // Dark gray
+        } else if name.contains("monitor_on") {
+            return SKColor(red: 0.20, green: 0.30, blue: 0.50, alpha: 1.0) // Blue screen
+        } else if name.contains("monitor_off") {
+            return SKColor(red: 0.15, green: 0.15, blue: 0.15, alpha: 1.0) // Dark
+        } else if name.contains("lamp") {
+            return SKColor(red: 0.95, green: 0.90, blue: 0.50, alpha: 1.0) // Yellow
+        } else if name.contains("coffee") || name.contains("mug") {
+            return SKColor(red: 0.60, green: 0.40, blue: 0.25, alpha: 1.0) // Coffee brown
+        } else if name.contains("plant") {
+            return SKColor(red: 0.20, green: 0.60, blue: 0.20, alpha: 1.0) // Green
+        } else if name.contains("window") {
+            return SKColor(red: 0.70, green: 0.85, blue: 1.0, alpha: 1.0) // Sky blue
+        } else if name.contains("whiteboard") {
+            return SKColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0) // White
+        } else if name.contains("clock") {
+            return SKColor(red: 0.80, green: 0.80, blue: 0.80, alpha: 1.0) // Light gray
+        } else if name.contains("floor") {
+            return SKColor(red: 0.769, green: 0.714, blue: 0.627, alpha: 1.0) // Floor
+        } else if name.contains("wall") {
+            return SKColor(red: 0.918, green: 0.902, blue: 0.875, alpha: 1.0) // Wall
+        } else {
+            return .gray
+        }
+    }
+
+    /// Creates a slightly varied color for animation frame differentiation.
+    private static func varyColor(_ color: SKColor, by amount: CGFloat) -> SKColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        // Alternate lighter/darker
+        let direction: CGFloat = amount.truncatingRemainder(dividingBy: 0.16) < 0.08 ? 1 : -1
+        r = min(1, max(0, r + direction * amount * 0.5))
+        g = min(1, max(0, g + direction * amount * 0.5))
+        b = min(1, max(0, b + direction * amount * 0.5))
+        return SKColor(red: r, green: g, blue: b, alpha: a)
+    }
+}
