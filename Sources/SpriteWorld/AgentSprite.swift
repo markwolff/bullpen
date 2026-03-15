@@ -38,6 +38,9 @@ public class AgentSprite: SKSpriteNode {
     /// Particle emitter attached for the current state (sparkle, spark, confetti)
     private var stateEmitter: SKEmitterNode?
 
+    /// Manages idle roaming behavior when the agent is not working
+    public let idleBehaviorManager = IdleBehaviorManager()
+
     // MARK: - Initialization
 
     public init(agentInfo: AgentInfo) {
@@ -139,10 +142,11 @@ public class AgentSprite: SKSpriteNode {
 
     /// Handles state transition with cross-fade blending (except error which is instant).
     private func transitionToState(_ newState: AgentState, from oldState: AgentState) {
-        // Remove idle ZZZ if leaving idle
+        // Remove idle ZZZ if leaving idle and reset roaming behavior
         if oldState == .idle {
             removeZZZ()
             idleStartTime = nil
+            cancelIdleRoaming()
         }
 
         // Remove previous state emitter
@@ -388,11 +392,19 @@ public class AgentSprite: SKSpriteNode {
             previous = point
         }
 
-        let sequence = SKAction.sequence(actions)
-        run(sequence) { [weak self] in
+        let complete = SKAction.run { [weak self] in
             self?.isWalking = false
             completion?()
         }
+        actions.append(complete)
+        let sequence = SKAction.sequence(actions)
+        run(sequence, withKey: "walk")
+    }
+
+    /// Stops any in-progress walk immediately.
+    public func stopWalking() {
+        removeAction(forKey: "walk")
+        isWalking = false
     }
 
     // MARK: - Helpers
@@ -441,5 +453,88 @@ public class AgentSprite: SKSpriteNode {
     /// Whether this sprite is performing a cross-fade transition.
     public var isTransitioning: Bool {
         action(forKey: "stateTransition") != nil
+    }
+
+    // MARK: - Idle Roaming Behavior
+
+    /// Whether the agent is currently roaming (not at desk) during idle state.
+    public var isRoaming: Bool {
+        idleBehaviorManager.phase != .atDesk
+    }
+
+    /// Cancels idle roaming and walks back to desk if needed.
+    public func cancelIdleRoaming() {
+        let wasRoaming = isRoaming
+        idleBehaviorManager.reset()
+        removeActionBubble()
+
+        if wasRoaming, let deskID = assignedDeskID {
+            stopWalking()
+
+            // Walk back to desk chair
+            let layout = OfficeLayout.defaultLayout()
+            if let desk = layout.desks.first(where: { $0.id == deskID }) {
+                let path = layout.findPath(from: position, to: desk.chairPosition)
+                walk(to: desk.chairPosition, via: path)
+            }
+        }
+    }
+
+    /// Processes an idle action returned by the behavior manager.
+    public func handleIdleAction(_ action: IdleAction, layout: OfficeLayout) {
+        switch action {
+        case .walkTo(let destination, _):
+            let path = layout.findPath(from: position, to: destination)
+            // Play idle animation while walking (reuse idle frames for casual walk)
+            walk(to: destination, via: path) { [weak self] in
+                self?.idleBehaviorManager.walkCompleted()
+            }
+
+        case .showEffect(let behavior):
+            showActionBubble(for: behavior)
+        }
+    }
+
+    /// Shows a small emoji/text bubble above the agent for the current idle activity.
+    private func showActionBubble(for behavior: IdleBehavior) {
+        removeActionBubble()
+
+        let emoji: String
+        switch behavior {
+        case .waterCooler: emoji = "💧"
+        case .browseBookshelf: emoji = "📖"
+        case .checkBulletinBoard: emoji = "📌"
+        case .lookOutWindow: emoji = "🌤"
+        case .petTheCat: emoji = "❤️"
+        case .whiteboard: emoji = "💡"
+        case .visitColleague: emoji = "💬"
+        case .stretchAtDesk: emoji = "🙆"
+        case .waterPlant: emoji = "🌱"
+        case .getCoffee: emoji = "☕️"
+        }
+
+        let bubble = SKLabelNode(text: emoji)
+        bubble.fontSize = 18
+        bubble.position = CGPoint(x: 0, y: size.height / 2 + 20)
+        bubble.name = "action_bubble"
+        bubble.zPosition = 190
+
+        // Fade in
+        bubble.alpha = 0
+        let fadeIn = SKAction.fadeIn(withDuration: 0.3)
+        // Gentle bob
+        let bobUp = SKAction.moveBy(x: 0, y: 4, duration: 1.0)
+        bobUp.timingMode = .easeInEaseOut
+        let bobDown = bobUp.reversed()
+        let bob = SKAction.repeatForever(SKAction.sequence([bobUp, bobDown]))
+        bubble.run(SKAction.group([fadeIn, bob]))
+
+        addChild(bubble)
+        idleBehaviorManager.actionBubble = bubble
+    }
+
+    /// Removes the action bubble if present.
+    private func removeActionBubble() {
+        childNode(withName: "action_bubble")?.removeFromParent()
     }
 }

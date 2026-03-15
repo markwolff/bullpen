@@ -65,6 +65,43 @@ public struct OfficeLayout: Sendable {
         desks.first { !occupiedDeskIDs.contains($0.id) }
     }
 
+    // MARK: - Points of Interest (standing positions for idle behaviors)
+
+    /// Position in front of the water cooler
+    public var waterCoolerStandPosition: CGPoint {
+        CGPoint(x: sceneSize.width - 100, y: sceneSize.height * 2 / 3 - 50)
+    }
+
+    /// Position in front of the bookshelf
+    public var bookshelfStandPosition: CGPoint {
+        CGPoint(x: sceneSize.width * 0.42, y: sceneSize.height - 140)
+    }
+
+    /// Position in front of the bulletin board
+    public var bulletinBoardStandPosition: CGPoint {
+        CGPoint(x: sceneSize.width * 0.62, y: sceneSize.height - 135)
+    }
+
+    /// Position in front of a window
+    public var windowStandPosition: CGPoint {
+        CGPoint(x: sceneSize.width / 2, y: sceneSize.height - 140)
+    }
+
+    /// Position in front of the whiteboard
+    public var whiteboardStandPosition: CGPoint {
+        CGPoint(x: sceneSize.width * 0.2, y: sceneSize.height - 140)
+    }
+
+    /// Positions near floor plants (agents can walk to water them)
+    public var plantStandPositions: [CGPoint] {
+        [
+            CGPoint(x: 60, y: sceneSize.height - 140),  // Near top-left plant
+            CGPoint(x: sceneSize.width - 60, y: sceneSize.height - 140),  // Near top-right plant
+            CGPoint(x: 55, y: 100),  // Near bottom-left plant
+            CGPoint(x: sceneSize.width - 55, y: 100),  // Near bottom-right plant
+        ]
+    }
+
     /// Generates a simple path from one point to another, avoiding obstacles.
     /// - Returns: Array of waypoints the sprite should walk through
     public func findPath(from start: CGPoint, to end: CGPoint) -> [CGPoint] {

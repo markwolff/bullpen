@@ -771,6 +771,70 @@ public class OfficeScene: SKScene {
         }
     }
 
+    // MARK: - Idle Roaming Behavior
+
+    /// Updates idle roaming behavior for a single agent sprite.
+    private func updateIdleBehavior(for sprite: AgentSprite, deltaTime: TimeInterval) {
+        // Only drive idle behavior when agent is actually idle
+        guard sprite.agentInfo.state == .idle else { return }
+        // Don't update when walking — the walk completion callback advances the state machine
+        guard !sprite.isWalking else { return }
+
+        let context = buildIdleContext(for: sprite)
+        if let action = sprite.idleBehaviorManager.update(deltaTime: deltaTime, context: context) {
+            sprite.handleIdleAction(action, layout: layout)
+
+            // Trigger cat heart when agent pets the cat
+            if case .showEffect(.petTheCat) = action {
+                catSprite?.showHeartParticle()
+            }
+        }
+    }
+
+    /// Builds the context struct that the idle behavior manager needs.
+    private func buildIdleContext(for sprite: AgentSprite) -> IdleContext {
+        let deskChairPosition: CGPoint
+        if let deskID = sprite.assignedDeskID,
+           let desk = layout.desks.first(where: { $0.id == deskID }) {
+            deskChairPosition = desk.chairPosition
+        } else {
+            deskChairPosition = sprite.position
+        }
+
+        // Gather positions of other idle agents at their desks (for visitColleague)
+        var otherIdleDeskPositions: [CGPoint] = []
+        for (_, otherSprite) in agentSprites where otherSprite !== sprite {
+            if otherSprite.agentInfo.state == .idle,
+               !otherSprite.isRoaming,
+               let deskID = otherSprite.assignedDeskID,
+               let desk = layout.desks.first(where: { $0.id == deskID }) {
+                otherIdleDeskPositions.append(
+                    CGPoint(x: desk.chairPosition.x + 40, y: desk.chairPosition.y)
+                )
+            }
+        }
+
+        // Cat position (only if cat is idle, not walking)
+        let catPos: CGPoint?
+        if let cat = catSprite, cat.catState == .idle {
+            catPos = cat.position
+        } else {
+            catPos = nil
+        }
+
+        return IdleContext(
+            deskChairPosition: deskChairPosition,
+            waterCoolerStandPosition: layout.waterCoolerStandPosition,
+            bookshelfStandPosition: layout.bookshelfStandPosition,
+            bulletinBoardStandPosition: layout.bulletinBoardStandPosition,
+            windowStandPosition: layout.windowStandPosition,
+            whiteboardStandPosition: layout.whiteboardStandPosition,
+            plantPositions: layout.plantStandPositions,
+            catPosition: catPos,
+            otherIdleAgentDeskPositions: otherIdleDeskPositions
+        )
+    }
+
     // MARK: - Update Loop
 
     public override func update(_ currentTime: TimeInterval) {
@@ -780,9 +844,10 @@ public class OfficeScene: SKScene {
         let deltaTime = lastUpdateTime > 0 ? currentTime - lastUpdateTime : 0
         lastUpdateTime = currentTime
 
-        // Update idle ZZZ for all agent sprites
+        // Update idle ZZZ and idle roaming behaviors for all agent sprites
         for sprite in agentSprites.values {
             sprite.updateIdleZZZ(currentTime: currentTime)
+            updateIdleBehavior(for: sprite, deltaTime: deltaTime)
         }
 
         // Update office cat (8.10-8.13)
