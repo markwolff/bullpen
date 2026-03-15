@@ -1,5 +1,7 @@
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, access } from "node:fs/promises";
+import { generateImage } from "ai";
+import { gateway } from "@ai-sdk/gateway";
 import { ART_BIBLE, TYPE_HINTS } from "./config.js";
 import { writeMetadata, type AssetMetadata } from "./metadata.js";
 
@@ -9,37 +11,38 @@ export interface GenerateOptions {
   type: string;
   description: string;
   aspectRatio?: string;
+  model?: string;
+  outputDir?: string;
+  force?: boolean;
+  subdir?: string;
 }
 
-/** Result returned after generating (or stubbing) an asset. */
+/** Result returned after generating an asset. */
 export interface GenerateResult {
-  outputPath: string;
-  metadataPath: string;
-  stubbed: boolean;
+  success: boolean;
+  outputPath?: string;
+  skipped?: boolean;
+  error?: string;
 }
 
-const MODEL_ID = "bfl/flux-kontext-max";
+const DEFAULT_MODEL = "bfl/flux-kontext-max";
 
 /**
  * Generate a single pixel-art asset using the Vercel AI Gateway.
- *
- * Currently stubbed — logs what it *would* do and writes a placeholder PNG.
- * Once an API key is configured, replace the stub with real generation calls:
- *
- * ```ts
- * import { gateway } from "@ai-sdk/gateway";
- * import { generateImage } from "ai";
- * const result = await generateImage({
- *   model: gateway("bfl/flux-kontext-max"),
- *   prompt: fullPrompt,
- *   aspectRatio: options.aspectRatio,
- * });
- * ```
  */
 export async function generateAsset(
   options: GenerateOptions,
 ): Promise<GenerateResult> {
-  const { name, type, description, aspectRatio } = options;
+  const {
+    name,
+    type,
+    description,
+    aspectRatio = "1:1",
+    model = DEFAULT_MODEL,
+    outputDir = "output",
+    force = false,
+    subdir,
+  } = options;
 
   // Build the full prompt from art bible + type hint + description.
   const typeHint = TYPE_HINTS[type] ?? "";
@@ -47,44 +50,51 @@ export async function generateAsset(
     .filter(Boolean)
     .join("\n\n");
 
-  // Determine output path relative to the project root.
-  const projectRoot = path.resolve(import.meta.dirname, "../../../..");
-  const outputDir = path.join(projectRoot, "Assets", "Generated", type);
-  const outputPath = path.join(outputDir, `${name}.png`);
+  // Determine output path
+  const resolvedDir = subdir ? path.join(outputDir, subdir) : outputDir;
+  const outputPath = path.join(resolvedDir, `${name}.png`);
 
-  console.log(`\nGenerating asset: ${name}`);
-  console.log(`  Type:   ${type}`);
-  console.log(`  Ratio:  ${aspectRatio ?? "auto"}`);
-  console.log(`  Output: ${path.relative(process.cwd(), outputPath)}`);
-  console.log(`  Prompt: ${fullPrompt.slice(0, 120)}...`);
+  // Skip if output already exists (unless --force)
+  if (!force) {
+    try {
+      await access(outputPath);
+      return { success: true, outputPath, skipped: true };
+    } catch {
+      // File doesn't exist, proceed with generation
+    }
+  }
 
-  // ── Stub: write a tiny 1x1 transparent PNG placeholder ────────────
-  // TODO: Replace with real AI generation once API key is available.
-  console.log("  [STUB] Skipping actual generation — no API key configured.");
+  try {
+    await mkdir(resolvedDir, { recursive: true });
 
-  await mkdir(outputDir, { recursive: true });
+    const result = await generateImage({
+      model: gateway.image(model),
+      prompt: fullPrompt,
+      aspectRatio: aspectRatio as `${number}:${number}`,
+    });
 
-  // Minimal valid 1x1 transparent PNG (67 bytes).
-  const placeholderPng = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-    "base64",
-  );
-  await writeFile(outputPath, placeholderPng);
+    // Write image data from the result
+    if (result.image) {
+      const imageData = Buffer.from(result.image.uint8Array);
+      await writeFile(outputPath, imageData);
+    } else {
+      return { success: false, error: "No image data in response" };
+    }
 
-  // ── Write sidecar metadata ────────────────────────────────────────
-  const metadata: AssetMetadata = {
-    name,
-    type,
-    prompt: fullPrompt,
-    model: MODEL_ID,
-    timestamp: new Date().toISOString(),
-    dimensions: { width: 1, height: 1 }, // placeholder
-  };
+    // Write sidecar metadata
+    const metadata: AssetMetadata = {
+      name,
+      type,
+      prompt: fullPrompt,
+      model,
+      timestamp: new Date().toISOString(),
+      dimensions: { width: 0, height: 0 }, // populated by consumer if needed
+    };
 
-  await writeMetadata(outputPath, metadata);
+    await writeMetadata(outputPath, metadata);
 
-  const metadataPath = `${outputPath}.meta.json`;
-  console.log("  Done (stub).\n");
-
-  return { outputPath, metadataPath, stubbed: true };
+    return { success: true, outputPath };
+  } catch (error: any) {
+    return { success: false, error: error.message || String(error) };
+  }
 }

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.73",
-    "ai": "^4.3.0",
+    "ai": "^6.0.116",
     "commander": "^13.1.0",
     "dotenv": "^16.5.0",
     "sharp": "^0.34.0",

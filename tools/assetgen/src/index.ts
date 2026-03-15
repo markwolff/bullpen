@@ -21,7 +21,9 @@ program
     `Asset type (${Object.keys(TYPE_HINTS).join(", ")})`,
   )
   .option("-d, --description <desc>", "Generation prompt / description")
-  .action(async (opts: { name: string; type?: string; description?: string }) => {
+  .option("-o, --output <dir>", "Output directory", "output")
+  .option("-f, --force", "Regenerate even if file exists")
+  .action(async (opts: { name: string; type?: string; description?: string; output: string; force?: boolean }) => {
     // If name matches a manifest entry, fill in defaults from there.
     const entry = BULLPEN_ASSETS.find((a) => a.name === opts.name);
     const type = opts.type ?? entry?.type;
@@ -45,13 +47,19 @@ program
       type,
       description,
       aspectRatio: entry?.aspectRatio,
+      outputDir: opts.output,
+      force: opts.force,
+      subdir: entry?.subdir,
     });
 
-    console.log(
-      result.stubbed
-        ? "Asset stubbed successfully."
-        : `Asset generated: ${result.outputPath}`,
-    );
+    if (result.skipped) {
+      console.log(`Skipped (already exists): ${result.outputPath}`);
+    } else if (result.success) {
+      console.log(`Asset generated: ${result.outputPath}`);
+    } else {
+      console.error(`Error: ${result.error}`);
+      process.exit(1);
+    }
   });
 
 // ── batch ───────────────────────────────────────────────────────────
@@ -63,28 +71,57 @@ program
     "-t, --type <type>",
     "Generate only assets of this type (character, furniture, etc.)",
   )
-  .action(async (opts: { all?: boolean; type?: string }) => {
+  .option("-o, --output <dir>", "Output directory", "output")
+  .option("-f, --force", "Regenerate even if files exist")
+  .action(async (opts: { all?: boolean; type?: string; output: string; force?: boolean }) => {
     let assets = BULLPEN_ASSETS;
 
     if (opts.type) {
       assets = assets.filter((a) => a.type === opts.type);
     } else if (!opts.all) {
-      console.error("Error: specify --all or --type <type>.");
-      process.exit(1);
+      // Default to all if no filter specified
+      assets = BULLPEN_ASSETS;
     }
 
-    console.log(`Generating ${assets.length} assets...\n`);
+    const total = assets.length;
+    let generated = 0;
+    let skipped = 0;
+    let failed = 0;
 
-    for (const entry of assets) {
-      await generateAsset({
+    console.log(`Generating ${total} assets to ${opts.output}...\n`);
+
+    for (let i = 0; i < assets.length; i++) {
+      const entry = assets[i];
+      const idx = i + 1;
+      console.log(`[${idx}/${total}] Generating ${entry.name}...`);
+
+      const result = await generateAsset({
         name: entry.name,
         type: entry.type,
         description: entry.description,
         aspectRatio: entry.aspectRatio,
+        outputDir: opts.output,
+        force: opts.force,
+        subdir: entry.subdir,
       });
+
+      if (result.skipped) {
+        console.log(`  Skipped (already exists): ${result.outputPath}`);
+        skipped++;
+      } else if (result.success) {
+        console.log(`  Generated: ${result.outputPath}`);
+        generated++;
+      } else {
+        console.error(`  FAILED: ${result.error}`);
+        failed++;
+      }
     }
 
-    console.log(`\nBatch complete: ${assets.length} assets processed.`);
+    console.log(`\n--- Batch Summary ---`);
+    console.log(`  Generated: ${generated}`);
+    console.log(`  Skipped:   ${skipped}`);
+    console.log(`  Failed:    ${failed}`);
+    console.log(`  Total:     ${total}`);
   });
 
 program.parse();
