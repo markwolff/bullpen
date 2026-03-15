@@ -715,7 +715,7 @@ public final class PixelArtGenerator: Sendable {
     // MARK: - Drawing Helpers
 
     private func drawTexture(width: Int, height: Int, draw: @escaping (CGContext) -> Void) -> SKTexture {
-        let image = NSImage(size: NSSize(width: width, height: height), flipped: true) { rect in
+        let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.clear(rect)
             draw(ctx)
