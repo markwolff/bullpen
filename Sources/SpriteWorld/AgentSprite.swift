@@ -80,8 +80,9 @@ public class AgentSprite: SKSpriteNode {
         statusIndicator.name = "statusIndicator"
         addChild(statusIndicator)
 
-        // Thought bubble above the sprite
+        // Thought bubble above the sprite — high z so it renders above all furniture
         thoughtBubble.position = CGPoint(x: 0, y: size.height / 2 + 30)
+        thoughtBubble.zPosition = 200
         addChild(thoughtBubble)
     }
 

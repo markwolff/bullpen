@@ -606,6 +606,7 @@ public class OfficeScene: SKScene {
             // Start at the entrance, then walk to desk
             let entrancePoint = CGPoint(x: layout.sceneSize.width / 2, y: 50)
             sprite.position = entrancePoint
+            sprite.zPosition = 5
 
             addChild(sprite)
             agentSprites[agent.id] = sprite
@@ -624,6 +625,7 @@ public class OfficeScene: SKScene {
                 x: CGFloat.random(in: 100...layout.sceneSize.width - 100),
                 y: 80
             )
+            sprite.zPosition = 5
             addChild(sprite)
             agentSprites[agent.id] = sprite
         }
