@@ -1,5 +1,7 @@
 # Milestone 1: Foundation & Test Infrastructure
 
+> **Status: COMPLETE** — All 13 tasks done. 17 tests passing. Committed in `a347e8b`.
+
 **Goal**: Fix the broken test target, establish test fixtures and helpers, validate all existing models, and scaffold the asset generation tool. After this milestone, `swift test` passes and the project has a solid foundation for TDD on all subsequent work.
 
 **Human involvement needed at end**: Confirm `swift test` passes on their machine. Provide `AI_GATEWAY_API_KEY` for Milestone 5.
