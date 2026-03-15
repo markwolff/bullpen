@@ -169,7 +169,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureMainWindow() {
         guard let window = NSApplication.shared.windows.first else { return }
         self.window = window
-        window.level = .floating
+        window.level = .normal
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
