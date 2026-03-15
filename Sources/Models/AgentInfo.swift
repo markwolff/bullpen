@@ -3,6 +3,10 @@ import Foundation
 /// Represents a single AI coding agent that is (or was) active on this machine.
 /// This is the primary model consumed by the sprite world to drive character behavior.
 public struct AgentInfo: Identifiable, Sendable, Equatable {
+    public static func == (lhs: AgentInfo, rhs: AgentInfo) -> Bool {
+        lhs.id == rhs.id
+    }
+
     /// Unique identifier for this agent session (derived from log file or session ID)
     public let id: String
 

@@ -1,0 +1,24 @@
+{
+  "name": "bullpen-assetgen",
+  "version": "0.1.0",
+  "description": "Pixel art asset generator for Bullpen using Vercel AI Gateway",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx src/index.ts generate",
+    "batch": "tsx src/index.ts batch",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/gateway": "^3.0.73",
+    "ai": "^4.3.0",
+    "commander": "^13.1.0",
+    "dotenv": "^16.5.0",
+    "sharp": "^0.34.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

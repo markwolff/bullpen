@@ -7,6 +7,9 @@ let package = Package(
     platforms: [
         .macOS(.v15)
     ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-testing.git", exact: "6.2.3"),
+    ],
     targets: [
         .executableTarget(
             name: "BullpenApp",
@@ -39,7 +42,12 @@ let package = Package(
         ),
         .testTarget(
             name: "BullpenTests",
-            dependencies: ["Models", "LogReaders", "Services"],
+            dependencies: [
+                "Models",
+                "LogReaders",
+                "Services",
+                .product(name: "Testing", package: "swift-testing"),
+            ],
             path: "Tests/BullpenTests"
         ),
     ]
