@@ -77,6 +77,7 @@ public class ThoughtBubble: SKNode {
 
         if textChanged {
             resetFadeTimer()
+            setupScrollIfNeeded()
         }
     }
 
@@ -112,6 +113,38 @@ public class ThoughtBubble: SKNode {
         run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
             self?.isHidden = true
         }
+    }
+
+    // MARK: - 8.14: Text Scroll for Long Text
+
+    /// Sets up a scrolling animation for text that exceeds the bubble width.
+    private func setupScrollIfNeeded() {
+        label.removeAction(forKey: "scroll")
+
+        let availableWidth = maxWidth - padding * 2
+
+        // Measure the text as single-line to detect overflow, since numberOfLines=2 causes wrapping
+        let textWidth: CGFloat
+        if let text = label.text, let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) {
+            let size = (text as NSString).size(withAttributes: [.font: font])
+            textWidth = size.width
+        } else {
+            textWidth = label.frame.width
+        }
+
+        if textWidth > availableWidth {
+            let scrollDistance = textWidth - availableWidth + 20
+            let scrollLeft = SKAction.moveBy(x: -scrollDistance, y: 0, duration: TimeInterval(scrollDistance / 30))
+            let pause = SKAction.wait(forDuration: 2.0)
+            let scrollBack = SKAction.moveBy(x: scrollDistance, y: 0, duration: 0)
+            let sequence = SKAction.sequence([pause, scrollLeft, pause, scrollBack])
+            label.run(SKAction.repeatForever(sequence), withKey: "scroll")
+        }
+    }
+
+    /// Whether the label currently has a scroll action (for testing).
+    public var hasScrollAction: Bool {
+        label.action(forKey: "scroll") != nil
     }
 
     // MARK: - Fade Timer — task 4.9

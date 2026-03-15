@@ -41,6 +41,12 @@ public final class AgentMonitorService: ObservableObject {
     /// Counter for sequential agent naming
     private var agentCounter: Int = 0
 
+    /// Notification service for agent state change alerts (8.6-8.8)
+    public let notificationService = NotificationService()
+
+    /// Whether the app window is currently visible (set externally)
+    public var windowVisible: Bool = true
+
     /// Timer for periodic session discovery
     private var discoveryTimer: Timer?
 
@@ -210,6 +216,18 @@ public final class AgentMonitorService: ObservableObject {
         // 7.10: Only update stateEnteredAt when the state actually transitions
         if oldState != newState {
             agents[index].stateEnteredAt = activity.timestamp
+
+            // 8.6-8.7: Send notifications on state transitions
+            let agent = agents[index]
+            if newState == .finished {
+                Task {
+                    await notificationService.notifyAgentFinished(agent: agent, windowVisible: windowVisible)
+                }
+            } else if newState == .error {
+                Task {
+                    await notificationService.notifyAgentError(agent: agent, windowVisible: windowVisible)
+                }
+            }
         }
 
         // 7.7: Accumulate token usage

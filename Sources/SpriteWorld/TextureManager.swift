@@ -61,8 +61,10 @@ public final class TextureManager: @unchecked Sendable {
     public static let tileFloor = "tile_floor"
     public static let tileWall = "tile_wall"
 
-    // Cat texture
+    // Cat textures
     public static let catIdle = "cat_idle"
+    public static let catSleep = "cat_sleep"
+    public static let catWalk = "cat_walk"
 
     /// All known texture names for validation
     public static let allTextureNames: [String] = [
@@ -76,7 +78,7 @@ public final class TextureManager: @unchecked Sendable {
         furnitureLamp, furnitureCoffeeMug,
         decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
         tileFloor, tileWall,
-        catIdle,
+        catIdle, catSleep, catWalk,
     ]
 
     // MARK: - Public API

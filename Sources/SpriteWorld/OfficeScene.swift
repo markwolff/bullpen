@@ -22,6 +22,15 @@ public class OfficeScene: SKScene {
     /// Background node for the office floor/walls
     private var backgroundNode: SKNode?
 
+    /// The office cat sprite (8.9-8.13)
+    public private(set) var catSprite: CatSprite?
+
+    /// Last update time for delta calculation
+    private var lastUpdateTime: TimeInterval = 0
+
+    /// Last time we updated window daylight
+    private var lastDaylightUpdate: TimeInterval = 0
+
     // MARK: - Initialization
 
     public init(layout: OfficeLayout = .defaultLayout()) {
@@ -52,6 +61,8 @@ public class OfficeScene: SKScene {
         setupDesks()
         setupDecorations()
         setupTitleLabel()
+        setupAmbientAnimations()
+        setupCat()
     }
 
     // MARK: - 6.4: Tiled Background
@@ -158,10 +169,10 @@ public class OfficeScene: SKScene {
             deskNode.zPosition = 1
             addChild(deskNode)
 
-            // Chair
+            // Chair — pushed back 5 points for empty desk ambient state (8.5)
             let chairTexture = tm.texture(for: TextureManager.furnitureChair)
             let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 20, height: 20))
-            chairNode.position = CGPoint(x: 0, y: -40)
+            chairNode.position = CGPoint(x: 0, y: -45)
             chairNode.name = "chair_\(desk.id)"
             deskNode.addChild(chairNode)
 
@@ -191,7 +202,7 @@ public class OfficeScene: SKScene {
             mugNode.zPosition = 2
             deskNode.addChild(mugNode)
 
-            // Steam emitter on coffee mug (6.15)
+            // Steam emitter on coffee mug (6.15) with horizontal wobble (8.3)
             let steam = createSteamEmitter()
             steam.position = CGPoint(x: 22, y: 12)
             steam.name = "steamEmitter_\(desk.id)"
@@ -212,7 +223,7 @@ public class OfficeScene: SKScene {
 
     // MARK: - 6.15: Coffee Mug Steam Particles
 
-    /// Creates a subtle steam emitter for coffee mugs.
+    /// Creates a subtle steam emitter for coffee mugs with horizontal wobble (8.3).
     private func createSteamEmitter() -> SKEmitterNode {
         let emitter = SKEmitterNode()
         emitter.particleBirthRate = 1
@@ -228,6 +239,9 @@ public class OfficeScene: SKScene {
         emitter.particleScaleSpeed = 0.05
         emitter.particleAlpha = 0.3
         emitter.particleAlphaSpeed = -0.15
+        // 8.3: Slight horizontal wobble via position range
+        emitter.particlePositionRange = CGVector(dx: 2, dy: 0)
+        emitter.xAcceleration = 1.5
         return emitter
     }
 
@@ -268,7 +282,7 @@ public class OfficeScene: SKScene {
         whiteboardNode.zPosition = 2
         addChild(whiteboardNode)
 
-        // Clock on wall (static)
+        // Clock on wall
         let clockTexture = tm.texture(for: TextureManager.decorationClock)
         let clockNode = SKSpriteNode(texture: clockTexture, size: CGSize(width: 20, height: 20))
         clockNode.position = CGPoint(x: layout.sceneSize.width - 100, y: layout.sceneSize.height - 40)
@@ -286,6 +300,94 @@ public class OfficeScene: SKScene {
         titleLabel.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - 30)
         titleLabel.zPosition = 10
         addChild(titleLabel)
+    }
+
+    // MARK: - 8.1-8.5: Ambient Animations
+
+    /// Sets up all ambient animations: clock second hand, plant sway, window daylight.
+    private func setupAmbientAnimations() {
+        setupClockSecondHand()
+        setupPlantSway()
+        applyWindowDaylight(hour: currentHour())
+    }
+
+    /// 8.1: Adds a ticking second hand to the wall clock.
+    private func setupClockSecondHand() {
+        guard let clockNode = childNode(withName: "decoration_clock") else { return }
+
+        let secondHand = SKShapeNode()
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: 0, y: 8))
+        secondHand.path = path
+        secondHand.strokeColor = SKColor(red: 0.9, green: 0.1, blue: 0.1, alpha: 1.0)
+        secondHand.lineWidth = 1
+        secondHand.name = "clock_second_hand"
+        secondHand.zPosition = 3
+        clockNode.addChild(secondHand)
+
+        // Rotate 6 degrees per second clockwise (negative angle = clockwise in SpriteKit)
+        let rotate = SKAction.rotate(byAngle: -.pi / 30, duration: 1.0)
+        secondHand.run(SKAction.repeatForever(rotate), withKey: "tick")
+    }
+
+    /// 8.2: Adds subtle sway animation to plant decoration nodes.
+    private func setupPlantSway() {
+        for i in 0...1 {
+            guard let plantNode = childNode(withName: "decoration_plant_\(i)") else { continue }
+
+            let swayLeft = SKAction.rotate(byAngle: CGFloat.pi / 90, duration: 1.5) // ~2 degrees
+            swayLeft.timingMode = .easeInEaseOut
+            let swayRight = swayLeft.reversed()
+            let sway = SKAction.sequence([swayLeft, swayRight])
+            plantNode.run(SKAction.repeatForever(sway), withKey: "sway")
+        }
+    }
+
+    /// 8.4: Returns the daylight color for a given hour (0-23).
+    /// Public for testing.
+    public static func daylightColor(for hour: Int) -> SKColor {
+        switch hour {
+        case 6..<12:
+            // Morning: warm yellow #F5E6C8
+            return SKColor(red: 0.961, green: 0.902, blue: 0.784, alpha: 1.0)
+        case 12..<18:
+            // Afternoon: bright white #FFFFFF
+            return SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
+        case 18..<21:
+            // Evening: warm orange #E8C090
+            return SKColor(red: 0.910, green: 0.753, blue: 0.565, alpha: 1.0)
+        default:
+            // Night (9pm-6am): dark blue #4060A0
+            return SKColor(red: 0.251, green: 0.376, blue: 0.627, alpha: 1.0)
+        }
+    }
+
+    /// Returns the current hour (0-23).
+    private func currentHour() -> Int {
+        Calendar.current.component(.hour, from: Date())
+    }
+
+    /// 8.4: Applies daylight color to the window decoration node.
+    /// Accepts an hour parameter for testability.
+    public func applyWindowDaylight(hour: Int) {
+        guard let windowNode = childNode(withName: "decoration_window") as? SKSpriteNode else { return }
+        let color = Self.daylightColor(for: hour)
+        windowNode.removeAction(forKey: "daylight")
+        windowNode.color = color
+        let colorize = SKAction.colorize(with: color, colorBlendFactor: 0.4, duration: 2.0)
+        windowNode.run(colorize, withKey: "daylight")
+    }
+
+    // MARK: - 8.9-8.13: Office Cat
+
+    /// Sets up the office cat sprite.
+    private func setupCat() {
+        let cat = CatSprite()
+        // Place near a corner initially
+        cat.position = CGPoint(x: 80, y: 100)
+        addChild(cat)
+        catSprite = cat
     }
 
     // MARK: - Agent Management
@@ -448,6 +550,11 @@ public class OfficeScene: SKScene {
         agentSprites[id]
     }
 
+    /// Returns the current desk assignments (for cat update)
+    public var currentDeskAssignments: [Int: String] {
+        deskAssignments
+    }
+
     // MARK: - Click Detection (7.5)
 
     public override func mouseDown(with event: NSEvent) {
@@ -466,9 +573,27 @@ public class OfficeScene: SKScene {
     public override func update(_ currentTime: TimeInterval) {
         super.update(currentTime)
 
+        // Calculate delta time
+        let deltaTime = lastUpdateTime > 0 ? currentTime - lastUpdateTime : 0
+        lastUpdateTime = currentTime
+
         // Update idle ZZZ for all agent sprites
         for sprite in agentSprites.values {
             sprite.updateIdleZZZ(currentTime: currentTime)
+        }
+
+        // Update office cat (8.10-8.13)
+        if let cat = catSprite {
+            let agents = agentSprites.values.map(\.agentInfo)
+            let deskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
+            let activeDeskIDs = Set(deskAssignments.keys)
+            cat.update(deltaTime: deltaTime, agents: agents, deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+        }
+
+        // Periodically update window daylight (every 60 seconds)
+        if currentTime - lastDaylightUpdate > 60.0 {
+            lastDaylightUpdate = currentTime
+            applyWindowDaylight(hour: currentHour())
         }
     }
 }
