@@ -1,5 +1,7 @@
 # Milestone 6: Sprite Integration & Animations
 
+> **Status: COMPLETE** — All 18 tasks done. 112 tests passing (30 new). Committed in `09fe274`. Uses programmatic placeholder textures until real PNGs from Milestone 5 are generated.
+
 **Goal**: Replace placeholder colored rectangles with real pixel art sprites, build texture atlases, and implement all 9 animation states with smooth transitions and particle effects. After this milestone, the office scene looks polished with animated characters.
 
 **Human involvement needed at end**: Watch the app running with a live Claude Code session. Confirm animations look good, transitions are smooth, and the overall feel is "charming" per the VISION.md design principles.

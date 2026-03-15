@@ -1,5 +1,7 @@
 # Milestone 5: Pixel Art Asset Generation
 
+> **Status: COMPLETE (tooling)** — Assetgen CLI implemented with 38 FLUX-optimized prompts. Committed in `38e1f4d`. **Note**: Actual image generation requires a valid `AI_GATEWAY_API_KEY` in `tools/assetgen/.env` — run `npx tsx src/index.ts batch -o ../../Assets/sprites/` to generate.
+
 **Goal**: Use the `tools/assetgen/` tool (scaffolded in Milestone 1) to generate all pixel art assets via Vercel AI Gateway + FLUX Kontext Max. After this milestone, the `Assets/` directory contains production-quality pixel art PNGs for all characters, furniture, decorations, and tiles.
 
 **Human involvement needed at end**:

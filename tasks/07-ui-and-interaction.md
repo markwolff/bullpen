@@ -1,5 +1,7 @@
 # Milestone 7: UI & Interaction (Menu Bar, Detail Popover, Window Management)
 
+> **Status: COMPLETE** — All 15 tasks done. 124 tests passing (14 new). Committed in `5f988da`.
+
 **Goal**: Add the menu bar presence (NSStatusItem), detail popover on agent click, and final window management behaviors. After this milestone, the app is feature-complete for V1 MVP — a user can see agents in the office, click them for details, and manage the window from the menu bar.
 
 **Human involvement needed at end**: Full manual QA pass — launch, use menu bar controls, click agents, drag window, verify on multiple Spaces. This is the V1 MVP acceptance test.

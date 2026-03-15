@@ -1,5 +1,7 @@
 # Milestone 3: Agent Monitor Service & State Machine
 
+> **Status: COMPLETE** — All 12 tasks done. 62 tests passing (14 new). Committed in `4f485ba`.
+
 **Goal**: Wire log readers and LogWatcher into `AgentMonitorService` so it discovers sessions, tracks agent state transitions in real time, and manages agent lifecycle (appear, update, disappear). After this milestone, the service layer is fully functional — feed it log files and it produces a live `[AgentInfo]` array.
 
 **Human involvement needed at end**: Run the app and start a Claude Code session in a terminal. Verify that `AgentMonitorService.agents` updates (check via debug print or breakpoint). This confirms the full pipeline: file system → log reader → state machine → published state.

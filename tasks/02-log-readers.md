@@ -1,5 +1,7 @@
 # Milestone 2: Log Readers
 
+> **Status: COMPLETE** — All 14 tasks done. 48 tests passing (31 new). Committed in `4b279ce`.
+
 **Goal**: Fully implement `ClaudeCodeLogReader` and `CodexLogReader` so they can discover sessions, parse log files, and emit structured `AgentActivity` events. Every behavior is tested against fixture files from Milestone 1.
 
 **Human involvement needed at end**: Run the app on their machine to verify it discovers real Claude Code sessions in `~/.claude/projects/`. Confirm parsed activities match actual terminal output.

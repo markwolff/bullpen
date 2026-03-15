@@ -1,5 +1,7 @@
 # Milestone 4: Office Scene & Floating Window
 
+> **Status: COMPLETE** — All 16 tasks done. 82 tests passing (20 new). Committed in `43fd2ec`.
+
 **Goal**: Get the SpriteKit office scene rendering in a floating borderless window with placeholder sprites at desks, wired to `AgentMonitorService`. After this milestone, running the app shows an office with colored-square agents that move between states as real Claude Code sessions run.
 
 **Human involvement needed at end**: Launch the app, start a Claude Code session, and visually confirm: an agent appears at a desk, its color changes as it reads/writes/thinks, and thought bubbles show current activity. This is the first "it works!" moment.

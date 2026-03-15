@@ -1,5 +1,7 @@
 # Milestone 8: V1.x Polish (Ambient Animations, Notifications, Office Cat)
 
+> **Status: COMPLETE** — All 17 tasks done. 142 tests passing (20 new). Committed in `4789646`.
+
 **Goal**: Add the delightful polish that makes Bullpen feel alive — animated ambient elements (clock, plants, coffee steam, daylight), macOS notifications for key events, and the office cat NPC. After this milestone, Bullpen is ready for public release.
 
 **Human involvement needed at end**: Final review of all polish elements. Approve notification wording. Watch the cat wander around the office. Ship it.
