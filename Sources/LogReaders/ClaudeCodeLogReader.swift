@@ -42,25 +42,42 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         }
 
         for projectDir in projectContents {
+            // Claude Code stores session logs in two possible locations:
+            // 1. Directly in project dir: projects/<hash>/<uuid>.jsonl
+            // 2. In sessions subdir: projects/<hash>/sessions/<uuid>.jsonl
+            let searchDirs: [URL]
             let sessionsDir = projectDir.appendingPathComponent("sessions")
-            guard fm.fileExists(atPath: sessionsDir.path) else { continue }
-
-            let sessionFiles: [URL]
-            do {
-                sessionFiles = try fm.contentsOfDirectory(
-                    at: sessionsDir,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
-                )
-            } catch {
-                // Permission error or similar — skip this directory
-                continue
+            if fm.fileExists(atPath: sessionsDir.path) {
+                searchDirs = [projectDir, sessionsDir]
+            } else {
+                searchDirs = [projectDir]
             }
 
-            for file in sessionFiles {
-                guard file.pathExtension == "jsonl" else { continue }
-                let sessionID = file.deletingPathExtension().lastPathComponent
-                sessions[sessionID] = file
+            for searchDir in searchDirs {
+                let dirFiles: [URL]
+                do {
+                    dirFiles = try fm.contentsOfDirectory(
+                        at: searchDir,
+                        includingPropertiesForKeys: [.contentModificationDateKey],
+                        options: [.skipsHiddenFiles]
+                    )
+                } catch {
+                    continue
+                }
+
+                for file in dirFiles {
+                    guard file.pathExtension == "jsonl" else { continue }
+
+                    // Only include recently active sessions (modified in last 10 minutes)
+                    if let attrs = try? fm.attributesOfItem(atPath: file.path),
+                       let modDate = attrs[.modificationDate] as? Date,
+                       Date().timeIntervalSince(modDate) > 600 {
+                        continue
+                    }
+
+                    let sessionID = file.deletingPathExtension().lastPathComponent
+                    sessions[sessionID] = file
+                }
             }
         }
 

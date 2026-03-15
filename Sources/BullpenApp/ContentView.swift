@@ -29,7 +29,7 @@ struct ContentView: View {
 
             // SpriteKit scene
             SpriteView(scene: officeScene)
-                .frame(minWidth: 800, minHeight: 600)
+                .frame(minWidth: 512, minHeight: 384)
                 .ignoresSafeArea()
                 .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
                     if let agentID = selectedAgentID,

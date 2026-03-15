@@ -29,7 +29,7 @@ struct BullpenApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 512, height: 384)
+        .defaultSize(width: 1024, height: 768)
     }
 }
 
@@ -56,7 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
 
         // Configure window after short delay to let SwiftUI create it
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.configureMainWindow()
             self.setupFrameRateTiering()
             self.restoreWindowPosition()
@@ -131,7 +131,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quit)
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
-        statusItem.menu = nil  // Reset so left-click still works
+        // Defer clearing so the menu has time to display
+        DispatchQueue.main.async { [weak self] in
+            self?.statusItem.menu = nil  // Reset so left-click still works
+        }
     }
 
     // MARK: - 7.12: Window position persistence
@@ -199,22 +202,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
-    private func setFrameRate(_ fps: Int) {
-        guard let window = self.window ?? NSApplication.shared.windows.first else { return }
-        for subview in window.contentView?.subviews ?? [] {
-            if let skView = subview as? SKView {
-                skView.preferredFramesPerSecond = fps
-                skView.isPaused = false
-            }
+    private func findSKView(in view: NSView) -> SKView? {
+        if let skView = view as? SKView { return skView }
+        for subview in view.subviews {
+            if let found = findSKView(in: subview) { return found }
         }
+        return nil
+    }
+
+    private func setFrameRate(_ fps: Int) {
+        guard let window = self.window ?? NSApplication.shared.windows.first,
+              let contentView = window.contentView,
+              let skView = findSKView(in: contentView) else { return }
+        skView.preferredFramesPerSecond = fps
+        skView.isPaused = false
     }
 
     private func handleOcclusionChange(window: NSWindow) {
         let isVisible = window.occlusionState.contains(.visible)
-        for subview in window.contentView?.subviews ?? [] {
-            if let skView = subview as? SKView {
-                skView.isPaused = !isVisible
-            }
-        }
+        guard let contentView = window.contentView,
+              let skView = findSKView(in: contentView) else { return }
+        skView.isPaused = !isVisible
     }
 }
