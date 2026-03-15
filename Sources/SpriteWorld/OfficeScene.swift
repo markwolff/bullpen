@@ -12,6 +12,10 @@ public class OfficeScene: SKScene {
     /// Active agent sprites, keyed by agent ID
     private var agentSprites: [String: AgentSprite] = [:]
 
+    /// Callback fired when an agent sprite is clicked. The parameter is the agent ID,
+    /// or nil if the click landed on empty space. (7.5)
+    public var onAgentClicked: ((String?) -> Void)?
+
     /// Which desks are currently occupied (deskID -> agentID)
     private var deskAssignments: [Int: String] = [:]
 
@@ -442,6 +446,19 @@ public class OfficeScene: SKScene {
     /// Returns a specific agent sprite by ID
     public func agentSprite(forID id: String) -> AgentSprite? {
         agentSprites[id]
+    }
+
+    // MARK: - Click Detection (7.5)
+
+    public override func mouseDown(with event: NSEvent) {
+        let location = event.location(in: self)
+        let nodes = self.nodes(at: location)
+
+        if let agentSprite = nodes.compactMap({ $0 as? AgentSprite ?? $0.parent as? AgentSprite }).first {
+            onAgentClicked?(agentSprite.agentInfo.id)
+        } else {
+            onAgentClicked?(nil)
+        }
     }
 
     // MARK: - Update Loop

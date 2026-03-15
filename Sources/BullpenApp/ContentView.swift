@@ -16,6 +16,12 @@ struct ContentView: View {
         return scene
     }()
 
+    /// The agent currently selected for the detail popover (7.6)
+    @State private var selectedAgentID: String?
+
+    /// Whether the detail popover is shown
+    @State private var showingPopover: Bool = false
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -25,9 +31,26 @@ struct ContentView: View {
             SpriteView(scene: officeScene)
                 .frame(minWidth: 800, minHeight: 600)
                 .ignoresSafeArea()
+                .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
+                    if let agentID = selectedAgentID,
+                       let agent = monitorService.agents.first(where: { $0.id == agentID }) {
+                        AgentDetailView(agent: agent)
+                    }
+                }
         }
         .onChange(of: monitorService.agents) { _, newAgents in
             officeScene.updateAgents(newAgents)
+        }
+        .onAppear {
+            officeScene.onAgentClicked = { agentID in
+                if let id = agentID {
+                    selectedAgentID = id
+                    showingPopover = true
+                } else {
+                    showingPopover = false
+                    selectedAgentID = nil
+                }
+            }
         }
     }
 

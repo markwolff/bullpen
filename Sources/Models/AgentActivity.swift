@@ -18,18 +18,28 @@ public struct AgentActivity: Sendable {
     /// Optional: the raw log line or JSON payload for debugging
     public let rawPayload: String?
 
+    /// Number of input tokens consumed by this activity (7.7)
+    public let inputTokens: Int
+
+    /// Number of output tokens produced by this activity (7.7)
+    public let outputTokens: Int
+
     public init(
         sessionID: String,
         timestamp: Date,
         activityType: ActivityType,
         summary: String,
-        rawPayload: String? = nil
+        rawPayload: String? = nil,
+        inputTokens: Int = 0,
+        outputTokens: Int = 0
     ) {
         self.sessionID = sessionID
         self.timestamp = timestamp
         self.activityType = activityType
         self.summary = summary
         self.rawPayload = rawPayload
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
     }
 }
 

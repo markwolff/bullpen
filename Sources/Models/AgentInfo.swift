@@ -31,6 +31,20 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// The workspace/project the agent is working in
     public var workspacePath: String?
 
+    /// Total input tokens consumed during this session (7.7)
+    public var totalInputTokens: Int = 0
+
+    /// Total output tokens produced during this session (7.7)
+    public var totalOutputTokens: Int = 0
+
+    /// Recent tool-use activities, most recent first, capped at 5 (7.8)
+    public var recentTools: [AgentActivity] = []
+
+    /// When the agent entered its current state (7.10).
+    /// Unlike `lastUpdatedAt` which changes on every activity,
+    /// this only changes when the state actually transitions.
+    public var stateEnteredAt: Date
+
     public init(
         id: String,
         name: String,
@@ -39,7 +53,8 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         currentTaskDescription: String = "",
         startedAt: Date = .now,
         lastUpdatedAt: Date = .now,
-        workspacePath: String? = nil
+        workspacePath: String? = nil,
+        stateEnteredAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -49,6 +64,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         self.startedAt = startedAt
         self.lastUpdatedAt = lastUpdatedAt
         self.workspacePath = workspacePath
+        self.stateEnteredAt = stateEnteredAt ?? startedAt
     }
 }
 

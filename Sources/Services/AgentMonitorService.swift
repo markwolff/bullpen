@@ -200,10 +200,29 @@ public final class AgentMonitorService: ObservableObject {
     public func updateAgentState(sessionID: String, activity: AgentActivity) {
         guard let index = agents.firstIndex(where: { $0.id == sessionID }) else { return }
 
+        let oldState = agents[index].state
         let newState = determineState(from: activity)
+
         agents[index].state = newState
         agents[index].currentTaskDescription = activity.summary
         agents[index].lastUpdatedAt = activity.timestamp
+
+        // 7.10: Only update stateEnteredAt when the state actually transitions
+        if oldState != newState {
+            agents[index].stateEnteredAt = activity.timestamp
+        }
+
+        // 7.7: Accumulate token usage
+        agents[index].totalInputTokens += activity.inputTokens
+        agents[index].totalOutputTokens += activity.outputTokens
+
+        // 7.8: Track recent tool-use activities (FIFO, most recent first, cap at 5)
+        if activity.activityType == .toolUse {
+            agents[index].recentTools.insert(activity, at: 0)
+            if agents[index].recentTools.count > 5 {
+                agents[index].recentTools = Array(agents[index].recentTools.prefix(5))
+            }
+        }
     }
 
     // MARK: - Private helpers
