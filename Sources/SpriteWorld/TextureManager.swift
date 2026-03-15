@@ -99,6 +99,13 @@ public final class TextureManager: @unchecked Sendable {
             return atlasTexture
         }
 
+        // Try loading from bundled PNG resource
+        if let bundleTexture = loadFromBundle(name: name) {
+            bundleTexture.filteringMode = .nearest
+            cache[name] = bundleTexture
+            return bundleTexture
+        }
+
         // Fall back to placeholder
         let placeholder = Self.generatePlaceholder(for: name)
         placeholder.filteringMode = .nearest
@@ -133,11 +140,20 @@ public final class TextureManager: @unchecked Sendable {
                 cache[frameName] = atlasTexture
                 lock.unlock()
                 frames.append(atlasTexture)
+            } else if let bundleTexture = loadFromBundle(name: frameName) {
+                bundleTexture.filteringMode = .nearest
+                lock.lock()
+                cache[frameName] = bundleTexture
+                lock.unlock()
+                frames.append(bundleTexture)
             } else {
-                // Generate placeholder with slight color variation per frame
-                let variation = CGFloat(i) * 0.08
-                let variedColor = Self.varyColor(baseColor, by: variation)
-                let tex = Self.placeholderTexture(size: size, color: variedColor)
+                // Fall back to base state texture (without frame index) from bundle
+                let baseName = "\(prefix)_\(state.rawValue)"
+                let tex = loadFromBundle(name: baseName) ?? {
+                    let variation = CGFloat(i) * 0.08
+                    let variedColor = Self.varyColor(baseColor, by: variation)
+                    return Self.placeholderTexture(size: size, color: variedColor)
+                }()
                 tex.filteringMode = .nearest
                 lock.lock()
                 cache[frameName] = tex
@@ -195,6 +211,15 @@ public final class TextureManager: @unchecked Sendable {
             }
         }
         return nil
+    }
+
+    /// Attempts to load a texture from a bundled PNG resource.
+    private func loadFromBundle(name: String) -> SKTexture? {
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources") else {
+            return nil
+        }
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        return SKTexture(image: image)
     }
 
     /// Generates a placeholder texture with a color derived from the texture name.

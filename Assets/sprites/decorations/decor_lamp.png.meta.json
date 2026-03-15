@@ -1,0 +1,11 @@
+{
+  "name": "decor_lamp",
+  "type": "decoration",
+  "prompt": "Style: 2D pixel art, 3/4 top-down perspective (RPG-style, like Stardew Valley or Game Dev Tycoon).\nColor palette: Warm, muted background tones (off-white walls #EAE6DF, tan wood floor #C4B6A0, brown desks #8B6544). Saturated accent colors for status indicators.\nResolution: Character sprites 32x48 pixels, furniture/tiles 16x16 or 32x32 pixels, scaled with nearest-neighbor filtering.\nOutline: 1px dark outlines (#2D2D3D, warm dark — never pure black) on all sprites.\nPerspective: 3/4 top-down view for all elements.\nLighting: Soft ambient lighting, warm office tones, no harsh directional shadows.\nBackground: Transparent where applicable.\nConsistency: All assets must feel like they belong in the same cozy office environment.\n\nA small decorative object. Various sizes. Adds personality and warmth to the office scene.\n\n16x24 pixel art small warm desk lamp with cone-shaped shade casting soft yellow glow, 3/4 top-down RPG perspective, cozy and inviting, 1px dark outlines #2D2D3D, transparent background, warm ambient lighting",
+  "model": "bfl/flux-kontext-max",
+  "timestamp": "2026-03-15T21:23:22.558Z",
+  "dimensions": {
+    "width": 0,
+    "height": 0
+  }
+}
