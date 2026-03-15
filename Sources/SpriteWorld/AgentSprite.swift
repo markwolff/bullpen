@@ -20,8 +20,8 @@ public class AgentSprite: SKSpriteNode {
     /// Name label below the sprite
     private let nameLabel: SKLabelNode
 
-    /// Visual state indicator (colored dot)
-    private let statusIndicator: SKShapeNode
+    /// Visual state indicator (colored dot or square)
+    public let statusIndicator: SKShapeNode
 
     // MARK: - Initialization
 
@@ -31,14 +31,11 @@ public class AgentSprite: SKSpriteNode {
         self.nameLabel = SKLabelNode()
         self.statusIndicator = SKShapeNode(circleOfRadius: 4)
 
-        // TODO: Replace with actual sprite texture/atlas
-        // For now, use a colored rectangle as placeholder
+        // Use state-based color for the sprite body
         let placeholderSize = CGSize(width: 32, height: 48)
-        let placeholderColor: SKColor = agentInfo.agentType == .claudeCode
-            ? SKColor(red: 0.85, green: 0.45, blue: 0.2, alpha: 1.0)   // Orange for Claude
-            : SKColor(red: 0.2, green: 0.6, blue: 0.85, alpha: 1.0)    // Blue for Codex
+        let bodyColor = AgentSprite.colorForState(agentInfo.state)
 
-        super.init(texture: nil, color: placeholderColor, size: placeholderSize)
+        super.init(texture: nil, color: bodyColor, size: placeholderSize)
 
         self.name = "agent_\(agentInfo.id)"
         setupChildNodes()
@@ -60,9 +57,10 @@ public class AgentSprite: SKSpriteNode {
         addChild(nameLabel)
 
         // Status indicator dot
-        statusIndicator.fillColor = colorForState(agentInfo.state)
+        statusIndicator.fillColor = AgentSprite.colorForState(agentInfo.state)
         statusIndicator.strokeColor = .clear
         statusIndicator.position = CGPoint(x: size.width / 2 + 6, y: size.height / 2 - 6)
+        statusIndicator.name = "statusIndicator"
         addChild(statusIndicator)
 
         // Thought bubble above the sprite
@@ -77,8 +75,14 @@ public class AgentSprite: SKSpriteNode {
         let oldState = agentInfo.state
         agentInfo = newInfo
 
-        // Update status indicator color
-        statusIndicator.fillColor = colorForState(newInfo.state)
+        let stateColor = AgentSprite.colorForState(newInfo.state)
+
+        // Update sprite body color to reflect state
+        self.color = stateColor
+
+        // Update status indicator color and shape — task 4.8
+        statusIndicator.fillColor = stateColor
+        updateStatusIndicatorShape(for: newInfo.state)
 
         // Update thought bubble
         thoughtBubble.update(text: newInfo.currentTaskDescription, for: newInfo.state)
@@ -86,50 +90,68 @@ public class AgentSprite: SKSpriteNode {
         // Trigger animation change if state changed
         if oldState != newInfo.state {
             playAnimation(for: newInfo.state)
+
+            // Pulse animation on state change — task 4.8
+            pulseStatusIndicator()
         }
+    }
+
+    /// Updates status indicator to square for error, circle for everything else — task 4.8
+    private func updateStatusIndicatorShape(for state: AgentState) {
+        if state == .error {
+            statusIndicator.path = CGPath(
+                rect: CGRect(x: -4, y: -4, width: 8, height: 8),
+                transform: nil
+            )
+        } else {
+            statusIndicator.path = CGPath(
+                ellipseIn: CGRect(x: -4, y: -4, width: 8, height: 8),
+                transform: nil
+            )
+        }
+    }
+
+    /// Pulse animation on state change — task 4.8
+    private func pulseStatusIndicator() {
+        let scaleUp = SKAction.scale(to: 1.3, duration: 0.15)
+        scaleUp.timingMode = .easeOut
+        let scaleDown = SKAction.scale(to: 1.0, duration: 0.15)
+        scaleDown.timingMode = .easeIn
+        statusIndicator.run(SKAction.sequence([scaleUp, scaleDown]), withKey: "pulse")
     }
 
     // MARK: - Animations
 
     /// Plays the appropriate animation for the given agent state.
-    func playAnimation(for state: AgentState) {
+    public func playAnimation(for state: AgentState) {
         removeAction(forKey: "stateAnimation")
 
         switch state {
         case .idle:
-            // TODO: Idle breathing/blinking animation
             playIdleAnimation()
 
         case .thinking:
-            // TODO: Scratching head, looking up animation
             playThinkingAnimation()
 
         case .writingCode:
-            // TODO: Typing animation with keyboard sounds
             playTypingAnimation()
 
         case .readingFiles:
-            // TODO: Reading/scrolling animation
             playReadingAnimation()
 
         case .runningCommand:
-            // TODO: Watching a terminal animation
             playTypingAnimation()
 
         case .searching:
-            // TODO: Looking around animation
             playThinkingAnimation()
 
         case .waitingForInput:
-            // TODO: Looking at camera / tapping foot
             playIdleAnimation()
 
         case .error:
-            // TODO: Distressed animation, red flash
             playErrorAnimation()
 
         case .finished:
-            // TODO: Standing up, stretching
             playIdleAnimation()
         }
     }
@@ -214,17 +236,27 @@ public class AgentSprite: SKSpriteNode {
     // MARK: - Helpers
 
     /// Returns a color representing the agent's current state.
-    private func colorForState(_ state: AgentState) -> SKColor {
+    /// Uses exact hex colors from VISION.md — task 4.7
+    public static func colorForState(_ state: AgentState) -> SKColor {
         switch state {
-        case .idle: SKColor.gray
-        case .thinking: SKColor.yellow
-        case .writingCode: SKColor.green
-        case .readingFiles: SKColor.cyan
-        case .runningCommand: SKColor.orange
-        case .searching: SKColor.purple
-        case .waitingForInput: SKColor.blue
-        case .error: SKColor.red
-        case .finished: SKColor.darkGray
+        case .idle:
+            SKColor(red: 0.627, green: 0.627, blue: 0.627, alpha: 1.0) // #A0A0A0
+        case .thinking:
+            SKColor(red: 0.941, green: 0.753, blue: 0.251, alpha: 1.0) // #F0C040
+        case .writingCode:
+            SKColor(red: 0.314, green: 0.784, blue: 0.471, alpha: 1.0) // #50C878
+        case .readingFiles:
+            SKColor(red: 0.376, green: 0.690, blue: 0.816, alpha: 1.0) // #60B0D0
+        case .runningCommand:
+            SKColor(red: 0.910, green: 0.565, blue: 0.251, alpha: 1.0) // #E89040
+        case .searching:
+            SKColor(red: 0.690, green: 0.502, blue: 0.816, alpha: 1.0) // #B080D0
+        case .waitingForInput:
+            SKColor(red: 0.376, green: 0.565, blue: 0.816, alpha: 1.0) // #6090D0
+        case .error:
+            SKColor(red: 0.878, green: 0.314, blue: 0.314, alpha: 1.0) // #E05050
+        case .finished:
+            SKColor(red: 0.439, green: 0.439, blue: 0.439, alpha: 1.0) // #707070
         }
     }
 }

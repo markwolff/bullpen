@@ -46,6 +46,7 @@ let package = Package(
                 "Models",
                 "LogReaders",
                 "Services",
+                "SpriteWorld",
                 .product(name: "Testing", package: "swift-testing"),
             ],
             path: "Tests/BullpenTests"

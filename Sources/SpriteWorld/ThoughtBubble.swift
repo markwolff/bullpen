@@ -17,6 +17,15 @@ public class ThoughtBubble: SKNode {
     /// Padding inside the bubble
     private let padding: CGFloat = 12
 
+    /// The last time the text was changed (for fade timer) — task 4.9
+    private var lastChangeTime: TimeInterval = 0
+
+    /// Whether the bubble has faded due to inactivity — task 4.9
+    private var hasFaded: Bool = false
+
+    /// Duration before fading to 50% opacity — task 4.9
+    private let fadeTimeout: TimeInterval = 10.0
+
     public override init() {
         bubbleBackground = SKShapeNode()
         label = SKLabelNode()
@@ -60,9 +69,15 @@ public class ThoughtBubble: SKNode {
             return
         }
 
+        // Reset fade timer on text change — task 4.9
+        let textChanged = label.text != text
         label.text = text
         updateBubblePath()
         show()
+
+        if textChanged {
+            resetFadeTimer()
+        }
     }
 
     /// Rebuilds the bubble shape to fit the current label text.
@@ -78,7 +93,6 @@ public class ThoughtBubble: SKNode {
             height: bubbleHeight
         )
 
-        // TODO: Add a little "tail" pointing down toward the agent sprite
         bubbleBackground.path = CGPath(roundedRect: rect, cornerWidth: 8, cornerHeight: 8, transform: nil)
     }
 
@@ -88,13 +102,33 @@ public class ThoughtBubble: SKNode {
         isHidden = false
         alpha = 0
         run(SKAction.fadeIn(withDuration: 0.2))
+        hasFaded = false
     }
 
     /// Hides the bubble with a fade-out animation.
     public func hide() {
         guard !isHidden else { return }
+        removeAction(forKey: "fadeTimeout")
         run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
             self?.isHidden = true
         }
+    }
+
+    // MARK: - Fade Timer — task 4.9
+
+    /// Resets the inactivity fade timer. After fadeTimeout seconds with no text change,
+    /// the bubble fades to 50% opacity.
+    private func resetFadeTimer() {
+        hasFaded = false
+        removeAction(forKey: "fadeTimeout")
+
+        // Restore full opacity if we had faded
+        run(SKAction.fadeAlpha(to: 1.0, duration: 0.1))
+
+        // Schedule fade after timeout
+        let wait = SKAction.wait(forDuration: fadeTimeout)
+        let fade = SKAction.fadeAlpha(to: 0.5, duration: 0.5)
+        let sequence = SKAction.sequence([wait, fade])
+        run(sequence, withKey: "fadeTimeout")
     }
 }
