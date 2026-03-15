@@ -73,6 +73,12 @@ public class OfficeScene: SKScene {
         // Pixel art tiles are 16x16, scaled 3x for a chunky Stardew Valley look
         let tileDisplaySize: CGFloat = 48
 
+        // Background container for parallax effect — all visible tiles go here
+        let bgContainer = SKNode()
+        bgContainer.name = "background_container"
+        bgContainer.zPosition = -12
+        addChild(bgContainer)
+
         // Wall (top 1/3) — warm plaster tiles
         let wallTexture = TextureManager.shared.texture(for: TextureManager.tileWall)
         let wallHeight = layout.sceneSize.height / 3
@@ -85,7 +91,7 @@ public class OfficeScene: SKScene {
                 let tile = SKSpriteNode(texture: wallTexture, size: CGSize(width: tileDisplaySize, height: tileDisplaySize))
                 tile.position = CGPoint(x: x, y: y)
                 tile.zPosition = -10
-                addChild(tile)
+                bgContainer.addChild(tile)
                 y += tileDisplaySize
             }
             x += tileDisplaySize
@@ -97,9 +103,9 @@ public class OfficeScene: SKScene {
         trim.fillColor = trimColor
         trim.strokeColor = .clear
         trim.zPosition = -8
-        addChild(trim)
+        bgContainer.addChild(trim)
 
-        // Add a single named wall node for test compatibility
+        // Add a single named wall node for test compatibility (direct scene child)
         let wall = SKSpriteNode(
             color: .clear,
             size: CGSize(width: layout.sceneSize.width, height: wallHeight)
@@ -123,13 +129,13 @@ public class OfficeScene: SKScene {
                 let tile = SKSpriteNode(texture: floorTexture, size: CGSize(width: tileDisplaySize, height: tileDisplaySize))
                 tile.position = CGPoint(x: x, y: y)
                 tile.zPosition = -10
-                addChild(tile)
+                bgContainer.addChild(tile)
                 y += tileDisplaySize
             }
             x += tileDisplaySize
         }
 
-        // Add a single named floor node for test compatibility
+        // Add a single named floor node for test compatibility (direct scene child)
         let floor = SKSpriteNode(
             color: .clear,
             size: CGSize(width: layout.sceneSize.width, height: floorHeight)
@@ -338,6 +344,14 @@ public class OfficeScene: SKScene {
         clockNode.zPosition = 2
         addChild(clockNode)
 
+        // Poster — 14x18 pixel art scaled 4x = 56x72, between whiteboard and bookshelf
+        let posterTexture = tm.texture(for: TextureManager.decorationPoster)
+        let posterNode = SKSpriteNode(texture: posterTexture, size: CGSize(width: 56, height: 72))
+        posterNode.position = CGPoint(x: 327, y: layout.sceneSize.height - 80)
+        posterNode.name = "decoration_poster"
+        posterNode.zPosition = 2
+        addChild(posterNode)
+
         // Bookshelf — 20x16 pixel art scaled 4x = 80x64, on the wall between desks
         let bookshelfTexture = tm.texture(for: TextureManager.decorationBookshelf)
         let bookshelfNode = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 80, height: 64))
@@ -376,12 +390,13 @@ public class OfficeScene: SKScene {
 
     // MARK: - 8.1-8.5: Ambient Animations
 
-    /// Sets up all ambient animations: clock second hand, plant sway, window daylight, dust motes.
+    /// Sets up all ambient animations: clock second hand, plant sway, window daylight, dust motes, rain.
     private func setupAmbientAnimations() {
         setupClockSecondHand()
         setupPlantSway()
         applyWindowDaylight(hour: currentHour())
         setupDustMotes()
+        updateRainState()
     }
 
     /// 8.1: Adds a ticking second hand to the wall clock.
@@ -448,6 +463,62 @@ public class OfficeScene: SKScene {
         addChild(emitter)
     }
 
+    // MARK: - Rain on Windows at Night
+
+    /// Adds rain particle emitters to window nodes during nighttime hours.
+    private func setupRainOnWindows() {
+        let hour = currentHour()
+        guard hour >= 21 || hour < 6 else { return }
+
+        for windowName in ["decoration_window", "decoration_window_2"] {
+            guard let windowNode = childNode(withName: windowName) else { continue }
+            // Don't add duplicates
+            guard windowNode.childNode(withName: "rain_emitter") == nil else { continue }
+
+            let emitter = SKEmitterNode()
+            emitter.particleBirthRate = 4
+            emitter.particleLifetime = 0.6
+            emitter.particleLifetimeRange = 0.2
+            emitter.particleColor = SKColor(red: 0.7, green: 0.8, blue: 1.0, alpha: 0.5)
+            emitter.particleColorAlphaSpeed = -0.5
+            emitter.particleSpeed = 80
+            emitter.particleSpeedRange = 20
+            emitter.emissionAngle = -(3 * .pi / 8) // angled downward-right
+            emitter.emissionAngleRange = .pi / 16
+            emitter.particleScale = 0.08
+            emitter.particleScaleSpeed = 0.02
+            emitter.particleAlpha = 0.5
+            emitter.particleAlphaRange = 0.2
+            emitter.particlePositionRange = CGVector(dx: 80, dy: 10)
+            emitter.position = CGPoint(x: 0, y: 30)
+            emitter.name = "rain_emitter"
+            emitter.zPosition = 3
+            windowNode.addChild(emitter)
+        }
+    }
+
+    /// Removes rain emitters from window nodes with a fade-out.
+    private func removeRainFromWindows() {
+        for windowName in ["decoration_window", "decoration_window_2"] {
+            guard let windowNode = childNode(withName: windowName) else { continue }
+            guard let rain = windowNode.childNode(withName: "rain_emitter") else { continue }
+            rain.run(SKAction.sequence([
+                SKAction.fadeOut(withDuration: 1.0),
+                SKAction.removeFromParent()
+            ]))
+        }
+    }
+
+    /// Updates rain state based on current hour. Called from ambient update cycle.
+    private func updateRainState() {
+        let hour = currentHour()
+        if hour >= 21 || hour < 6 {
+            setupRainOnWindows()
+        } else {
+            removeRainFromWindows()
+        }
+    }
+
     /// 8.4: Returns the daylight color for a given hour (0-23).
     /// Public for testing.
     public static func daylightColor(for hour: Int) -> SKColor {
@@ -472,15 +543,17 @@ public class OfficeScene: SKScene {
         Calendar.current.component(.hour, from: Date())
     }
 
-    /// 8.4: Applies daylight color to the window decoration node.
+    /// 8.4: Applies daylight color to all window decoration nodes.
     /// Accepts an hour parameter for testability.
     public func applyWindowDaylight(hour: Int) {
-        guard let windowNode = childNode(withName: "decoration_window") as? SKSpriteNode else { return }
         let color = Self.daylightColor(for: hour)
-        windowNode.removeAction(forKey: "daylight")
-        windowNode.color = color
-        let colorize = SKAction.colorize(with: color, colorBlendFactor: 0.4, duration: 2.0)
-        windowNode.run(colorize, withKey: "daylight")
+        for windowName in ["decoration_window", "decoration_window_2"] {
+            guard let windowNode = childNode(withName: windowName) as? SKSpriteNode else { continue }
+            windowNode.removeAction(forKey: "daylight")
+            windowNode.color = color
+            let colorize = SKAction.colorize(with: color, colorBlendFactor: 0.4, duration: 2.0)
+            windowNode.run(colorize, withKey: "daylight")
+        }
     }
 
     // MARK: - 8.9-8.13: Office Cat
@@ -659,6 +732,30 @@ public class OfficeScene: SKScene {
         deskAssignments
     }
 
+    // MARK: - Parallax Effect
+
+    /// Shifts the background container slightly for a depth illusion when the window moves.
+    public func applyParallax(dx: CGFloat, dy: CGFloat) {
+        guard let container = childNode(withName: "background_container") else { return }
+        let factor: CGFloat = 0.03
+        let maxOffset: CGFloat = 8.0
+        let targetX = max(-maxOffset, min(maxOffset, dx * factor))
+        let targetY = max(-maxOffset, min(maxOffset, dy * factor))
+        container.removeAction(forKey: "parallax")
+        let move = SKAction.move(to: CGPoint(x: targetX, y: targetY), duration: 0.08)
+        move.timingMode = .easeOut
+        container.run(move, withKey: "parallax")
+    }
+
+    /// Animates the background container back to its default position.
+    public func resetParallax() {
+        guard let container = childNode(withName: "background_container") else { return }
+        container.removeAction(forKey: "parallax")
+        let reset = SKAction.move(to: .zero, duration: 0.4)
+        reset.timingMode = .easeOut
+        container.run(reset, withKey: "parallax")
+    }
+
     // MARK: - Click Detection (7.5)
 
     public override func mouseDown(with event: NSEvent) {
@@ -698,6 +795,7 @@ public class OfficeScene: SKScene {
         if currentTime - lastDaylightUpdate > 60.0 {
             lastDaylightUpdate = currentTime
             applyWindowDaylight(hour: currentHour())
+            updateRainState()
         }
     }
 }

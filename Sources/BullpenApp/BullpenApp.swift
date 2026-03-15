@@ -48,6 +48,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reference to the monitor service for badge updates (set from BullpenApp)
     var monitorService: AgentMonitorService?
 
+    /// Tracks window position for parallax delta calculation
+    private var lastWindowOrigin: CGPoint?
+
+    /// Debounce timer for resetting parallax after dragging stops
+    private var parallaxResetWorkItem: DispatchWorkItem?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set activation policy to accessory (no dock icon) — task 4.12
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -156,13 +162,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Observes window move notifications to auto-save position.
+    /// Observes window move notifications to auto-save position and apply parallax.
     private func setupWindowPositionPersistence() {
         NotificationCenter.default.publisher(for: NSWindow.didMoveNotification)
             .sink { [weak self] _ in
                 self?.saveWindowPosition()
+                self?.handleParallax()
             }
             .store(in: &cancellables)
+    }
+
+    /// Computes window drag delta and applies parallax to the office scene background.
+    private func handleParallax() {
+        guard let window = self.window else { return }
+        let origin = window.frame.origin
+
+        guard let last = lastWindowOrigin else {
+            lastWindowOrigin = origin
+            return
+        }
+
+        let dx = origin.x - last.x
+        let dy = origin.y - last.y
+        lastWindowOrigin = origin
+
+        guard let contentView = window.contentView,
+              let skView = findSKView(in: contentView),
+              let scene = skView.scene as? OfficeScene else { return }
+
+        scene.applyParallax(dx: dx, dy: dy)
+
+        // Debounce reset: after 0.3s of no movement, animate back to origin
+        parallaxResetWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak scene] in
+            scene?.resetParallax()
+        }
+        parallaxResetWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
     }
 
     /// Configures the main window as a floating, borderless, transparent overlay.

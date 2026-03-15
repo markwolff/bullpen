@@ -525,6 +525,59 @@ public final class PixelArtGenerator: Sendable {
         }
     }
 
+    /// "SHIP IT" poster with pixel-art rocket — 14x18 pixel art
+    func poster() -> SKTexture {
+        drawTexture(width: 14, height: 18) { [self] ctx in
+            // Frame border
+            fill(ctx, rect: r(0, 0, 14, 18), color: Self.woodLight)
+            // Dark interior
+            fill(ctx, rect: r(1, 1, 12, 16), color: Self.RGB(0x2A2A3A))
+
+            // "SHIP" text at top — compact 2px-wide letters in cyan
+            let cyan = Self.RGB(0x60E0FF)
+            // S
+            fill(ctx, rect: r(2, 14, 2, 1), color: cyan)
+            fill(ctx, rect: r(2, 15, 1, 1), color: cyan)
+            fill(ctx, rect: r(2, 16, 2, 1), color: cyan)
+            fill(ctx, rect: r(3, 13, 1, 1), color: cyan)
+            fill(ctx, rect: r(2, 12, 2, 1), color: cyan)
+            // H
+            fill(ctx, rect: r(5, 12, 1, 5), color: cyan)
+            fill(ctx, rect: r(7, 12, 1, 5), color: cyan)
+            fill(ctx, rect: r(6, 14, 1, 1), color: cyan)
+            // I
+            fill(ctx, rect: r(9, 12, 1, 5), color: cyan)
+            // P
+            fill(ctx, rect: r(11, 12, 1, 5), color: cyan)
+            fill(ctx, rect: r(12, 14, 1, 3), color: cyan)
+            fill(ctx, rect: r(11, 14, 2, 1), color: cyan)
+            fill(ctx, rect: r(11, 16, 2, 1), color: cyan)
+
+            // "IT" text below — centered
+            // I
+            fill(ctx, rect: r(5, 10, 1, 1), color: cyan)
+            // T
+            fill(ctx, rect: r(7, 10, 3, 1), color: cyan)
+            fill(ctx, rect: r(8, 9, 1, 1), color: cyan)
+            fill(ctx, rect: r(8, 8, 1, 1), color: cyan)
+
+            // Rocket body (centered, lower half)
+            let white = Self.RGB(0xE0E0E0)
+            let red = Self.RGB(0xE04040)
+            let orange = Self.RGB(0xFFA030)
+            // Nose cone
+            fill(ctx, rect: r(7, 7, 1, 1), color: red)
+            // Body
+            fill(ctx, rect: r(6, 4, 3, 3), color: white)
+            // Fins
+            fill(ctx, rect: r(5, 4, 1, 2), color: red)
+            fill(ctx, rect: r(9, 4, 1, 2), color: red)
+            // Flame
+            fill(ctx, rect: r(6, 2, 3, 2), color: orange)
+            fill(ctx, rect: r(7, 1, 1, 1), color: Self.RGB(0xFF6020))
+        }
+    }
+
     // MARK: - Animation Frame Variants
 
     /// Generates a character texture with per-frame pixel variations for animation.
