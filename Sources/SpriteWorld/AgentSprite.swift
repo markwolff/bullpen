@@ -83,7 +83,7 @@ public class AgentSprite: SKSpriteNode {
         self.tokenLabel = SKLabelNode()
         self.carriedLaptopNode = SKSpriteNode(
             texture: TextureManager.shared.texture(for: TextureManager.furnitureLaptopOn),
-            size: CGSize(width: 20, height: 15)
+            size: CGSize(width: 24, height: 19)
         )
 
         let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4

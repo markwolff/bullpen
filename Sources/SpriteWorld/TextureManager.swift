@@ -520,7 +520,7 @@ public final class TextureManager: @unchecked Sendable {
         case furnitureLamp: CGSize(width: 16, height: 32)
         case furnitureCoffeeMug: CGSize(width: 10, height: 12)
         case furnitureLaptopDesk: CGSize(width: 48, height: 30)
-        case furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver: CGSize(width: 24, height: 18)
+        case furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver: CGSize(width: 30, height: 24)
         case furnitureLongTable: CGSize(width: 240, height: 30)
         default: CGSize(width: 32, height: 32)
         }

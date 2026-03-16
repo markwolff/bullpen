@@ -94,12 +94,12 @@ public struct OfficeLayout: Sendable {
         let focusRoom = RoomDefinition(
             id: "focus_studio",
             name: "Focus Studio",
-            frame: CGRect(x: 52, y: 320, width: 342, height: 396)
+            frame: CGRect(x: 52, y: 370, width: 342, height: 346)
         )
         let loungeRoom = RoomDefinition(
             id: "recreation_lounge",
             name: "Recreation Lounge",
-            frame: CGRect(x: 52, y: 52, width: 342, height: 212)
+            frame: CGRect(x: 52, y: 52, width: 342, height: 314)
         )
         let spineRoom = RoomDefinition(
             id: "circulation_spine",
@@ -123,12 +123,12 @@ public struct OfficeLayout: Sendable {
         )
 
         let tableDefinitions = [
-            TableDefinition(id: 0, centerY: 576, seatXPositions: [100, 170, 240, 310, 380]),
-            TableDefinition(id: 1, centerY: 466, seatXPositions: [100, 170, 240, 310, 380]),
-            TableDefinition(id: 2, centerY: 618, seatXPositions: [650, 740, 830, 920, 1010]),
-            TableDefinition(id: 3, centerY: 520, seatXPositions: [650, 740, 830, 920, 1010]),
-            TableDefinition(id: 4, centerY: 204, seatXPositions: [650, 750, 850, 950]),
-            TableDefinition(id: 5, centerY: 110, seatXPositions: [650, 750, 850, 950]),
+            TableDefinition(id: 0, centerY: 576, seatXPositions: [140, 220, 300]),              // Focus Studio, 3 seats
+            TableDefinition(id: 1, centerY: 466, seatXPositions: [140, 220, 300]),              // Focus Studio, 3 seats
+            TableDefinition(id: 2, centerY: 618, seatXPositions: [650, 740, 830, 920, 1010]),   // Collaboration, 5 seats
+            TableDefinition(id: 3, centerY: 520, seatXPositions: [650, 740, 830, 920, 1010]),   // Collaboration, 5 seats
+            TableDefinition(id: 4, centerY: 204, seatXPositions: [620, 720, 820, 920, 1020, 1120]), // Build Room, 6 seats
+            TableDefinition(id: 5, centerY: 135, seatXPositions: [620, 720, 820, 920, 1020, 1120]), // Build Room, 6 seats
         ]
 
         var desks: [DeskPosition] = []
@@ -147,20 +147,20 @@ public struct OfficeLayout: Sendable {
         }
 
         let barriers = [
-            Barrier(id: "focus_glass_upper", kind: .glassWall, rect: CGRect(x: 394, y: 320, width: 8, height: 150)),
+            Barrier(id: "focus_glass_upper", kind: .glassWall, rect: CGRect(x: 394, y: 370, width: 8, height: 120)),
             Barrier(id: "focus_glass_lower", kind: .glassWall, rect: CGRect(x: 394, y: 558, width: 8, height: 158)),
             Barrier(id: "lounge_wall_lower", kind: .solidWall, rect: CGRect(x: 394, y: 52, width: 8, height: 86)),
-            Barrier(id: "lounge_wall_upper", kind: .solidWall, rect: CGRect(x: 394, y: 180, width: 8, height: 84)),
+            Barrier(id: "lounge_wall_upper", kind: .solidWall, rect: CGRect(x: 394, y: 180, width: 8, height: 186)),
             Barrier(id: "entry_wall_lower", kind: .solidWall, rect: CGRect(x: 1232, y: 40, width: 8, height: 264)),
             Barrier(id: "entry_wall_upper", kind: .solidWall, rect: CGRect(x: 1232, y: 400, width: 8, height: 328)),
             Barrier(id: "build_glass_left", kind: .glassWall, rect: CGRect(x: 562, y: 264, width: 110, height: 8)),
             Barrier(id: "build_glass_right", kind: .glassWall, rect: CGRect(x: 752, y: 264, width: 476, height: 8)),
             Barrier(id: "collab_glass_left", kind: .glassWall, rect: CGRect(x: 562, y: 436, width: 110, height: 8)),
             Barrier(id: "collab_glass_right", kind: .glassWall, rect: CGRect(x: 752, y: 436, width: 476, height: 8)),
-            Barrier(id: "coffee_bar", kind: .furniture, rect: CGRect(x: 932, y: 300, width: 110, height: 44)),
-            Barrier(id: "water_cooler", kind: .furniture, rect: CGRect(x: 690, y: 304, width: 40, height: 72)),
+            Barrier(id: "coffee_bar", kind: .furniture, rect: CGRect(x: 1052, y: 300, width: 110, height: 44)),
+            Barrier(id: "water_cooler", kind: .furniture, rect: CGRect(x: 680, y: 304, width: 40, height: 72)),
             Barrier(id: "printer", kind: .furniture, rect: CGRect(x: 564, y: 96, width: 36, height: 36)),
-            Barrier(id: "ping_pong", kind: .furniture, rect: CGRect(x: 136, y: 118, width: 124, height: 60)),
+            Barrier(id: "ping_pong", kind: .furniture, rect: CGRect(x: 138, y: 248, width: 124, height: 60)),
         ]
 
         return OfficeLayout(
@@ -227,7 +227,7 @@ public struct OfficeLayout: Sendable {
     // MARK: - Points of Interest
 
     public var waterCoolerStandPosition: CGPoint {
-        CGPoint(x: 710, y: 314)
+        CGPoint(x: 700, y: 340)
     }
 
     public var bookshelfStandPosition: CGPoint {
@@ -235,7 +235,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var bulletinBoardStandPosition: CGPoint {
-        CGPoint(x: 850, y: 386)
+        CGPoint(x: 900, y: 386)
     }
 
     public var windowStandPosition: CGPoint {
@@ -256,22 +256,22 @@ public struct OfficeLayout: Sendable {
     }
 
     public var loungePosition: CGPoint {
-        CGPoint(x: 178, y: 146)
+        CGPoint(x: 280, y: 140)
     }
 
     public var dogBowlPosition: CGPoint {
-        CGPoint(x: 322, y: 92)
+        CGPoint(x: 160, y: 100)
     }
 
     public var dogSleepPosition: CGPoint {
-        CGPoint(x: 266, y: 92)
+        CGPoint(x: 200, y: 90)
     }
 
     public var dogToyPositions: [CGPoint] {
         [
-            CGPoint(x: 240, y: 80),
-            CGPoint(x: 280, y: 100),
-            CGPoint(x: 300, y: 80),
+            CGPoint(x: 120, y: 80),
+            CGPoint(x: 170, y: 100),
+            CGPoint(x: 220, y: 80),
         ]
     }
 
@@ -324,19 +324,19 @@ public struct OfficeLayout: Sendable {
     }
 
     public var coffeeStationPosition: CGPoint {
-        CGPoint(x: 940, y: 324)
+        CGPoint(x: 1060, y: 324)
     }
 
     public var baristaPosition: CGPoint {
-        CGPoint(x: 988, y: 324)
+        CGPoint(x: 1108, y: 324)
     }
 
     public var baristaCustomerPosition: CGPoint {
-        CGPoint(x: 892, y: 324)
+        CGPoint(x: 1012, y: 324)
     }
 
     public var coffeeRugPosition: CGPoint {
-        CGPoint(x: 940, y: 304)
+        CGPoint(x: 1060, y: 304)
     }
 
     public var desklessPacingPositions: [CGPoint] {

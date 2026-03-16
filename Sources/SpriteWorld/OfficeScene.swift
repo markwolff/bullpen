@@ -265,7 +265,7 @@ public class OfficeScene: SKScene {
         let pingPongShadow = SKShapeNode(rectOf: CGSize(width: 132, height: 68), cornerRadius: 10)
         pingPongShadow.fillColor = SKColor(white: 0.0, alpha: 0.15)
         pingPongShadow.strokeColor = .clear
-        pingPongShadow.position = CGPoint(x: 198, y: 148)
+        pingPongShadow.position = CGPoint(x: 200, y: 278)
         pingPongShadow.zPosition = -3
         addChild(pingPongShadow)
 
@@ -273,7 +273,7 @@ public class OfficeScene: SKScene {
         pingPong.fillColor = SKColor(red: 0.18, green: 0.44, blue: 0.36, alpha: 1.0)
         pingPong.strokeColor = SKColor(red: 0.88, green: 0.90, blue: 0.86, alpha: 1.0)
         pingPong.lineWidth = 2
-        pingPong.position = CGPoint(x: 198, y: 150)
+        pingPong.position = CGPoint(x: 200, y: 280)
         pingPong.zPosition = -2
         addChild(pingPong)
 
@@ -316,6 +316,30 @@ public class OfficeScene: SKScene {
         loungeRug.position = loungeRugBorder.position
         loungeRug.zPosition = -6
         addChild(loungeRug)
+
+        // Focus Studio rug — between the two desk rows
+        let focusRug = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 14)
+        focusRug.fillColor = SKColor(red: 0.62, green: 0.56, blue: 0.46, alpha: 0.60)
+        focusRug.strokeColor = .clear
+        focusRug.position = CGPoint(x: 220, y: 521)
+        focusRug.zPosition = -7
+        addChild(focusRug)
+
+        // Build Room rug — between the two desk rows
+        let buildRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
+        buildRug.fillColor = SKColor(red: 0.55, green: 0.48, blue: 0.38, alpha: 0.55)
+        buildRug.strokeColor = .clear
+        buildRug.position = CGPoint(x: 860, y: 170)
+        buildRug.zPosition = -7
+        addChild(buildRug)
+
+        // Collaboration Room rug
+        let collabRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
+        collabRug.fillColor = SKColor(red: 0.50, green: 0.56, blue: 0.62, alpha: 0.42)
+        collabRug.strokeColor = .clear
+        collabRug.position = CGPoint(x: 830, y: 570)
+        collabRug.zPosition = -7
+        addChild(collabRug)
     }
 
     // MARK: - 6.3: Furniture Textures
@@ -364,7 +388,7 @@ public class OfficeScene: SKScene {
             seatNode.addChild(chairNode)
 
             let laptopTexture = tm.texture(for: TextureManager.furnitureLaptopOff)
-            let laptopNode = SKSpriteNode(texture: laptopTexture, size: CGSize(width: 24, height: 18))
+            let laptopNode = SKSpriteNode(texture: laptopTexture, size: CGSize(width: 30, height: 24))
             laptopNode.position = CGPoint(x: 0, y: 10)
             laptopNode.name = "monitor_\(desk.id)"
             laptopNode.zPosition = 2
@@ -480,7 +504,7 @@ public class OfficeScene: SKScene {
 
         let coolerTexture = tm.texture(for: TextureManager.decorationWaterCooler)
         let coolerNode = SKSpriteNode(texture: coolerTexture, size: CGSize(width: 40, height: 80))
-        coolerNode.position = CGPoint(x: 730, y: 348)
+        coolerNode.position = CGPoint(x: 720, y: 348)
         coolerNode.name = "decoration_water_cooler"
         coolerNode.zPosition = 2
         addChild(coolerNode)
@@ -505,6 +529,26 @@ public class OfficeScene: SKScene {
         printerNode.name = "decoration_printer"
         printerNode.zPosition = 2
         addChild(printerNode)
+
+        // Collaboration Room potted plant
+        let collabPlant = SKSpriteNode(texture: plantTexture, size: CGSize(width: 44, height: 72))
+        collabPlant.position = CGPoint(x: 1170, y: 490)
+        collabPlant.name = "decoration_plant_collab"
+        collabPlant.zPosition = 2
+        addChild(collabPlant)
+
+        // Recreation Lounge mid-zone decorations (bridge gap between ping pong and couch areas)
+        let loungeShelf = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 56, height: 48))
+        loungeShelf.position = CGPoint(x: 90, y: 220)
+        loungeShelf.name = "decoration_lounge_shelf"
+        loungeShelf.zPosition = 2
+        addChild(loungeShelf)
+
+        let loungePlant = SKSpriteNode(texture: plantTexture, size: CGSize(width: 32, height: 52))
+        loungePlant.position = CGPoint(x: 350, y: 220)
+        loungePlant.name = "decoration_lounge_plant"
+        loungePlant.zPosition = 2
+        addChild(loungePlant)
 
     }
 
@@ -734,7 +778,7 @@ public class OfficeScene: SKScene {
         radioSprite = radio
 
         let plant = GrowingPlantSprite()
-        plant.position = CGPoint(x: 620, y: layout.coffeeStationPosition.y - 8)
+        plant.position = CGPoint(x: 760, y: layout.coffeeStationPosition.y - 8)
         plant.zPosition = 2
         addChild(plant)
         growingPlantSprite = plant

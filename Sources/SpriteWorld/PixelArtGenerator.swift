@@ -643,28 +643,28 @@ public final class PixelArtGenerator: Sendable {
             fill(ctx, rect: r(11, 14, 2, 1), color: cyan)
             fill(ctx, rect: r(11, 16, 2, 1), color: cyan)
 
-            // "IT" text below — centered
-            // I
-            fill(ctx, rect: r(5, 10, 1, 1), color: cyan)
-            // T
-            fill(ctx, rect: r(7, 10, 3, 1), color: cyan)
-            fill(ctx, rect: r(8, 9, 1, 1), color: cyan)
-            fill(ctx, rect: r(8, 8, 1, 1), color: cyan)
+            // "IT" text below — 2px-wide, 5px-tall letters at y=6-10, centered
+            // I (serifed: 3px top/bottom bars + 1px stem) at x=4-6
+            fill(ctx, rect: r(4, 10, 3, 1), color: cyan)  // top serif
+            fill(ctx, rect: r(5, 7, 1, 3), color: cyan)   // vertical stem
+            fill(ctx, rect: r(4, 6, 3, 1), color: cyan)   // bottom serif
+            // T (3px crossbar + 1px stem) at x=8-10
+            fill(ctx, rect: r(8, 10, 3, 1), color: cyan)  // crossbar
+            fill(ctx, rect: r(9, 6, 1, 4), color: cyan)   // vertical stem
 
-            // Rocket body (centered, lower half)
+            // Rocket body (centered, shifted down to y=1-5)
             let white = Self.RGB(0xE0E0E0)
             let red = Self.RGB(0xE04040)
             let orange = Self.RGB(0xFFA030)
             // Nose cone
-            fill(ctx, rect: r(7, 7, 1, 1), color: red)
+            fill(ctx, rect: r(7, 5, 1, 1), color: red)
             // Body
-            fill(ctx, rect: r(6, 4, 3, 3), color: white)
+            fill(ctx, rect: r(6, 2, 3, 3), color: white)
             // Fins
-            fill(ctx, rect: r(5, 4, 1, 2), color: red)
-            fill(ctx, rect: r(9, 4, 1, 2), color: red)
+            fill(ctx, rect: r(5, 2, 1, 2), color: red)
+            fill(ctx, rect: r(9, 2, 1, 2), color: red)
             // Flame
-            fill(ctx, rect: r(6, 2, 3, 2), color: orange)
-            fill(ctx, rect: r(7, 1, 1, 1), color: Self.RGB(0xFF6020))
+            fill(ctx, rect: r(7, 1, 1, 1), color: orange)
         }
     }
 
@@ -1398,45 +1398,55 @@ public final class PixelArtGenerator: Sendable {
         }
     }
 
-    /// Open laptop with code on screen — 8x6 pixel art
+    /// Open laptop with code on screen — 10x8 pixel art, silver aluminum body
     func laptopOn() -> SKTexture {
-        drawTexture(width: 8, height: 6) { [self] ctx in
-            // Screen (back panel)
-            fill(ctx, rect: r(0, 2, 8, 4), color: Self.monitorFrame)
-            fill(ctx, rect: r(1, 3, 6, 2), color: Self.monitorScreenOn)
+        drawTexture(width: 10, height: 8) { [self] ctx in
+            // Screen bezel (silver)
+            fill(ctx, rect: r(0, 3, 10, 5), color: Self.RGB(0xB0B8C0))
+            fill(ctx, rect: r(0, 7, 10, 1), color: Self.RGB(0x909898)) // top edge shadow
+            // Screen content
+            fill(ctx, rect: r(1, 4, 8, 3), color: Self.monitorScreenOn)
             // Code lines
-            fill(ctx, rect: r(2, 4, 3, 1), color: Self.RGB(0x80D0FF))
-            fill(ctx, rect: r(2, 3, 4, 1), color: Self.RGB(0xA0FF90))
-            // Keyboard base
-            fill(ctx, rect: r(0, 0, 8, 2), color: Self.RGB(0x484848))
-            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0x585858))
+            fill(ctx, rect: r(2, 6, 4, 1), color: Self.RGB(0x80D0FF))
+            fill(ctx, rect: r(2, 5, 5, 1), color: Self.RGB(0xA0FF90))
+            fill(ctx, rect: r(3, 4, 3, 1), color: Self.RGB(0xFFE080))
+            // Keyboard base (silver)
+            fill(ctx, rect: r(0, 0, 10, 3), color: Self.RGB(0xC0C8D0))
+            fill(ctx, rect: r(1, 1, 8, 1), color: Self.RGB(0xA8B0B8)) // key area
+            fill(ctx, rect: r(0, 0, 10, 1), color: Self.RGB(0x909898)) // front edge
         }
     }
 
-    /// Closed/dark laptop — 8x6 pixel art
+    /// Closed/dark laptop — 10x8 pixel art, silver aluminum body
     func laptopOff() -> SKTexture {
-        drawTexture(width: 8, height: 6) { [self] ctx in
-            // Screen (dark)
-            fill(ctx, rect: r(0, 2, 8, 4), color: Self.monitorFrame)
-            fill(ctx, rect: r(1, 3, 6, 2), color: Self.monitorScreen)
-            // Keyboard base
-            fill(ctx, rect: r(0, 0, 8, 2), color: Self.RGB(0x484848))
-            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0x585858))
+        drawTexture(width: 10, height: 8) { [self] ctx in
+            // Screen bezel (silver)
+            fill(ctx, rect: r(0, 3, 10, 5), color: Self.RGB(0xB0B8C0))
+            fill(ctx, rect: r(0, 7, 10, 1), color: Self.RGB(0x909898)) // top edge shadow
+            // Screen (dark/off)
+            fill(ctx, rect: r(1, 4, 8, 3), color: Self.monitorScreen)
+            // Keyboard base (silver)
+            fill(ctx, rect: r(0, 0, 10, 3), color: Self.RGB(0xC0C8D0))
+            fill(ctx, rect: r(1, 1, 8, 1), color: Self.RGB(0xA8B0B8)) // key area
+            fill(ctx, rect: r(0, 0, 10, 1), color: Self.RGB(0x909898)) // front edge
         }
     }
 
-    /// Laptop screensaver — 8x6 pixel art with colorful pattern
+    /// Laptop screensaver — 10x8 pixel art, silver aluminum body with colorful pattern
     func laptopScreensaver() -> SKTexture {
-        drawTexture(width: 8, height: 6) { [self] ctx in
+        drawTexture(width: 10, height: 8) { [self] ctx in
+            // Screen bezel (silver)
+            fill(ctx, rect: r(0, 3, 10, 5), color: Self.RGB(0xB0B8C0))
+            fill(ctx, rect: r(0, 7, 10, 1), color: Self.RGB(0x909898)) // top edge shadow
             // Screen with screensaver
-            fill(ctx, rect: r(0, 2, 8, 4), color: Self.monitorFrame)
-            fill(ctx, rect: r(1, 3, 6, 2), color: Self.RGB(0x203048))
+            fill(ctx, rect: r(1, 4, 8, 3), color: Self.RGB(0x203048))
             // Colorful bouncing pattern
-            fill(ctx, rect: r(2, 4, 2, 1), color: Self.RGB(0xFF6080))
-            fill(ctx, rect: r(4, 3, 2, 1), color: Self.RGB(0x60D0FF))
-            // Keyboard base
-            fill(ctx, rect: r(0, 0, 8, 2), color: Self.RGB(0x484848))
-            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0x585858))
+            fill(ctx, rect: r(2, 6, 3, 1), color: Self.RGB(0xFF6080))
+            fill(ctx, rect: r(5, 4, 3, 1), color: Self.RGB(0x60D0FF))
+            // Keyboard base (silver)
+            fill(ctx, rect: r(0, 0, 10, 3), color: Self.RGB(0xC0C8D0))
+            fill(ctx, rect: r(1, 1, 8, 1), color: Self.RGB(0xA8B0B8)) // key area
+            fill(ctx, rect: r(0, 0, 10, 1), color: Self.RGB(0x909898)) // front edge
         }
     }
 
