@@ -1,15 +1,14 @@
 import Foundation
 import SpriteKit
 
-/// Defines the layout of the office world: desk positions, walkable areas,
-/// and pathfinding for agent sprites.
+/// Defines the layout of the office world: desk positions, rooms,
+/// collision geometry, and pathfinding for agent sprites.
 public struct OfficeLayout: Sendable {
-    /// A position in the office where a desk can be placed
     public struct DeskPosition: Sendable, Identifiable {
         public let id: Int
-        public let position: CGPoint       // Center of the desk in scene coordinates
-        public let chairPosition: CGPoint  // Where the agent sprite sits
-        public let facingDirection: CGFloat // Angle the agent faces when seated (radians)
+        public let position: CGPoint
+        public let chairPosition: CGPoint
+        public let facingDirection: CGFloat
 
         public init(id: Int, position: CGPoint, chairPosition: CGPoint, facingDirection: CGFloat = 0) {
             self.id = id
@@ -19,315 +18,520 @@ public struct OfficeLayout: Sendable {
         }
     }
 
-    /// Long communal table definition — one table surface with multiple seat positions
     public struct TableDefinition: Sendable {
         public let id: Int
         public let centerY: CGFloat
         public let seatXPositions: [CGFloat]
 
-        /// Left edge of the table surface (with margin before first seat)
         public var leftX: CGFloat { (seatXPositions.first ?? 0) - 40 }
-        /// Right edge of the table surface (with margin after last seat)
         public var rightX: CGFloat { (seatXPositions.last ?? 0) + 40 }
-        /// Width of the table surface
         public var width: CGFloat { rightX - leftX }
-        /// Center X of the table surface
         public var centerX: CGFloat { (leftX + rightX) / 2 }
     }
 
-    /// Size of the office scene in points
+    public struct RoomDefinition: Sendable, Identifiable {
+        public let id: String
+        public let name: String
+        public let frame: CGRect
+
+        public init(id: String, name: String, frame: CGRect) {
+            self.id = id
+            self.name = name
+            self.frame = frame
+        }
+    }
+
+    public struct Barrier: Sendable, Identifiable {
+        public enum Kind: String, Sendable {
+            case solidWall
+            case glassWall
+            case furniture
+        }
+
+        public let id: String
+        public let kind: Kind
+        public let rect: CGRect
+
+        public init(id: String, kind: Kind, rect: CGRect) {
+            self.id = id
+            self.kind = kind
+            self.rect = rect
+        }
+    }
+
+    private struct GridCell: Hashable {
+        let x: Int
+        let y: Int
+    }
+
     public let sceneSize: CGSize
-
-    /// All available seat positions (one per agent) along the communal tables
     public let desks: [DeskPosition]
-
-    /// The communal tables in the office
     public let tables: [TableDefinition]
-
-    /// Area where agents can walk (simplified as a rect for now)
+    public let rooms: [RoomDefinition]
     public let walkableArea: CGRect
+    public let barriers: [Barrier]
 
-    /// Creates the default office layout with two long communal tables.
+    public init(
+        sceneSize: CGSize,
+        desks: [DeskPosition],
+        tables: [TableDefinition],
+        rooms: [RoomDefinition],
+        walkableArea: CGRect,
+        barriers: [Barrier]
+    ) {
+        self.sceneSize = sceneSize
+        self.desks = desks
+        self.tables = tables
+        self.rooms = rooms
+        self.walkableArea = walkableArea
+        self.barriers = barriers
+    }
+
+    /// Creates a multi-room office with three desk rooms and a recreation lounge.
     public static func defaultLayout() -> OfficeLayout {
         let sceneSize = CGSize(width: 1280, height: 768)
 
-        // Three long communal tables, 10 seats each, tight co-working spacing
-        let seatXPositions: [CGFloat] = [175, 250, 325, 400, 475, 550, 625, 700, 775, 850]
+        let focusRoom = RoomDefinition(
+            id: "focus_studio",
+            name: "Focus Studio",
+            frame: CGRect(x: 52, y: 320, width: 374, height: 396)
+        )
+        let loungeRoom = RoomDefinition(
+            id: "recreation_lounge",
+            name: "Recreation Lounge",
+            frame: CGRect(x: 52, y: 52, width: 336, height: 212)
+        )
+        let spineRoom = RoomDefinition(
+            id: "circulation_spine",
+            name: "Circulation Spine",
+            frame: CGRect(x: 430, y: 52, width: 92, height: 664)
+        )
+        let galleryRoom = RoomDefinition(
+            id: "gallery",
+            name: "Gallery",
+            frame: CGRect(x: 524, y: 268, width: 704, height: 168)
+        )
+        let collaborationRoom = RoomDefinition(
+            id: "collaboration_room",
+            name: "Collaboration Room",
+            frame: CGRect(x: 524, y: 436, width: 704, height: 280)
+        )
+        let buildRoom = RoomDefinition(
+            id: "build_room",
+            name: "Build Room",
+            frame: CGRect(x: 524, y: 52, width: 704, height: 212)
+        )
+
         let tableDefinitions = [
-            TableDefinition(id: 0, centerY: 460, seatXPositions: seatXPositions),
-            TableDefinition(id: 1, centerY: 330, seatXPositions: seatXPositions),
-            TableDefinition(id: 2, centerY: 200, seatXPositions: seatXPositions),
+            TableDefinition(id: 0, centerY: 616, seatXPositions: [110, 165, 220, 275, 330, 385]),
+            TableDefinition(id: 1, centerY: 506, seatXPositions: [110, 165, 220, 275, 330, 385]),
+            TableDefinition(id: 2, centerY: 618, seatXPositions: [650, 740, 830, 920, 1010]),
+            TableDefinition(id: 3, centerY: 520, seatXPositions: [650, 740, 830, 920, 1010]),
+            TableDefinition(id: 4, centerY: 194, seatXPositions: [650, 750, 850, 950]),
+            TableDefinition(id: 5, centerY: 120, seatXPositions: [650, 750, 850, 950]),
         ]
 
         var desks: [DeskPosition] = []
         var deskID = 0
         for table in tableDefinitions {
             for x in table.seatXPositions {
-                desks.append(DeskPosition(
-                    id: deskID,
-                    position: CGPoint(x: x, y: table.centerY),
-                    chairPosition: CGPoint(x: x, y: table.centerY - 30)
-                ))
+                desks.append(
+                    DeskPosition(
+                        id: deskID,
+                        position: CGPoint(x: x, y: table.centerY),
+                        chairPosition: CGPoint(x: x, y: table.centerY - 30)
+                    )
+                )
                 deskID += 1
             }
         }
+
+        let barriers = [
+            Barrier(id: "focus_glass_upper", kind: .glassWall, rect: CGRect(x: 426, y: 320, width: 8, height: 150)),
+            Barrier(id: "focus_glass_lower", kind: .glassWall, rect: CGRect(x: 426, y: 558, width: 8, height: 158)),
+            Barrier(id: "lounge_wall_lower", kind: .solidWall, rect: CGRect(x: 388, y: 52, width: 8, height: 86)),
+            Barrier(id: "lounge_wall_upper", kind: .solidWall, rect: CGRect(x: 388, y: 180, width: 8, height: 84)),
+            Barrier(id: "build_glass_left", kind: .glassWall, rect: CGRect(x: 524, y: 264, width: 126, height: 8)),
+            Barrier(id: "build_glass_right", kind: .glassWall, rect: CGRect(x: 730, y: 264, width: 498, height: 8)),
+            Barrier(id: "collab_glass_left", kind: .glassWall, rect: CGRect(x: 524, y: 436, width: 126, height: 8)),
+            Barrier(id: "collab_glass_right", kind: .glassWall, rect: CGRect(x: 730, y: 436, width: 498, height: 8)),
+            Barrier(id: "coffee_bar", kind: .furniture, rect: CGRect(x: 1032, y: 300, width: 110, height: 44)),
+            Barrier(id: "water_cooler", kind: .furniture, rect: CGRect(x: 1144, y: 312, width: 40, height: 72)),
+            Barrier(id: "printer", kind: .furniture, rect: CGRect(x: 1148, y: 96, width: 36, height: 36)),
+            Barrier(id: "ping_pong", kind: .furniture, rect: CGRect(x: 136, y: 118, width: 124, height: 60)),
+        ]
 
         return OfficeLayout(
             sceneSize: sceneSize,
             desks: desks,
             tables: tableDefinitions,
-            walkableArea: CGRect(x: 50, y: 50, width: 1180, height: 668)
+            rooms: [focusRoom, loungeRoom, spineRoom, galleryRoom, collaborationRoom, buildRoom],
+            walkableArea: CGRect(x: 40, y: 40, width: 1200, height: 688),
+            barriers: barriers
         )
     }
 
-    /// Returns a random unoccupied desk position.
-    /// - Parameter occupiedDeskIDs: IDs of desks that already have an agent assigned
-    /// - Returns: An available desk, or nil if the office is full
     public func nextAvailableDesk(occupiedDeskIDs: Set<Int>) -> DeskPosition? {
         desks.filter { !occupiedDeskIDs.contains($0.id) }.randomElement()
     }
 
-    // MARK: - Table Obstacles
+    // MARK: - Rooms and Obstacles
 
-    /// Bounding rectangles for table+chair obstacles (for pathfinding)
+    public var glassPartitions: [Barrier] {
+        barriers.filter { $0.kind == .glassWall }
+    }
+
+    public var solidPartitions: [Barrier] {
+        barriers.filter { $0.kind == .solidWall }
+    }
+
+    public var furnitureObstacles: [CGRect] {
+        barriers.compactMap { barrier in
+            barrier.kind == .furniture ? barrier.rect : nil
+        }
+    }
+
+    /// Table tops only. Chair landings remain walkable for seated agents.
     public var deskObstacles: [CGRect] {
         tables.map { table in
-            CGRect(
-                x: table.leftX,
-                y: table.centerY - 40,
-                width: table.width,
-                height: 50
-            )
+            CGRect(x: table.leftX, y: table.centerY - 12, width: table.width, height: 24)
         }
+    }
+
+    public var collisionObstacles: [CGRect] {
+        barriers.map(\.rect) + deskObstacles
     }
 
     // MARK: - Aisles
 
-    /// Y coordinates of horizontal aisles between/around communal tables
     public var aisleYPositions: [CGFloat] {
-        [530, 395, 265, 130, 80]
+        [642, 522, 352, 190, 104]
     }
 
-    /// X coordinates of vertical corridors (left wall, center aisle, right wall)
     public var corridorXPositions: [CGFloat] {
-        [100, 550, 1180]
+        [162, 474, 718, 1036, 1186]
     }
 
     // MARK: - Door Position
 
-    /// Position of the office door (right wall, between desk rows)
     public var doorPosition: CGPoint {
-        CGPoint(x: sceneSize.width - 30, y: sceneSize.height / 2 + 10)
+        CGPoint(x: 1238, y: 352)
     }
 
-    /// Position an agent walks to before exiting through the door
     public var doorExitPosition: CGPoint {
-        CGPoint(x: sceneSize.width - 60, y: sceneSize.height / 2 + 10)
+        CGPoint(x: 1186, y: 352)
     }
 
-    // MARK: - Points of Interest (standing positions for idle behaviors)
+    // MARK: - Points of Interest
 
-    /// Position in front of the water cooler
     public var waterCoolerStandPosition: CGPoint {
-        CGPoint(x: sceneSize.width - 100, y: sceneSize.height * 2 / 3 - 50)
+        CGPoint(x: 1112, y: 314)
     }
 
-    /// Position in front of the bookshelf
     public var bookshelfStandPosition: CGPoint {
-        CGPoint(x: sceneSize.width * 0.42, y: sceneSize.height - 140)
+        CGPoint(x: 130, y: 652)
     }
 
-    /// Position in front of the bulletin board
     public var bulletinBoardStandPosition: CGPoint {
-        CGPoint(x: sceneSize.width * 0.62, y: sceneSize.height - 135)
+        CGPoint(x: 646, y: 352)
     }
 
-    /// Position in front of a window
     public var windowStandPosition: CGPoint {
-        CGPoint(x: sceneSize.width / 2, y: sceneSize.height - 140)
+        CGPoint(x: 904, y: 648)
     }
 
-    /// Position in front of the whiteboard
     public var whiteboardStandPosition: CGPoint {
-        CGPoint(x: sceneSize.width * 0.2, y: sceneSize.height - 140)
+        CGPoint(x: 592, y: 352)
     }
 
-    /// Positions near floor plants (agents can walk to water them)
     public var plantStandPositions: [CGPoint] {
         [
-            CGPoint(x: 60, y: sceneSize.height - 140),  // Near top-left plant
-            CGPoint(x: sceneSize.width - 60, y: sceneSize.height - 140),  // Near top-right plant
-            CGPoint(x: 55, y: 100),  // Near bottom-left plant
-            CGPoint(x: sceneSize.width - 55, y: 100),  // Near bottom-right plant
+            CGPoint(x: 86, y: 652),
+            CGPoint(x: 1152, y: 648),
+            CGPoint(x: 92, y: 96),
+            CGPoint(x: 1190, y: 96),
         ]
     }
 
-    /// Position for the lounge couch
     public var loungePosition: CGPoint {
-        CGPoint(x: 80, y: 80)
+        CGPoint(x: 178, y: 146)
     }
 
-    /// Dog bowl position - near the lounge area
     public var dogBowlPosition: CGPoint {
-        CGPoint(x: 150, y: 90)
+        CGPoint(x: 322, y: 92)
     }
 
-    /// Dog starting/sleep position - near her bowl
     public var dogSleepPosition: CGPoint {
-        CGPoint(x: 180, y: 80)
+        CGPoint(x: 266, y: 92)
     }
 
-    /// Positions where dog toys can be scattered in the office
     public var dogToyPositions: [CGPoint] {
         [
-            CGPoint(x: 120, y: 70),   // Near the dog bowl area
-            CGPoint(x: 280, y: 85),   // Middle of the office floor
-            CGPoint(x: 420, y: 75),   // Near the far side
+            CGPoint(x: 118, y: 102),
+            CGPoint(x: 214, y: 116),
+            CGPoint(x: 304, y: 150),
         ]
     }
 
-    /// Position to stand near the radio
     public var radioStandPosition: CGPoint {
-        CGPoint(x: 130, y: sceneSize.height - 100)
+        CGPoint(x: 116, y: 218)
     }
 
-    /// Position to stand near the printer
     public var printerStandPosition: CGPoint {
-        CGPoint(x: sceneSize.width - 120, y: 130)
+        CGPoint(x: 1112, y: 110)
     }
 
-    /// Position for coffee machine (near water cooler)
     public var coffeeMachinePosition: CGPoint {
-        CGPoint(x: sceneSize.width - 140, y: sceneSize.height * 2 / 3 - 50)
+        baristaCustomerPosition
     }
 
-    /// Chat positions flanking the water cooler
     public var waterCoolerChatPositions: (left: CGPoint, right: CGPoint) {
         let base = waterCoolerStandPosition
         return (
-            left: CGPoint(x: base.x - 25, y: base.y),
-            right: CGPoint(x: base.x + 25, y: base.y)
+            left: CGPoint(x: base.x - 28, y: base.y),
+            right: CGPoint(x: base.x + 28, y: base.y)
         )
     }
 
-    /// Pizza drop position (open area below tables)
     public var pizzaDropPosition: CGPoint {
-        CGPoint(x: sceneSize.width / 2, y: 120)
+        CGPoint(x: 868, y: 352)
     }
 
-    /// Standup huddle positions (circle formation in open area between tables)
     public var standupHuddlePositions: [CGPoint] {
-        let center = CGPoint(x: sceneSize.width * 0.5, y: 345)
-        let radius: CGFloat = 50
-        return (0..<8).map { i in
-            let angle = CGFloat(i) * (.pi * 2 / 8)
-            return CGPoint(x: center.x + cos(angle) * radius,
-                          y: center.y + sin(angle) * radius)
+        let center = pizzaDropPosition
+        let radius: CGFloat = 64
+        return (0..<8).map { index in
+            let angle = CGFloat(index) * (.pi * 2 / 8)
+            return CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
         }
     }
 
-    /// Achievement shelf position
     public var achievementShelfPosition: CGPoint {
-        CGPoint(x: sceneSize.width * 0.75, y: sceneSize.height - 75)
+        CGPoint(x: 1060, y: 690)
     }
 
-    /// Radio position
     public var radioPosition: CGPoint {
-        CGPoint(x: 130, y: sceneSize.height - 80)
+        CGPoint(x: 100, y: 216)
     }
 
-    // MARK: - New Decoration Positions
-
-    /// Position for the bird cage on the back wall
     public var birdCagePosition: CGPoint {
-        CGPoint(x: 1050, y: sceneSize.height - 75)
+        CGPoint(x: 1172, y: 690)
     }
 
-    /// Position for the coffee station (left wall, between tables)
     public var coffeeStationPosition: CGPoint {
-        CGPoint(x: 100, y: 345)
+        CGPoint(x: 1040, y: 324)
     }
 
-    /// Position where the barista stands (behind the station)
     public var baristaPosition: CGPoint {
-        CGPoint(x: 100, y: 330)
+        CGPoint(x: 1088, y: 324)
     }
 
-    /// Position where an agent stands to order coffee from barista
     public var baristaCustomerPosition: CGPoint {
-        CGPoint(x: 150, y: 330)
+        CGPoint(x: 992, y: 324)
     }
 
-    /// Position for coat hooks near the door
     public var coatHooksPosition: CGPoint {
-        CGPoint(x: sceneSize.width - 50, y: 500)
+        CGPoint(x: 1170, y: 412)
     }
 
-    /// Position for a small rug under the coffee station
     public var coffeeRugPosition: CGPoint {
-        CGPoint(x: 110, y: 330)
+        CGPoint(x: 1040, y: 304)
     }
 
-    /// Position for motivational poster on left wall
     public var poster2Position: CGPoint {
-        CGPoint(x: 30, y: 500)
+        CGPoint(x: 92, y: 614)
     }
 
-    /// Candidate pacing points for agents who are active but temporarily deskless.
     public var desklessPacingPositions: [CGPoint] {
         let aisleIntersections = corridorXPositions.flatMap { x in
             aisleYPositions.map { y in CGPoint(x: x, y: y) }
         }
-
-        return aisleIntersections + [
-            waterCoolerStandPosition,
-            bookshelfStandPosition,
-            bulletinBoardStandPosition,
-            windowStandPosition,
-            whiteboardStandPosition,
-            loungePosition,
-            radioStandPosition,
-            printerStandPosition,
-            baristaCustomerPosition,
-        ]
+        let roomCenters = rooms.map { CGPoint(x: $0.frame.midX, y: $0.frame.midY) }
+        return Array(
+            Set(
+                aisleIntersections + roomCenters + [
+                    waterCoolerStandPosition,
+                    bookshelfStandPosition,
+                    bulletinBoardStandPosition,
+                    windowStandPosition,
+                    whiteboardStandPosition,
+                    loungePosition,
+                    radioStandPosition,
+                    printerStandPosition,
+                    baristaCustomerPosition,
+                    pizzaDropPosition,
+                ]
+            )
+        )
     }
 
-    /// Position for animated wall clock
     public var wallClockPosition: CGPoint {
-        CGPoint(x: 800, y: sceneSize.height - 30)
+        CGPoint(x: 988, y: 700)
     }
 
     // MARK: - Pathfinding
 
-    /// Generates a corridor-based path from one point to another, routing through aisles.
-    /// - Returns: Array of waypoints the sprite should walk through
     public func findPath(from start: CGPoint, to end: CGPoint) -> [CGPoint] {
-        let startAisle = nearestAisleY(to: start.y)
-        let endAisle = nearestAisleY(to: end.y)
+        guard hypot(end.x - start.x, end.y - start.y) > 8 else { return [end] }
 
-        if startAisle == endAisle {
-            return [
-                CGPoint(x: start.x, y: startAisle),
-                CGPoint(x: end.x, y: startAisle)
-            ]
+        let startCell = nearestWalkableCell(to: start)
+        let endCell = nearestWalkableCell(to: end)
+        let cells = aStarPath(from: startCell, to: endCell)
+
+        guard !cells.isEmpty else { return [end] }
+        return condensedWaypoints(from: cells, end: end)
+    }
+
+    private var cellSize: CGFloat { 32 }
+
+    private var gridWidth: Int {
+        Int(ceil(sceneSize.width / cellSize))
+    }
+
+    private var gridHeight: Int {
+        Int(ceil(sceneSize.height / cellSize))
+    }
+
+    private func nearestWalkableCell(to point: CGPoint) -> GridCell {
+        var bestCell = GridCell(
+            x: max(0, min(gridWidth - 1, Int(point.x / cellSize))),
+            y: max(0, min(gridHeight - 1, Int(point.y / cellSize)))
+        )
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+
+        for y in 0..<gridHeight {
+            for x in 0..<gridWidth {
+                let cell = GridCell(x: x, y: y)
+                guard isWalkable(cell) else { continue }
+                let center = centerOfCell(cell)
+                let distance = hypot(center.x - point.x, center.y - point.y)
+                if distance < bestDistance {
+                    bestDistance = distance
+                    bestCell = cell
+                }
+            }
         }
 
-        // Route through nearest vertical corridor
-        let corridor = nearestCorridorX(to: start.x)
-        return [
-            CGPoint(x: start.x, y: startAisle),
-            CGPoint(x: corridor, y: startAisle),
-            CGPoint(x: corridor, y: endAisle),
-            CGPoint(x: end.x, y: endAisle)
+        return bestCell
+    }
+
+    private func isWalkable(_ cell: GridCell) -> Bool {
+        let center = centerOfCell(cell)
+        guard walkableArea.contains(center) else { return false }
+        return !collisionObstacles.contains(where: { $0.contains(center) })
+    }
+
+    private func centerOfCell(_ cell: GridCell) -> CGPoint {
+        CGPoint(
+            x: CGFloat(cell.x) * cellSize + cellSize / 2,
+            y: CGFloat(cell.y) * cellSize + cellSize / 2
+        )
+    }
+
+    private func neighbors(of cell: GridCell) -> [GridCell] {
+        let candidates = [
+            GridCell(x: cell.x + 1, y: cell.y),
+            GridCell(x: cell.x - 1, y: cell.y),
+            GridCell(x: cell.x, y: cell.y + 1),
+            GridCell(x: cell.x, y: cell.y - 1),
         ]
+
+        return candidates.filter { candidate in
+            candidate.x >= 0 && candidate.x < gridWidth &&
+            candidate.y >= 0 && candidate.y < gridHeight &&
+            isWalkable(candidate)
+        }
     }
 
-    /// Returns the nearest aisle Y coordinate to the given Y position.
-    private func nearestAisleY(to y: CGFloat) -> CGFloat {
-        aisleYPositions.min(by: { abs($0 - y) < abs($1 - y) }) ?? y
+    private func aStarPath(from start: GridCell, to goal: GridCell) -> [GridCell] {
+        var openSet: Set<GridCell> = [start]
+        var cameFrom: [GridCell: GridCell] = [:]
+        var gScore: [GridCell: Int] = [start: 0]
+        var fScore: [GridCell: Int] = [start: heuristic(from: start, to: goal)]
+
+        while let current = openSet.min(by: {
+            (fScore[$0] ?? .max) < (fScore[$1] ?? .max)
+        }) {
+            if current == goal {
+                return reconstructPath(cameFrom: cameFrom, current: current)
+            }
+
+            openSet.remove(current)
+
+            for neighbor in neighbors(of: current) {
+                let tentative = (gScore[current] ?? .max) + 1
+                if tentative < (gScore[neighbor] ?? .max) {
+                    cameFrom[neighbor] = current
+                    gScore[neighbor] = tentative
+                    fScore[neighbor] = tentative + heuristic(from: neighbor, to: goal)
+                    openSet.insert(neighbor)
+                }
+            }
+        }
+
+        return [start, goal]
     }
 
-    private func nearestCorridorX(to x: CGFloat) -> CGFloat {
-        corridorXPositions.min(by: { abs($0 - x) < abs($1 - x) }) ?? x
+    private func reconstructPath(cameFrom: [GridCell: GridCell], current: GridCell) -> [GridCell] {
+        var path = [current]
+        var cursor = current
+        while let previous = cameFrom[cursor] {
+            cursor = previous
+            path.append(previous)
+        }
+        return path.reversed()
+    }
+
+    private func heuristic(from start: GridCell, to end: GridCell) -> Int {
+        abs(start.x - end.x) + abs(start.y - end.y)
+    }
+
+    private func condensedWaypoints(from cells: [GridCell], end: CGPoint) -> [CGPoint] {
+        guard let first = cells.first else { return [end] }
+
+        var turningCells: [GridCell] = [first]
+        if cells.count > 2 {
+            for index in 1..<(cells.count - 1) {
+                let previous = cells[index - 1]
+                let current = cells[index]
+                let next = cells[index + 1]
+
+                let previousDelta = (x: current.x - previous.x, y: current.y - previous.y)
+                let nextDelta = (x: next.x - current.x, y: next.y - current.y)
+                if previousDelta.x != nextDelta.x || previousDelta.y != nextDelta.y {
+                    turningCells.append(current)
+                }
+            }
+        }
+        if let last = cells.last {
+            turningCells.append(last)
+        }
+
+        var waypoints = turningCells.dropFirst().map(centerOfCell)
+        if let last = waypoints.last, hypot(last.x - end.x, last.y - end.y) <= cellSize / 2 {
+            waypoints[waypoints.count - 1] = end
+        } else {
+            waypoints.append(end)
+        }
+
+        return deduplicated(waypoints)
+    }
+
+    private func deduplicated(_ points: [CGPoint]) -> [CGPoint] {
+        var unique: [CGPoint] = []
+        for point in points {
+            guard let last = unique.last else {
+                unique.append(point)
+                continue
+            }
+
+            if hypot(last.x - point.x, last.y - point.y) > 0.5 {
+                unique.append(point)
+            }
+        }
+        return unique
     }
 }

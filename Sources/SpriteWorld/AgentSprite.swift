@@ -4,6 +4,10 @@ import Models
 /// A SpriteKit node representing a single AI agent character in the office.
 /// Manages the agent's visual appearance, animations, and movement.
 public class AgentSprite: SKSpriteNode {
+    private enum PhysicsMask {
+        static let agent: UInt32 = 0x1 << 0
+        static let environment: UInt32 = 0x1 << 1
+    }
 
     /// The agent info this sprite represents
     public private(set) var agentInfo: AgentInfo
@@ -92,12 +96,27 @@ public class AgentSprite: SKSpriteNode {
 
         self.name = "agent_\(agentInfo.id)"
         self.colorBlendFactor = 0
+        configurePhysicsBody()
         setupChildNodes()
     }
 
     @available(*, unavailable)
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    private func configurePhysicsBody() {
+        let footprint = CGSize(width: size.width * 0.34, height: size.height * 0.18)
+        let center = CGPoint(x: 0, y: -size.height * 0.30)
+        let body = SKPhysicsBody(rectangleOf: footprint, center: center)
+        body.affectedByGravity = false
+        body.allowsRotation = false
+        body.linearDamping = 12
+        body.usesPreciseCollisionDetection = true
+        body.categoryBitMask = PhysicsMask.agent
+        body.collisionBitMask = PhysicsMask.environment
+        body.contactTestBitMask = PhysicsMask.environment
+        physicsBody = body
     }
 
     private func setupChildNodes() {
@@ -573,11 +592,12 @@ public class AgentSprite: SKSpriteNode {
         var actions: [SKAction] = []
         let speed: CGFloat = 100 * speedMultiplier
 
-        let allPoints = waypoints + [destination]
+        let allPoints = deduplicatedPath(waypoints + [destination])
         var previous = position
 
         for point in allPoints {
             let distance = hypot(point.x - previous.x, point.y - previous.y)
+            guard distance > 0.5 else { continue }
             let duration = TimeInterval(distance / speed)
             let move = SKAction.move(to: point, duration: duration)
             move.timingMode = .easeInEaseOut
@@ -592,6 +612,23 @@ public class AgentSprite: SKSpriteNode {
         actions.append(complete)
         let sequence = SKAction.sequence(actions)
         run(sequence, withKey: "walk")
+    }
+
+    private func deduplicatedPath(_ points: [CGPoint]) -> [CGPoint] {
+        var result: [CGPoint] = []
+        for point in points {
+            guard let last = result.last else {
+                result.append(point)
+                continue
+            }
+
+            let deltaX = last.x - point.x
+            let deltaY = last.y - point.y
+            if hypot(deltaX, deltaY) > 0.5 {
+                result.append(point)
+            }
+        }
+        return result
     }
 
     /// Stops any in-progress walk immediately.
