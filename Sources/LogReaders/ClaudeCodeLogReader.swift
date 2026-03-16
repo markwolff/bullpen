@@ -68,10 +68,13 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 for file in dirFiles {
                     guard file.pathExtension == "jsonl" else { continue }
 
-                    // Only include recently active sessions (modified in last 10 minutes)
+                    // Only include recently active sessions (modified in last 2 hours).
+                    // Agents in long thinking/LLM calls may not write to logs for
+                    // extended periods — a short window here causes active agents
+                    // to be dropped from discovery and permanently disappear.
                     if let attrs = try? fm.attributesOfItem(atPath: file.path),
                        let modDate = attrs[.modificationDate] as? Date,
-                       Date().timeIntervalSince(modDate) > 600 {
+                       Date().timeIntervalSince(modDate) > 7200 {
                         continue
                     }
 
