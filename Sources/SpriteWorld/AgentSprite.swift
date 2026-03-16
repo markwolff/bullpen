@@ -593,14 +593,16 @@ public class AgentSprite: SKSpriteNode {
         idleBehaviorManager.reset()
         removeActionBubble()
 
-        if wasRoaming, let deskID = assignedDeskID {
+        if wasRoaming {
             stopWalking()
 
-            // Walk back to desk chair
-            let layout = OfficeLayout.defaultLayout()
-            if let desk = layout.desks.first(where: { $0.id == deskID }) {
-                let path = layout.findPath(from: position, to: desk.chairPosition)
-                walk(to: desk.chairPosition, via: path)
+            // Walk back to desk chair if we still have one assigned
+            if let deskID = assignedDeskID {
+                let layout = OfficeLayout.defaultLayout()
+                if let desk = layout.desks.first(where: { $0.id == deskID }) {
+                    let path = layout.findPath(from: position, to: desk.chairPosition)
+                    walk(to: desk.chairPosition, via: path)
+                }
             }
         }
     }

@@ -801,6 +801,44 @@ public class OfficeScene: SKScene {
             }
         }
 
+        // Release desks for idle agents
+        for agent in agents {
+            guard let sprite = agentSprites[agent.id] else { continue }
+            if agent.state == .idle, let deskID = sprite.assignedDeskID {
+                // Release the desk
+                deskAssignments.removeValue(forKey: deskID)
+                turnOffMonitor(deskID: deskID)
+                deskClutterManager.clearClutter(forDeskID: deskID, scene: self)
+                coffeeRunManager.removeCup(deskID: deskID, scene: self)
+                sprite.assignedDeskID = nil
+            }
+        }
+
+        // Assign desks to active agents that don't have one
+        for agent in agents {
+            guard agent.state != .idle && agent.state != .finished else { continue }
+            if let sprite = agentSprites[agent.id] {
+                // Agent is in the scene but has no desk
+                if sprite.assignedDeskID == nil {
+                    let occupiedDeskIDs = Set(deskAssignments.keys)
+                    if let desk = layout.nextAvailableDesk(occupiedDeskIDs: occupiedDeskIDs) {
+                        sprite.assignedDeskID = desk.id
+                        deskAssignments[desk.id] = agent.id
+                        sprite.cancelIdleRoaming()
+                        let path = layout.findPath(from: sprite.position, to: desk.chairPosition)
+                        sprite.walk(to: desk.chairPosition, via: path) { [weak sprite] in
+                            guard let sprite else { return }
+                            sprite.playAnimation(for: agent.state)
+                        }
+                        turnOnMonitor(deskID: desk.id, state: agent.state)
+                    }
+                }
+            } else if !fadingOutAgentIDs.contains(agent.id) {
+                // Agent is not in the scene — try adding (maybe desk is available now)
+                addAgentSprite(for: agent)
+            }
+        }
+
         // Update monitor states based on desk assignments
         updateMonitorStates(agents: agents)
 
@@ -842,14 +880,8 @@ public class OfficeScene: SKScene {
             // Turn on monitor
             turnOnMonitor(deskID: desk.id, state: agent.state)
         } else {
-            // No desk available — stand near the door
-            sprite.position = CGPoint(
-                x: layout.doorExitPosition.x - CGFloat.random(in: 0...40),
-                y: layout.doorExitPosition.y
-            )
-            sprite.zPosition = 5
-            addChild(sprite)
-            agentSprites[agent.id] = sprite
+            // No desk available — don't add the agent to the scene
+            return
         }
     }
 
