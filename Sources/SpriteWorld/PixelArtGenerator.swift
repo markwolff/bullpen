@@ -509,6 +509,16 @@ public final class PixelArtGenerator: Sendable {
             let rightEye = superviseShift < 2 ? 9 : 10
             fill(ctx, rect: r(leftEye, 19, 1, 1), color: eyeColor)
             fill(ctx, rect: r(rightEye, 19, 1, 1), color: eyeColor)
+        case "deepThinking":
+            // Same as thinking: hand on chin + sparkle
+            fill(ctx, rect: r(10, 16, 2, 1), color: skin)
+            let dtSparkleOffsets: [(Int, Int)] = [(2, 22), (13, 23), (1, 23), (14, 22)]
+            let dtIdx = frame % dtSparkleOffsets.count
+            fill(ctx, rect: r(dtSparkleOffsets[dtIdx].0, dtSparkleOffsets[dtIdx].1, 1, 1), color: Self.lampYellow)
+            if frame % 2 == 1 {
+                let dtIdx2 = (dtIdx + 2) % dtSparkleOffsets.count
+                fill(ctx, rect: r(dtSparkleOffsets[dtIdx2].0, dtSparkleOffsets[dtIdx2].1, 1, 1), color: Self.lampYellow)
+            }
         default:
             break
         }

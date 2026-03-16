@@ -11,6 +11,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
             && lhs.isSubagent == rhs.isSubagent
             && lhs.nameRefined == rhs.nameRefined
             && lhs.name == rhs.name
+            && lhs.roleTitle == rhs.roleTitle
     }
 
     /// Unique identifier for this agent session (derived from log file or session ID)
@@ -60,14 +61,21 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// Whether this agent is a subagent spawned by another agent session
     public var isSubagent: Bool = false
 
-    /// The project directory name this agent is working in (shown as subtitle)
-    public var projectName: String?
+    /// Display role shown as subtitle beneath the agent's name.
+    /// For subagents, derived from the meta.json `agentType` field that Claude Code
+    /// writes alongside each subagent log (e.g., "Explore" → "Explorer", "test-runner" → "Test Runner").
+    /// For main agents, inferred from state: "Planner" if in plan mode,
+    /// "Lead" if supervising subagents, "Developer" otherwise.
+    public var roleTitle: String?
 
     /// Whether this agent is currently in plan mode
     public var isPlanMode: Bool = false
 
     /// The session ID of the parent agent that spawned this subagent
     public var parentSessionID: String?
+
+    /// The OS process ID for liveness checking (Claude Code only)
+    public var pid: Int32? = nil
 
     /// Session IDs of currently active child subagents
     public var activeChildSessionIDs: Set<String> = []
@@ -89,7 +97,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         workspacePath: String? = nil,
         stateEnteredAt: Date? = nil,
         isSubagent: Bool = false,
-        projectName: String? = nil,
+        roleTitle: String? = nil,
         parentSessionID: String? = nil
     ) {
         self.id = id
@@ -103,7 +111,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         self.workspacePath = workspacePath
         self.stateEnteredAt = stateEnteredAt ?? startedAt
         self.isSubagent = isSubagent
-        self.projectName = projectName
+        self.roleTitle = roleTitle
         self.parentSessionID = parentSessionID
     }
 }

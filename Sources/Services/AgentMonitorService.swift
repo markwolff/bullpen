@@ -44,6 +44,15 @@ public final class AgentMonitorService: ObservableObject {
     /// How long an idle agent stays before removal (seconds)
     private let idleRemovalTimeout: TimeInterval
 
+    /// How long a deep thinking agent can pace before transitioning to idle (seconds)
+    private let deepThinkingTimeout: TimeInterval
+
+    /// Process liveness checker for PID-based deep thinking validation
+    private let livenessChecker = ProcessLivenessChecker()
+
+    /// Cached session PID mappings (populated lazily on first deep thinking transition)
+    private var sessionPIDs: [String: Int32] = [:]
+
     /// Maximum number of simultaneous agents
     private let maxAgents: Int = 1000
 
@@ -85,7 +94,8 @@ public final class AgentMonitorService: ObservableObject {
         discoveryInterval: TimeInterval = 10.0,
         idleTimeout: TimeInterval = 30.0,
         finishedRemovalTimeout: TimeInterval = 120.0,
-        idleRemovalTimeout: TimeInterval = 120.0
+        idleRemovalTimeout: TimeInterval = 120.0,
+        deepThinkingTimeout: TimeInterval = 600.0
     ) {
         self.logReaders = logReaders ?? [
             ClaudeCodeLogReader(),
@@ -95,6 +105,7 @@ public final class AgentMonitorService: ObservableObject {
         self.idleTimeout = idleTimeout
         self.finishedRemovalTimeout = finishedRemovalTimeout
         self.idleRemovalTimeout = idleRemovalTimeout
+        self.deepThinkingTimeout = deepThinkingTimeout
     }
 
     /// Starts monitoring all agent log sources.
@@ -128,6 +139,7 @@ public final class AgentMonitorService: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.checkIdleTimeouts()
+                self?.checkDeepThinkingTimeouts()
                 self?.checkAgentRemoval()
             }
         }
@@ -156,6 +168,7 @@ public final class AgentMonitorService: ObservableObject {
         childToParentMap.removeAll()
         parentToChildrenMap.removeAll()
         pendingSessions.removeAll()
+        sessionPIDs.removeAll()
         deferNextDiscovery = false
     }
 
@@ -237,17 +250,56 @@ public final class AgentMonitorService: ObservableObject {
         }
     }
 
-    /// Checks all agents for idle timeout and transitions them to .idle if needed.
+    /// Checks all agents for idle timeout and transitions them to .idle or .deepThinking.
     /// Call directly in tests instead of waiting for timers.
     public func checkIdleTimeouts() {
         let now = Date()
         for i in agents.indices {
             let agent = agents[i]
-            // Don't transition finished agents to idle (finished is terminal until new activity)
-            guard agent.state != .finished && agent.state != .idle else { continue }
+            // Don't transition finished, idle, or deepThinking agents
+            guard agent.state != .finished && agent.state != .idle && agent.state != .deepThinking else { continue }
             // Never idle-timeout a parent with active children
             guard !agent.hasActiveChildren else { continue }
             if now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
+                if agent.state == .thinking {
+                    // Thinking agents enter deep thinking instead of idle
+                    agents[i].state = .deepThinking
+                    agents[i].stateEnteredAt = now
+                    agents[i].lastUpdatedAt = now
+                    // Look up and store PID for liveness checking
+                    if agents[i].pid == nil && agents[i].agentType == .claudeCode {
+                        if sessionPIDs.isEmpty {
+                            sessionPIDs = livenessChecker.discoverSessionPIDs()
+                        }
+                        agents[i].pid = sessionPIDs[agent.id]
+                    }
+                } else {
+                    agents[i].state = .idle
+                    agents[i].lastUpdatedAt = now
+                }
+            }
+        }
+    }
+
+    /// Checks deep thinking agents for timeout or dead process.
+    /// Call directly in tests instead of waiting for timers.
+    public func checkDeepThinkingTimeouts() {
+        let now = Date()
+        for i in agents.indices {
+            let agent = agents[i]
+            guard agent.state == .deepThinking else { continue }
+
+            // Check PID liveness for Claude Code agents
+            if agent.agentType == .claudeCode, let pid = agent.pid {
+                if !livenessChecker.isProcessAlive(pid: pid) {
+                    agents[i].state = .idle
+                    agents[i].lastUpdatedAt = now
+                    continue
+                }
+            }
+
+            // Check deep thinking timeout
+            if now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
                 agents[i].state = .idle
                 agents[i].lastUpdatedAt = now
             }
@@ -351,6 +403,18 @@ public final class AgentMonitorService: ObservableObject {
             agents[index].isPlanMode = false
         }
 
+        // Dynamically update role title for main agents based on current state.
+        // Subagent roles are static (set from meta.json at creation time).
+        if !agents[index].isSubagent {
+            if agents[index].isPlanMode {
+                agents[index].roleTitle = "Planner"
+            } else if agents[index].hasActiveChildren {
+                agents[index].roleTitle = "Lead"
+            } else {
+                agents[index].roleTitle = "Developer"
+            }
+        }
+
         // 7.7: Accumulate token usage
         agents[index].totalInputTokens += activity.inputTokens
         agents[index].totalOutputTokens += activity.outputTokens
@@ -416,7 +480,6 @@ public final class AgentMonitorService: ObservableObject {
         reader: any AgentLogReader
     ) {
         let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
-        let projectName = Self.extractProjectName(from: fileURL)
         let name = Self.generateAgentName(from: sessionID)
         let isSubagent = fileURL.path.contains("/subagents/")
 
@@ -429,6 +492,16 @@ public final class AgentMonitorService: ObservableObject {
             }
         }
 
+        // Determine role title: for subagents, read the companion meta.json
+        // that Claude Code writes alongside each subagent log. For main agents,
+        // default to "Developer" (dynamically updated to "Planner"/"Lead" based on state).
+        let roleTitle: String
+        if isSubagent {
+            roleTitle = Self.readSubagentRole(from: fileURL) ?? "Subagent"
+        } else {
+            roleTitle = "Developer"
+        }
+
         let agent = AgentInfo(
             id: sessionID,
             name: name,
@@ -437,7 +510,7 @@ public final class AgentMonitorService: ObservableObject {
             state: .idle,
             currentTaskDescription: "Starting up...",
             isSubagent: isSubagent,
-            projectName: projectName,
+            roleTitle: roleTitle,
             parentSessionID: parentSessionID
         )
         agents.append(agent)
@@ -603,51 +676,74 @@ public final class AgentMonitorService: ObservableObject {
         return "\(adjectives[adjIndex]) \(animals[animalIndex])"
     }
 
-    /// Extracts a project name from the log file path.
-    /// Claude Code logs: ~/.claude/projects/<hash>/<session>.jsonl
-    /// We try to decode the project hash directory name, which is a
-    /// percent-encoded absolute path. Falls back to a short hash prefix.
-    static func extractProjectName(from fileURL: URL) -> String {
-        // Walk up from the session file to find the project directory
-        let projectDir = fileURL.deletingLastPathComponent()
-        let dirName = projectDir.lastPathComponent
+    // MARK: - Subagent Role Detection
 
-        // If this is a "sessions" subdirectory, go up one more
-        let effectiveDir: URL
-        if dirName == "sessions" {
-            effectiveDir = projectDir.deletingLastPathComponent()
-        } else {
-            effectiveDir = projectDir
+    /// Reads the companion meta.json file for a subagent log to extract its role.
+    ///
+    /// Claude Code writes a `agent-<id>.meta.json` alongside each subagent JSONL log
+    /// containing `{"agentType": "<type>"}`. The agentType directly indicates the
+    /// subagent's role (e.g., "Explore", "test-runner", "code-reviewer", "general-purpose").
+    /// We map these raw type strings to human-friendly display titles.
+    static func readSubagentRole(from logFileURL: URL) -> String? {
+        // Derive meta.json path: agent-<id>.jsonl → agent-<id>.meta.json
+        let logName = logFileURL.deletingPathExtension().lastPathComponent
+        let metaURL = logFileURL.deletingLastPathComponent()
+            .appendingPathComponent("\(logName).meta.json")
+
+        guard let data = try? Data(contentsOf: metaURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let agentType = json["agentType"] as? String
+        else {
+            return nil
         }
 
-        // If we landed on a "subagents" directory, walk up past the
-        // session UUID directory to the actual project hash directory.
-        let effectiveName = effectiveDir.lastPathComponent
-        let resolvedDir: URL
-        if effectiveName == "subagents" {
-            // subagents → session-uuid → project-hash
-            resolvedDir = effectiveDir.deletingLastPathComponent().deletingLastPathComponent()
-        } else {
-            resolvedDir = effectiveDir
+        return mapAgentTypeToTitle(agentType)
+    }
+
+    /// Maps a raw Claude Code subagent type string to a clean display title.
+    ///
+    /// Known agentType values observed in real logs include:
+    ///   "Explore", "Plan", "general-purpose", "code-reviewer", "test-runner",
+    ///   "feature-dev:code-architect", "feature-dev:code-explorer",
+    ///   "codebase-investigator", "simplicity-champion", "product-thinker",
+    ///   "validator", "sentry:issue-summarizer", and custom user-defined types.
+    ///
+    /// The mapping prioritizes well-known types, then falls back to cleaning up
+    /// the raw string into a human-readable title.
+    static func mapAgentTypeToTitle(_ agentType: String) -> String {
+        // Well-known types with curated display names
+        switch agentType.lowercased() {
+        case "explore":
+            return "Explorer"
+        case "plan":
+            return "Planner"
+        case "general-purpose":
+            return "Generalist"
+        case "code-reviewer", "code-quality-advocate":
+            return "Code Reviewer"
+        case "test-runner":
+            return "Test Runner"
+        case "validator":
+            return "Validator"
+        case "feature-dev:code-architect":
+            return "Architect"
+        case "feature-dev:code-explorer", "codebase-investigator", "investigator":
+            return "Investigator"
+        case "simplicity-champion":
+            return "Simplifier"
+        case "product-thinker":
+            return "Product Thinker"
+        case "sentry:issue-summarizer":
+            return "Issue Analyst"
+        default:
+            // Fall back to cleaning up the raw type string:
+            // "edge-runtime-expert" → "Edge Runtime Expert"
+            // "feature-dev:code-reviewer" → "Code Reviewer" (take part after colon)
+            let base = agentType.contains(":") ? String(agentType.split(separator: ":").last!) : agentType
+            return base.split(separator: "-")
+                .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+                .joined(separator: " ")
         }
-
-        let encodedName = resolvedDir.lastPathComponent
-
-        // Claude Code encodes the project path as the directory name
-        // e.g., "-Users-mark-projects-bullpen-london" → "london"
-        // Detect encoded paths (they start with "-")
-        let projectName: String
-        if encodedName.hasPrefix("-") {
-            let parts = encodedName.split(separator: "-").map(String.init)
-            projectName = parts.last ?? encodedName
-        } else {
-            projectName = encodedName
-        }
-
-        guard !projectName.isEmpty else { return "Agent" }
-
-        // Capitalize first letter
-        return projectName.prefix(1).uppercased() + projectName.dropFirst()
     }
 
     /// Extracts a short task name from a user message's raw JSON payload.
@@ -681,15 +777,28 @@ public final class AgentMonitorService: ObservableObject {
         return shortenPrompt(text)
     }
 
-    /// Distills a user prompt into a short display name (max 25 chars).
-    private static func shortenPrompt(_ text: String) -> String {
+    /// Distills a user prompt into a short display name (max 28 chars).
+    ///
+    /// Strips filler prefixes, title-cases the first few words, and truncates
+    /// at word boundaries to avoid ugly mid-word cuts like "Authenticati…".
+    /// Also filters out system/meta content (e.g., "[request Interrupted")
+    /// that can leak into user message payloads.
+    static func shortenPrompt(_ text: String) -> String {
         var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip common prefixes
+        // Filter out system/meta content that isn't a real user prompt.
+        // Claude Code sometimes includes "[request Interrupted..." or similar
+        // metadata strings in the message content array.
+        if cleaned.hasPrefix("[") || cleaned.hasPrefix("<") {
+            return "Task"
+        }
+
+        // Strip common filler prefixes so the name leads with the action verb
         let prefixes = [
             "please ", "can you ", "could you ", "i want you to ",
             "i need you to ", "help me ", "let's ", "let's ",
             "i'd like you to ", "go ahead and ", "we need to ", "you should ",
+            "i want to ", "we should ", "now ", "ok ", "okay ",
         ]
         let lower = cleaned.lowercased()
         for prefix in prefixes {
@@ -699,21 +808,19 @@ public final class AgentMonitorService: ObservableObject {
             }
         }
 
-        // Take first few meaningful words
-        let words = cleaned.split(separator: " ", maxSplits: 5, omittingEmptySubsequences: true)
+        // Split into words, filter out noise
+        let words = cleaned.split(separator: " ", maxSplits: 6, omittingEmptySubsequences: true)
         guard !words.isEmpty else { return "Task" }
 
-        // Build name from first 4 words, capitalize each
-        let nameWords = words.prefix(4).map { word -> String in
-            let w = String(word)
-            return w.prefix(1).uppercased() + w.dropFirst().lowercased()
-        }
-
-        var result = nameWords.joined(separator: " ")
-
-        // Cap at 25 characters
-        if result.count > 25 {
-            result = String(result.prefix(25)).trimmingCharacters(in: .whitespaces)
+        // Build name from words that fit within the character budget.
+        // Truncate at word boundaries to avoid mid-word cuts.
+        let maxLength = 28
+        var result = ""
+        for word in words.prefix(5) {
+            let titleWord = word.prefix(1).uppercased() + word.dropFirst().lowercased()
+            let candidate = result.isEmpty ? titleWord : "\(result) \(titleWord)"
+            if candidate.count > maxLength { break }
+            result = candidate
         }
 
         return result.isEmpty ? "Task" : result

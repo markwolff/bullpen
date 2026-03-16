@@ -20,8 +20,8 @@ public class AgentSprite: SKSpriteNode {
     /// Name label below the sprite
     private let nameLabel: SKLabelNode
 
-    /// Project name subtitle below the name label
-    private let projectLabel: SKLabelNode
+    /// Role title subtitle below the name label (e.g., "Explorer", "Planner", "Developer")
+    private let roleLabel: SKLabelNode
 
     /// Visual state indicator (colored dot or square)
     public let statusIndicator: SKShapeNode
@@ -53,7 +53,7 @@ public class AgentSprite: SKSpriteNode {
         self.agentInfo = agentInfo
         self.thoughtBubble = ThoughtBubble()
         self.nameLabel = SKLabelNode()
-        self.projectLabel = SKLabelNode()
+        self.roleLabel = SKLabelNode()
 
         let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4
         self.statusIndicator = SKShapeNode(circleOfRadius: indicatorRadius)
@@ -90,15 +90,15 @@ public class AgentSprite: SKSpriteNode {
         nameLabel.horizontalAlignmentMode = .center
         addChild(nameLabel)
 
-        // Project name subtitle below name label
-        projectLabel.text = agentInfo.projectName ?? ""
-        projectLabel.fontName = "Menlo"
-        projectLabel.fontSize = isSubagent ? 7 : 9
-        projectLabel.fontColor = SKColor(white: 0.7, alpha: 1.0)
-        projectLabel.position = CGPoint(x: 0, y: nameLabel.position.y - (isSubagent ? 10 : 13))
-        projectLabel.horizontalAlignmentMode = .center
-        if agentInfo.projectName != nil {
-            addChild(projectLabel)
+        // Role title subtitle below name label (e.g., "Explorer", "Developer", "Planner")
+        roleLabel.text = agentInfo.roleTitle ?? ""
+        roleLabel.fontName = "Menlo"
+        roleLabel.fontSize = isSubagent ? 7 : 9
+        roleLabel.fontColor = SKColor(white: 0.7, alpha: 1.0)
+        roleLabel.position = CGPoint(x: 0, y: nameLabel.position.y - (isSubagent ? 10 : 13))
+        roleLabel.horizontalAlignmentMode = .center
+        if agentInfo.roleTitle != nil {
+            addChild(roleLabel)
         }
 
         // Status indicator dot — smaller for subagents
@@ -122,7 +122,7 @@ public class AgentSprite: SKSpriteNode {
     public func update(with newInfo: AgentInfo) {
         let oldState = agentInfo.state
         let oldName = agentInfo.name
-        let oldProjectName = agentInfo.projectName
+        let oldRoleTitle = agentInfo.roleTitle
         agentInfo = newInfo
 
         let stateColor = AgentSprite.colorForState(newInfo.state)
@@ -132,11 +132,11 @@ public class AgentSprite: SKSpriteNode {
             nameLabel.text = newInfo.name
         }
 
-        // Update project label if project name changed
-        if newInfo.projectName != oldProjectName {
-            projectLabel.text = newInfo.projectName ?? ""
-            if projectLabel.parent == nil && newInfo.projectName != nil {
-                addChild(projectLabel)
+        // Update role title label if it changed (e.g., Developer → Planner → Lead)
+        if newInfo.roleTitle != oldRoleTitle {
+            roleLabel.text = newInfo.roleTitle ?? ""
+            if roleLabel.parent == nil && newInfo.roleTitle != nil {
+                addChild(roleLabel)
             }
         }
 
@@ -152,21 +152,17 @@ public class AgentSprite: SKSpriteNode {
         // Update planning clipboard overlay
         updatePlanModeOverlay(isPlanMode: newInfo.isPlanMode)
 
-        // Update thought bubble — prefix with "Planning..." when in plan mode
+        // Update thought bubble — determine best text once, call bubble once
         let desc = newInfo.currentTaskDescription
         let bubbleText: String
-        if newInfo.isPlanMode && !desc.isEmpty {
+        if !newInfo.recentTools.isEmpty && newInfo.state != .finished && newInfo.state != .idle {
+            bubbleText = newInfo.recentTools.first!.summary
+        } else if newInfo.isPlanMode && !desc.isEmpty {
             bubbleText = "Planning: \(desc)"
         } else {
             bubbleText = desc
         }
         thoughtBubble.update(text: bubbleText, for: newInfo.state)
-
-        // Show only the latest tool summary (not a queue) — skip for finished/idle agents
-        if !newInfo.recentTools.isEmpty && newInfo.state != .finished && newInfo.state != .idle {
-            let latest = newInfo.recentTools.first!.summary
-            thoughtBubble.refreshCycle(recentTools: [latest])
-        }
 
         // Trigger animation change if state changed
         if oldState != newInfo.state {
@@ -246,7 +242,7 @@ public class AgentSprite: SKSpriteNode {
 
     // MARK: - State Transitions (6.14)
 
-    /// Handles state transition with cross-fade blending (except error which is instant).
+    /// Handles state transition by swapping animation directly (no cross-fade).
     private func transitionToState(_ newState: AgentState, from oldState: AgentState) {
         // Remove idle ZZZ if leaving idle and reset roaming behavior
         if oldState == .idle {
@@ -255,24 +251,17 @@ public class AgentSprite: SKSpriteNode {
             cancelIdleRoaming()
         }
 
+        // Cancel deep thinking pacing if leaving deepThinking
+        if oldState == .deepThinking {
+            cancelDeepThinkingPacing()
+        }
+
         // Remove previous state emitter
         removeStateEmitter()
 
-        // Error transitions are instant (no fade)
-        if newState == .error || oldState == .error {
-            playAnimation(for: newState)
-            currentAnimationState = newState
-            return
-        }
-
-        // Cross-fade transition: fade out → swap → fade in (0.3s total)
-        let fadeOut = SKAction.fadeAlpha(to: 0, duration: 0.15)
-        let swap = SKAction.run { [weak self] in
-            self?.playAnimation(for: newState)
-            self?.currentAnimationState = newState
-        }
-        let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.15)
-        run(SKAction.sequence([fadeOut, swap, fadeIn]), withKey: "stateTransition")
+        // Direct animation swap — SpriteKit handles texture changes seamlessly
+        playAnimation(for: newState)
+        currentAnimationState = newState
     }
 
     // MARK: - Animations (6.5–6.13)
@@ -339,6 +328,12 @@ public class AgentSprite: SKSpriteNode {
             // 4 frames, 2.0s per frame, loop forever — arms-crossed watching
             let animate = SKAction.animate(with: frames, timePerFrame: 2.0)
             run(SKAction.repeatForever(animate), withKey: "stateAnimation")
+
+        case .deepThinking:
+            // Same as thinking: 4 frames, 2.0s, loop forever + sparkle emitter
+            let animate = SKAction.animate(with: frames, timePerFrame: 2.0)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
+            addSparkleEmitter()
         }
     }
 
@@ -496,12 +491,12 @@ public class AgentSprite: SKSpriteNode {
     // MARK: - Movement
 
     /// Walks the agent sprite to a destination point along a path.
-    public func walk(to destination: CGPoint, via waypoints: [CGPoint], completion: (() -> Void)? = nil) {
+    public func walk(to destination: CGPoint, via waypoints: [CGPoint], speedMultiplier: CGFloat = 1.0, completion: (() -> Void)? = nil) {
         guard !isWalking else { return }
         isWalking = true
 
         var actions: [SKAction] = []
-        let speed: CGFloat = 100 // points per second
+        let speed: CGFloat = 100 * speedMultiplier
 
         let allPoints = waypoints + [destination]
         var previous = position
@@ -562,6 +557,8 @@ public class AgentSprite: SKSpriteNode {
             SKColor(red: 0.439, green: 0.439, blue: 0.439, alpha: 1.0) // #707070
         case .supervisingAgents:
             SKColor(red: 0.251, green: 0.690, blue: 0.690, alpha: 1.0) // #40B0B0 teal
+        case .deepThinking:
+            SKColor(red: 0.910, green: 0.753, blue: 0.251, alpha: 1.0) // Amber/gold
         }
     }
 
@@ -575,10 +572,6 @@ public class AgentSprite: SKSpriteNode {
         stateEmitter?.name
     }
 
-    /// Whether this sprite is performing a cross-fade transition.
-    public var isTransitioning: Bool {
-        action(forKey: "stateTransition") != nil
-    }
 
     // MARK: - Idle Roaming Behavior
 
@@ -597,11 +590,13 @@ public class AgentSprite: SKSpriteNode {
             stopWalking()
 
             // Walk back to desk chair if we still have one assigned
+            // Hustle (1.5x) if in an active working state
             if let deskID = assignedDeskID {
                 let layout = OfficeLayout.defaultLayout()
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let path = layout.findPath(from: position, to: desk.chairPosition)
-                    walk(to: desk.chairPosition, via: path)
+                    let hustle: CGFloat = agentInfo.state.isActive ? 1.5 : 1.0
+                    walk(to: desk.chairPosition, via: path, speedMultiplier: hustle)
                 }
             }
         }
@@ -669,5 +664,83 @@ public class AgentSprite: SKSpriteNode {
     /// Removes the action bubble if present.
     func removeActionBubble() {
         childNode(withName: "action_bubble")?.removeFromParent()
+    }
+
+    // MARK: - Deep Thinking Pacing Behavior
+
+    /// Manages deep thinking pacing behavior when the agent has been thinking for a long time.
+    public lazy var deepThinkingBehaviorManager = DeepThinkingBehaviorManager()
+
+    /// Whether the agent is currently pacing during deep thinking.
+    public var isDeepThinkingPacing: Bool {
+        deepThinkingBehaviorManager.isPacing
+    }
+
+    /// Starts the deep thinking pacing cycle and shows the 🤔 emoji.
+    public func startDeepThinkingPacing(waypoints: [CGPoint], otherAgentPositions: [CGPoint] = []) {
+        let action = deepThinkingBehaviorManager.startPacing(waypoints: waypoints, otherAgentPositions: otherAgentPositions)
+        showDeepThinkingEmoji()
+        handleDeepThinkingAction(action, layout: OfficeLayout.defaultLayout())
+    }
+
+    /// Cancels deep thinking pacing and walks back to desk at 1.5x speed.
+    public func cancelDeepThinkingPacing() {
+        let wasPacing = deepThinkingBehaviorManager.isPacing
+        deepThinkingBehaviorManager.reset()
+        removeDeepThinkingEmoji()
+
+        if wasPacing {
+            stopWalking()
+
+            // Walk back to desk if assigned
+            if let deskID = assignedDeskID {
+                let layout = OfficeLayout.defaultLayout()
+                if let desk = layout.desks.first(where: { $0.id == deskID }) {
+                    let path = layout.findPath(from: position, to: desk.chairPosition)
+                    walk(to: desk.chairPosition, via: path, speedMultiplier: 1.5)
+                }
+            }
+        }
+    }
+
+    /// Handles a deep thinking action by walking or showing the emoji.
+    public func handleDeepThinkingAction(_ action: DeepThinkingBehaviorManager.DeepThinkingAction, layout: OfficeLayout) {
+        switch action {
+        case .walkTo(let destination):
+            let path = layout.findPath(from: position, to: destination)
+            walk(to: destination, via: path, speedMultiplier: 0.7) { [weak self] in
+                self?.deepThinkingBehaviorManager.walkCompleted()
+            }
+        case .showThinkingEmoji:
+            showDeepThinkingEmoji()
+        }
+    }
+
+    /// Shows a floating 🤔 emoji above the agent.
+    private func showDeepThinkingEmoji() {
+        guard childNode(withName: "deep_thinking_emoji") == nil else { return }
+
+        let emoji = SKLabelNode(text: "\u{1F914}")
+        emoji.fontSize = 18
+        emoji.position = CGPoint(x: 0, y: size.height / 2 + 20)
+        emoji.name = "deep_thinking_emoji"
+        emoji.zPosition = 190
+
+        // Fade in
+        emoji.alpha = 0
+        let fadeIn = SKAction.fadeIn(withDuration: 0.3)
+        // Gentle bob
+        let bobUp = SKAction.moveBy(x: 0, y: 4, duration: 1.0)
+        bobUp.timingMode = .easeInEaseOut
+        let bobDown = bobUp.reversed()
+        let bob = SKAction.repeatForever(SKAction.sequence([bobUp, bobDown]))
+        emoji.run(SKAction.group([fadeIn, bob]))
+
+        addChild(emoji)
+    }
+
+    /// Removes the deep thinking emoji.
+    private func removeDeepThinkingEmoji() {
+        childNode(withName: "deep_thinking_emoji")?.removeFromParent()
     }
 }

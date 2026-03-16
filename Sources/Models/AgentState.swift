@@ -33,6 +33,19 @@ public enum AgentState: String, Sendable, CaseIterable {
     /// Agent is supervising active subagents
     case supervisingAgents
 
+    /// Agent has been thinking for a long time (>30s) — paces the office with 🤔
+    case deepThinking
+
+    /// Whether this state represents active work (not idle, finished, or error).
+    public var isActive: Bool {
+        switch self {
+        case .thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents:
+            true
+        case .idle, .waitingForInput, .error, .finished, .deepThinking:
+            false
+        }
+    }
+
     /// Human-readable description for display in thought bubbles
     public var displayLabel: String {
         switch self {
@@ -46,6 +59,7 @@ public enum AgentState: String, Sendable, CaseIterable {
         case .error: "Error!"
         case .finished: "Done"
         case .supervisingAgents: "Supervising..."
+        case .deepThinking: "Deep in thought..."
         }
     }
 }

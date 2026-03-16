@@ -47,6 +47,9 @@ public class IdleBehaviorManager {
     public private(set) var phase: Phase = .atDesk
     public private(set) var currentBehavior: IdleBehavior?
 
+    /// Recent behaviors for variety tracking (last 4)
+    public private(set) var recentBehaviors: [IdleBehavior] = []
+
     /// How long the agent has been sitting idle at desk before roaming
     private var deskIdleTimer: TimeInterval = 0
 
@@ -93,6 +96,7 @@ public class IdleBehaviorManager {
         totalIdleTime = 0
         effectShown = false
         targetDestination = nil
+        recentBehaviors = []
         actionBubble?.removeFromParent()
         actionBubble = nil
     }
@@ -184,6 +188,12 @@ public class IdleBehaviorManager {
         actionBubble?.removeFromParent()
         actionBubble = nil
 
+        // Record completed behavior in history
+        if let behavior = currentBehavior {
+            recentBehaviors.append(behavior)
+            if recentBehaviors.count > 4 { recentBehaviors.removeFirst() }
+        }
+
         // 60% chance to do another activity, 40% chance to return to desk
         if Double.random(in: 0...1) < 0.6 {
             return startActivity(context: context)
@@ -221,10 +231,9 @@ public class IdleBehaviorManager {
             candidates.removeAll { $0 == .printerArea }
         }
 
-        // Avoid repeating the same behavior
-        if let current = currentBehavior {
-            candidates.removeAll { $0 == current }
-        }
+        // Avoid repeating recent behaviors (last 4 + current)
+        let excluded = Set(recentBehaviors + [currentBehavior].compactMap { $0 })
+        candidates.removeAll { excluded.contains($0) }
 
         // Social distancing: remove destinations where another agent is nearby,
         // heading toward, or already performing at (within 60px)

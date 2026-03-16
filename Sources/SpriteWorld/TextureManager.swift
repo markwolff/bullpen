@@ -281,6 +281,7 @@ public final class TextureManager: @unchecked Sendable {
         switch state {
         case .idle: 4
         case .thinking: 4
+        case .deepThinking: 4
         case .writingCode: 2
         case .readingFiles: 3
         case .runningCommand: 2

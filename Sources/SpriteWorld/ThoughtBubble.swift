@@ -67,7 +67,7 @@ public class ThoughtBubble: SKNode {
     /// Pass nil or empty string to hide the bubble.
     /// Only shows the bubble if the text has changed from the current message.
     public func update(text: String?, for state: AgentState) {
-        guard let text, !text.isEmpty, state != .idle && state != .finished else {
+        guard let text, !text.isEmpty, state != .idle && state != .finished && state != .deepThinking else {
             hide()
             return
         }
@@ -79,7 +79,6 @@ public class ThoughtBubble: SKNode {
         label.text = text
         updateBubblePath()
         show()
-        resetFadeTimer()
         setupScrollIfNeeded()
         scheduleAutoHide()
     }
@@ -123,25 +122,24 @@ public class ThoughtBubble: SKNode {
         cropNode.maskNode = maskNode
     }
 
-    /// Shows the bubble with a fade-in animation, staggered by a small random delay
-    /// so multiple agents spawning together don't all pop bubbles at once.
+    /// Shows the bubble with a fade-in animation.
     public func show() {
         guard isHidden else { return }
         isHidden = false
         alpha = 0
-        let delay = SKAction.wait(forDuration: TimeInterval.random(in: 0.0...0.6))
-        let fadeIn = SKAction.fadeIn(withDuration: 0.2)
-        run(SKAction.sequence([delay, fadeIn]), withKey: "showDelay")
+        let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.2)
+        run(fadeIn, withKey: "bubbleAlpha")
     }
 
     /// Hides the bubble with a fade-out animation.
     public func hide() {
         removeAction(forKey: "autoHide")
-        removeAction(forKey: "showDelay")
         guard !isHidden else { return }
-        run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
+        let fadeOut = SKAction.fadeAlpha(to: 0, duration: 0.2)
+        let markHidden = SKAction.run { [weak self] in
             self?.isHidden = true
         }
+        run(SKAction.sequence([fadeOut, markHidden]), withKey: "bubbleAlpha")
     }
 
     // MARK: - 8.14: Text Truncation for Long Text
@@ -181,47 +179,15 @@ public class ThoughtBubble: SKNode {
         false
     }
 
-    // MARK: - Latest Tool Display
-
-    /// Shows only the latest tool summary. No queueing — only the most recent matters.
-    public func refreshCycle(recentTools: [String]) {
-        // Only care about the very latest tool
-        guard let latest = recentTools.first else { return }
-        // Don't re-show if the content is the same as what was last displayed
-        guard latest != lastDisplayedText else { return }
-
-        lastDisplayedText = latest
-        label.text = latest
-        updateBubblePath()
-        show()
-        resetFadeTimer()
-        setupScrollIfNeeded()
-        scheduleAutoHide()
-    }
-
-    /// No-op — cycling is removed. Kept for API compatibility.
-    public func updateCycle(deltaTime: TimeInterval) {
-        // Intentionally empty — we only show the latest update, no cycling
-    }
-
     // MARK: - Auto-Hide
 
-    /// Schedules the bubble to fade out after 2 seconds.
+    /// Schedules the bubble to fade out after 2.5 seconds.
     private func scheduleAutoHide() {
         removeAction(forKey: "autoHide")
-        let wait = SKAction.wait(forDuration: TimeInterval.random(in: 1.8...2.5))
-        let fadeOut = SKAction.fadeOut(withDuration: 0.2)
-        let markHidden = SKAction.run { [weak self] in
-            self?.isHidden = true
+        let wait = SKAction.wait(forDuration: 2.5)
+        let doHide = SKAction.run { [weak self] in
+            self?.hide()
         }
-        run(SKAction.sequence([wait, fadeOut, markHidden]), withKey: "autoHide")
-    }
-
-    // MARK: - Opacity
-
-    /// Restores full opacity and removes any pending fade action.
-    private func resetFadeTimer() {
-        removeAction(forKey: "fadeTimeout")
-        run(SKAction.fadeAlpha(to: 1.0, duration: 0.1))
+        run(SKAction.sequence([wait, doHide]), withKey: "autoHide")
     }
 }

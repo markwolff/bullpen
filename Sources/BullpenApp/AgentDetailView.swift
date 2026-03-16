@@ -124,6 +124,7 @@ struct AgentDetailView: View {
         case .error: .red
         case .finished: Color(white: 0.4)
         case .supervisingAgents: .teal
+        case .deepThinking: .orange
         }
     }
 }

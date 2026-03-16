@@ -1,7 +1,7 @@
 import SpriteKit
 import Models
 
-/// Manages pair programming sessions — when 2 agents share the same projectName
+/// Manages pair programming sessions — when 2 agents share the same roleTitle
 /// and both are working, there's a chance the "visitor" walks behind the "host" to observe.
 @MainActor
 public class PairProgrammingManager {
@@ -40,15 +40,15 @@ public class PairProgrammingManager {
         guard checkTimer >= checkInterval else { return nil }
         checkTimer = 0
 
-        // Find pairs of working agents with same projectName
+        // Find pairs of working agents with same roleTitle
         let workingAgents = agents.filter { agent in
             let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
                 .contains(agent.state)
-            return isWorking && agent.projectName != nil
+            return isWorking && agent.roleTitle != nil
         }
 
-        // Group by projectName
-        let grouped = Dictionary(grouping: workingAgents, by: { $0.projectName! })
+        // Group by roleTitle
+        let grouped = Dictionary(grouping: workingAgents, by: { $0.roleTitle! })
 
         for (_, group) in grouped where group.count >= 2 {
             // 20% chance per eligible group

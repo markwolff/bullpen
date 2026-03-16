@@ -804,7 +804,7 @@ public class OfficeScene: SKScene {
         // Release desks for idle agents
         for agent in agents {
             guard let sprite = agentSprites[agent.id] else { continue }
-            if agent.state == .idle, let deskID = sprite.assignedDeskID {
+            if (agent.state == .idle || agent.state == .deepThinking), let deskID = sprite.assignedDeskID {
                 // Release the desk
                 deskAssignments.removeValue(forKey: deskID)
                 turnOffMonitor(deskID: deskID)
@@ -816,7 +816,7 @@ public class OfficeScene: SKScene {
 
         // Assign desks to active agents that don't have one
         for agent in agents {
-            guard agent.state != .idle && agent.state != .finished else { continue }
+            guard agent.state != .idle && agent.state != .finished && agent.state != .deepThinking else { continue }
             if let sprite = agentSprites[agent.id] {
                 // Agent is in the scene but has no desk
                 if sprite.assignedDeskID == nil {
@@ -826,7 +826,8 @@ public class OfficeScene: SKScene {
                         deskAssignments[desk.id] = agent.id
                         sprite.cancelIdleRoaming()
                         let path = layout.findPath(from: sprite.position, to: desk.chairPosition)
-                        sprite.walk(to: desk.chairPosition, via: path) { [weak sprite] in
+                        let hustle: CGFloat = agent.state.isActive ? 1.5 : 1.0
+                        sprite.walk(to: desk.chairPosition, via: path, speedMultiplier: hustle) { [weak sprite] in
                             guard let sprite else { return }
                             sprite.playAnimation(for: agent.state)
                         }
@@ -870,9 +871,10 @@ public class OfficeScene: SKScene {
             addChild(sprite)
             agentSprites[agent.id] = sprite
 
-            // Walk to assigned desk
+            // Walk to assigned desk — hustle if already in an active state
             let path = layout.findPath(from: entrancePoint, to: desk.chairPosition)
-            sprite.walk(to: desk.chairPosition, via: path) { [weak sprite] in
+            let hustle: CGFloat = agent.state.isActive ? 1.5 : 1.0
+            sprite.walk(to: desk.chairPosition, via: path, speedMultiplier: hustle) { [weak sprite] in
                 guard let sprite else { return }
                 sprite.playAnimation(for: agent.state)
             }
@@ -1106,12 +1108,12 @@ public class OfficeScene: SKScene {
             }
         }
 
-        // Gather positions of other roaming agents (for social distancing)
+        // Gather positions of other roaming/pacing agents (for social distancing)
         var otherRoamingPositions: [CGPoint] = []
         // Gather destinations that other agents are walking toward or performing at
         var occupiedActivityPositions: [CGPoint] = []
         for (_, otherSprite) in agentSprites where otherSprite !== sprite {
-            if otherSprite.isRoaming {
+            if otherSprite.isRoaming || otherSprite.isDeepThinkingPacing {
                 otherRoamingPositions.append(otherSprite.position)
             }
             // Track reserved destinations — where agents are headed or performing
@@ -1155,6 +1157,45 @@ public class OfficeScene: SKScene {
         )
     }
 
+    // MARK: - Deep Thinking Pacing Behavior
+
+    /// Updates deep thinking pacing behavior for a single agent sprite.
+    private func updateDeepThinkingBehavior(for sprite: AgentSprite, deltaTime: TimeInterval) {
+        guard sprite.agentInfo.state == .deepThinking else { return }
+        guard !sprite.isWalking else { return }
+
+        // Gather waypoints from recreation areas
+        let waypoints = [
+            layout.waterCoolerStandPosition,
+            layout.bookshelfStandPosition,
+            layout.bulletinBoardStandPosition,
+            layout.windowStandPosition,
+            layout.whiteboardStandPosition,
+        ] + layout.plantStandPositions
+
+        // Gather other roaming/pacing agent positions for social distancing
+        var otherPositions: [CGPoint] = []
+        for (_, otherSprite) in agentSprites where otherSprite !== sprite {
+            if otherSprite.isRoaming || otherSprite.isDeepThinkingPacing {
+                otherPositions.append(otherSprite.position)
+            }
+        }
+
+        if !sprite.isDeepThinkingPacing {
+            // Start pacing for the first time
+            sprite.startDeepThinkingPacing(waypoints: waypoints, otherAgentPositions: otherPositions)
+        } else {
+            // Continue pacing — pump the state machine
+            if let action = sprite.deepThinkingBehaviorManager.update(
+                deltaTime: deltaTime,
+                waypoints: waypoints,
+                otherAgentPositions: otherPositions
+            ) {
+                sprite.handleDeepThinkingAction(action, layout: layout)
+            }
+        }
+    }
+
     // MARK: - Update Loop
 
     public override func update(_ currentTime: TimeInterval) {
@@ -1165,13 +1206,13 @@ public class OfficeScene: SKScene {
         lastUpdateTime = currentTime
 
         let agents = agentSprites.values.map(\.agentInfo)
-        let activeAgentCount = agents.filter { $0.state != .idle && $0.state != .finished }.count
+        let activeAgentCount = agents.filter { $0.state.isActive }.count
 
         // Update idle ZZZ, idle roaming, and thought bubble cycling for all agent sprites
         for sprite in agentSprites.values {
             sprite.updateIdleZZZ(currentTime: currentTime)
             updateIdleBehavior(for: sprite, deltaTime: deltaTime)
-            sprite.thoughtBubble.updateCycle(deltaTime: deltaTime)
+            updateDeepThinkingBehavior(for: sprite, deltaTime: deltaTime)
 
             // Y-based depth sorting: agents closer to bottom (lower Y) render in front
             // Map Y range to zPosition 5.0–5.9 so agents always stay in the agent layer
