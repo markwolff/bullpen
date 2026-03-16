@@ -8,6 +8,7 @@ DerivedData/
 .netrc
 .env
 .context/
+.superpowers/
 
 # Assetgen tool
 tools/assetgen/node_modules/

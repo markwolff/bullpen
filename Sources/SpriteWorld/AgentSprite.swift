@@ -49,9 +49,11 @@ public class AgentSprite: SKSpriteNode {
         self.nameLabel = SKLabelNode()
         self.statusIndicator = SKShapeNode(circleOfRadius: 4)
 
-        // Load texture from TextureManager — 16x24 pixel art scaled 3x = 48x72
-        let textureName = Self.textureName(for: agentInfo.agentType, state: agentInfo.state)
-        let texture = TextureManager.shared.texture(for: textureName)
+        // Load trait-based texture — 16x24 pixel art scaled 3x = 48x72
+        let texture = PixelArtGenerator.shared.character(
+            traits: agentInfo.traits,
+            state: agentInfo.state.rawValue
+        )
         let spriteSize = CGSize(width: 48, height: 72)
 
         super.init(texture: texture, color: .clear, size: spriteSize)
@@ -94,9 +96,15 @@ public class AgentSprite: SKSpriteNode {
     /// Updates this sprite to reflect new agent info.
     public func update(with newInfo: AgentInfo) {
         let oldState = agentInfo.state
+        let oldName = agentInfo.name
         agentInfo = newInfo
 
         let stateColor = AgentSprite.colorForState(newInfo.state)
+
+        // Update name label if name changed (smart naming refinement)
+        if newInfo.name != oldName {
+            nameLabel.text = newInfo.name
+        }
 
         // Update status indicator color and shape — task 4.8
         statusIndicator.fillColor = stateColor
@@ -231,10 +239,9 @@ public class AgentSprite: SKSpriteNode {
         }
     }
 
-    /// Returns animation frames for the current agent type and given state.
+    /// Returns animation frames for the current agent's traits and given state.
     private func framesForState(_ state: AgentState) -> [SKTexture] {
-        let prefix = agentInfo.agentType == .claudeCode ? "char_claude" : "char_codex"
-        return TextureManager.shared.animationFrames(prefix: prefix, state: state)
+        return TextureManager.shared.animationFrames(traits: agentInfo.traits, state: state)
     }
 
     // MARK: - Particle Emitters (6.6, 6.12, 6.13)

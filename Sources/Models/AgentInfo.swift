@@ -10,11 +10,17 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// Unique identifier for this agent session (derived from log file or session ID)
     public let id: String
 
-    /// Human-readable name for this agent (e.g., "Claude Code #1", "Codex CLI")
-    public let name: String
+    /// Human-readable name for this agent — starts as project name, refined to task name
+    public var name: String
+
+    /// Whether the name has been refined from the first user prompt
+    public var nameRefined: Bool = false
 
     /// What kind of agent this is
     public let agentType: AgentType
+
+    /// Visual traits (hoodie color, skin tone, hair, accessory) derived from session ID
+    public let traits: CharacterTraits
 
     /// The agent's current activity state
     public var state: AgentState
@@ -49,6 +55,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         id: String,
         name: String,
         agentType: AgentType,
+        traits: CharacterTraits? = nil,
         state: AgentState = .idle,
         currentTaskDescription: String = "",
         startedAt: Date = .now,
@@ -59,6 +66,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         self.id = id
         self.name = name
         self.agentType = agentType
+        self.traits = traits ?? CharacterTraits.from(sessionID: id, agentType: agentType)
         self.state = state
         self.currentTaskDescription = currentTaskDescription
         self.startedAt = startedAt
