@@ -625,7 +625,8 @@ public class OfficeScene: SKScene {
 
             // Walk to assigned desk
             let path = layout.findPath(from: entrancePoint, to: desk.chairPosition)
-            sprite.walk(to: desk.chairPosition, via: path) {
+            sprite.walk(to: desk.chairPosition, via: path) { [weak sprite] in
+                guard let sprite else { return }
                 sprite.playAnimation(for: agent.state)
             }
 
@@ -657,6 +658,7 @@ public class OfficeScene: SKScene {
         fadingOutAgentIDs.insert(id)
 
         // Stop any idle roaming and reset state
+        sprite.idleBehaviorManager.reset()
         sprite.stopWalking()
         sprite.removeActionBubble()
 
@@ -664,7 +666,8 @@ public class OfficeScene: SKScene {
         let exitPos = layout.doorExitPosition
         let doorPos = layout.doorPosition
         let path = layout.findPath(from: sprite.position, to: exitPos)
-        sprite.walk(to: exitPos, via: path) { [weak self] in
+        sprite.walk(to: exitPos, via: path) { [weak self, weak sprite] in
+            guard let sprite else { return }
             // Arrived at the door — walk into it and fade out
             sprite.run(SKAction.sequence([
                 SKAction.move(to: doorPos, duration: 0.3),

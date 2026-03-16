@@ -36,7 +36,7 @@ public final class AgentMonitorService: ObservableObject {
     private let idleRemovalTimeout: TimeInterval
 
     /// Maximum number of simultaneous agents
-    private let maxAgents: Int = 8
+    private let maxAgents: Int = 1000
 
     /// Counter for sequential agent naming
     private var agentCounter: Int = 0
@@ -85,8 +85,8 @@ public final class AgentMonitorService: ObservableObject {
         isMonitoring = true
 
         // Perform initial discovery immediately
-        Task {
-            await performDiscovery()
+        Task { [weak self] in
+            await self?.performDiscovery()
         }
 
         // Set up periodic discovery timer
@@ -270,12 +270,16 @@ public final class AgentMonitorService: ObservableObject {
             // 8.6-8.7: Send notifications on state transitions
             let agent = agents[index]
             if newState == .finished {
+                let service = notificationService
+                let visible = windowVisible
                 Task {
-                    await notificationService.notifyAgentFinished(agent: agent, windowVisible: windowVisible)
+                    await service.notifyAgentFinished(agent: agent, windowVisible: visible)
                 }
             } else if newState == .error {
+                let service = notificationService
+                let visible = windowVisible
                 Task {
-                    await notificationService.notifyAgentError(agent: agent, windowVisible: windowVisible)
+                    await service.notifyAgentError(agent: agent, windowVisible: visible)
                 }
             }
         }
@@ -347,8 +351,8 @@ public final class AgentMonitorService: ObservableObject {
         watcher.startWatching()
 
         // Do an initial read
-        Task {
-            await processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
+        Task { [weak self] in
+            await self?.processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
         }
     }
 

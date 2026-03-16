@@ -43,16 +43,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
 
     /// Reference to the main window for toggle/persistence
-    private var window: NSWindow?
+    private weak var window: NSWindow?
 
     /// Reference to the monitor service for badge updates (set from BullpenApp)
-    var monitorService: AgentMonitorService?
+    weak var monitorService: AgentMonitorService?
 
     /// Tracks window position for parallax delta calculation
     private var lastWindowOrigin: CGPoint?
 
     /// Debounce timer for resetting parallax after dragging stops
     private var parallaxResetWorkItem: DispatchWorkItem?
+
+    func applicationWillTerminate(_ notification: Notification) {
+        monitorService?.stopMonitoring()
+        if let statusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        parallaxResetWorkItem?.cancel()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set activation policy to regular (visible in Dock and Cmd+Tab)

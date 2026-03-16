@@ -325,6 +325,9 @@ public class AgentSprite: SKSpriteNode {
         // Auto-remove after 2 seconds
         emitter.run(SKAction.sequence([
             SKAction.wait(forDuration: 2.0),
+            SKAction.run { [weak self] in
+                self?.stateEmitter = nil
+            },
             SKAction.removeFromParent()
         ]))
     }
