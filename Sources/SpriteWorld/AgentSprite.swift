@@ -23,6 +23,9 @@ public class AgentSprite: SKSpriteNode {
     /// Role title subtitle below the name label (e.g., "Explorer", "Planner", "Developer")
     private let roleLabel: SKLabelNode
 
+    /// Token count label below the role title (e.g., "1,250 tok")
+    private let tokenLabel: SKLabelNode
+
     /// Visual state indicator (colored dot or square)
     public let statusIndicator: SKShapeNode
 
@@ -54,6 +57,7 @@ public class AgentSprite: SKSpriteNode {
         self.thoughtBubble = ThoughtBubble()
         self.nameLabel = SKLabelNode()
         self.roleLabel = SKLabelNode()
+        self.tokenLabel = SKLabelNode()
 
         let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4
         self.statusIndicator = SKShapeNode(circleOfRadius: indicatorRadius)
@@ -101,6 +105,19 @@ public class AgentSprite: SKSpriteNode {
             addChild(roleLabel)
         }
 
+        // Token count label below role title
+        let totalTokens = agentInfo.totalInputTokens + agentInfo.totalOutputTokens
+        tokenLabel.text = totalTokens > 0 ? "\(AgentSprite.formatTokenCount(totalTokens)) tok" : ""
+        tokenLabel.fontName = "Menlo"
+        tokenLabel.fontSize = isSubagent ? 7 : 9
+        tokenLabel.fontColor = SKColor(white: 1.0, alpha: 0.6)
+        let tokenAnchorY = agentInfo.roleTitle != nil ? roleLabel.position.y : nameLabel.position.y
+        tokenLabel.position = CGPoint(x: 0, y: tokenAnchorY - (isSubagent ? 10 : 13))
+        tokenLabel.horizontalAlignmentMode = .center
+        if totalTokens > 0 {
+            addChild(tokenLabel)
+        }
+
         // Status indicator dot — smaller for subagents
         statusIndicator.fillColor = AgentSprite.colorForState(agentInfo.state)
         statusIndicator.strokeColor = .clear
@@ -137,6 +154,18 @@ public class AgentSprite: SKSpriteNode {
             roleLabel.text = newInfo.roleTitle ?? ""
             if roleLabel.parent == nil && newInfo.roleTitle != nil {
                 addChild(roleLabel)
+            }
+            // Reposition token label when role title appears/disappears
+            let tokenAnchorY = newInfo.roleTitle != nil ? roleLabel.position.y : nameLabel.position.y
+            tokenLabel.position = CGPoint(x: 0, y: tokenAnchorY - (isSubagent ? 10 : 13))
+        }
+
+        // Update token count label
+        let totalTokens = newInfo.totalInputTokens + newInfo.totalOutputTokens
+        if totalTokens > 0 {
+            tokenLabel.text = "\(AgentSprite.formatTokenCount(totalTokens)) tok"
+            if tokenLabel.parent == nil {
+                addChild(tokenLabel)
             }
         }
 
@@ -570,6 +599,14 @@ public class AgentSprite: SKSpriteNode {
         case .deepThinking:
             SKColor(red: 0.910, green: 0.753, blue: 0.251, alpha: 1.0) // Amber/gold
         }
+    }
+
+    /// Formats a token count with comma separators (e.g., 50000 → "50,000").
+    static func formatTokenCount(_ count: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = ","
+        return formatter.string(from: NSNumber(value: count)) ?? "\(count)"
     }
 
     /// Whether this sprite currently has a state-specific particle emitter.
