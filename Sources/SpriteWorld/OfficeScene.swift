@@ -355,6 +355,7 @@ public class OfficeScene: SKScene {
             tableNode.fillColor = SKColor(red: 0.30, green: 0.31, blue: 0.27, alpha: 1.0)
             tableNode.strokeColor = .clear
             tableNode.lineWidth = 0
+            tableNode.isAntialiased = false
             tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
             tableNode.name = "table_\(table.id)"
             tableNode.zPosition = 1
@@ -366,22 +367,6 @@ public class OfficeScene: SKScene {
             accentStrip.position = CGPoint(x: 0, y: 8)
             accentStrip.zPosition = 2
             tableNode.addChild(accentStrip)
-
-            let leftLamp = SKShapeNode(rectOf: CGSize(width: 20, height: 12), cornerRadius: 5)
-            leftLamp.fillColor = SKColor(red: 0.94, green: 0.95, blue: 0.92, alpha: 1.0)
-            leftLamp.strokeColor = .clear
-            leftLamp.position = CGPoint(x: -tableWidth / 2 + 18, y: 8)
-            leftLamp.name = "lamp_table_\(table.id)_left"
-            leftLamp.zPosition = 2
-            tableNode.addChild(leftLamp)
-
-            let rightLamp = SKShapeNode(rectOf: CGSize(width: 20, height: 12), cornerRadius: 5)
-            rightLamp.fillColor = SKColor(red: 0.94, green: 0.95, blue: 0.92, alpha: 1.0)
-            rightLamp.strokeColor = .clear
-            rightLamp.position = CGPoint(x: tableWidth / 2 - 18, y: 8)
-            rightLamp.name = "lamp_table_\(table.id)_right"
-            rightLamp.zPosition = 2
-            tableNode.addChild(rightLamp)
         }
 
         for desk in layout.desks {
