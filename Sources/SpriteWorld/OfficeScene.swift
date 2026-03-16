@@ -402,6 +402,7 @@ public class OfficeScene: SKScene {
             laptopNode.position = CGPoint(x: 0, y: 10)
             laptopNode.name = "monitor_\(desk.id)"
             laptopNode.zPosition = 2
+            laptopNode.isHidden = true
             seatNode.addChild(laptopNode)
 
             let glowNode = SKShapeNode(rectOf: CGSize(width: 30, height: 24), cornerRadius: 3)
@@ -895,11 +896,10 @@ public class OfficeScene: SKScene {
             }
         }
 
-        // Turn off desk visuals for idle agents (but keep desk assigned so they return to the same seat)
+        // Clear transient desk items for agents that are no longer working at their claimed seat.
         for agent in agents {
             guard let sprite = agentSprites[agent.id] else { continue }
             if (agent.state == .idle || agent.state == .deepThinking), let deskID = sprite.assignedDeskID {
-                turnOffMonitor(deskID: deskID)
                 deskClutterManager.clearClutter(forDeskID: deskID, scene: self)
                 coffeeRunManager.removeCup(deskID: deskID, scene: self)
             }
@@ -914,16 +914,9 @@ public class OfficeScene: SKScene {
                     let occupiedDeskIDs = Set(deskAssignments.keys)
                     if let desk = layout.nextAvailableDesk(occupiedDeskIDs: occupiedDeskIDs) {
                         sprite.cancelDesklessPacing()
-                        sprite.assignedDeskID = desk.id
-                        deskAssignments[desk.id] = agent.id
+                        reserveDesk(desk, for: sprite, agentID: agent.id)
                         sprite.cancelIdleRoaming()
-                        let path = layout.findPath(from: sprite.position, to: desk.chairPosition)
-                        let hustle: CGFloat = agent.state.isActive ? 1.5 : 1.0
-                        sprite.walk(to: desk.chairPosition, via: path, speedMultiplier: hustle) { [weak sprite] in
-                            guard let sprite else { return }
-                            sprite.playAnimation(for: agent.state)
-                        }
-                        turnOnMonitor(deskID: desk.id, state: agent.state)
+                        moveAgent(sprite, toClaim: desk, state: agent.state)
                     }
                 }
             } else if !fadingOutAgentIDs.contains(agent.id) {
@@ -964,19 +957,8 @@ public class OfficeScene: SKScene {
         sprite.playAnimation(for: agent.state)
 
         if let desk = assignedDesk {
-            sprite.assignedDeskID = desk.id
-            deskAssignments[desk.id] = agent.id
-
-            // Walk to assigned desk — hustle if already in an active state
-            let path = layout.findPath(from: entrancePoint, to: desk.chairPosition)
-            let hustle: CGFloat = agent.state.isActive ? 1.5 : 1.0
-            sprite.walk(to: desk.chairPosition, via: path, speedMultiplier: hustle) { [weak sprite] in
-                guard let sprite else { return }
-                sprite.playAnimation(for: agent.state)
-            }
-
-            // Turn on monitor
-            turnOnMonitor(deskID: desk.id, state: agent.state)
+            reserveDesk(desk, for: sprite, agentID: agent.id)
+            moveAgent(sprite, toClaim: desk, state: agent.state)
         }
     }
 
@@ -984,13 +966,14 @@ public class OfficeScene: SKScene {
     private func removeAgentSprite(id: String) {
         guard let sprite = agentSprites.removeValue(forKey: id) else { return }
 
-        // Free up the desk, turn off monitor, and clean up desk items
+        // Free up the desk, remove its laptop, and clean up desk items
         if let deskID = sprite.assignedDeskID {
             deskAssignments.removeValue(forKey: deskID)
-            turnOffMonitor(deskID: deskID)
+            hideDeskLaptop(deskID: deskID)
             deskClutterManager.clearClutter(forDeskID: deskID, scene: self)
             coffeeRunManager.removeCup(deskID: deskID, scene: self)
         }
+        sprite.releaseDeskClaim()
 
         // Track this ID as fading out so updateAgents won't re-add it
         fadingOutAgentIDs.insert(id)
@@ -1020,22 +1003,64 @@ public class OfficeScene: SKScene {
 
     // MARK: - Monitor Management — task 4.4, 4.11, 6.3
 
-    /// Turns on the laptop on a desk with the "on" texture
+    private func reserveDesk(_ desk: OfficeLayout.DeskPosition, for sprite: AgentSprite, agentID: String) {
+        sprite.assignedDeskID = desk.id
+        deskAssignments[desk.id] = agentID
+        hideDeskLaptop(deskID: desk.id)
+    }
+
+    private func moveAgent(_ sprite: AgentSprite, toClaim desk: OfficeLayout.DeskPosition, state: AgentState) {
+        let path = layout.findPath(from: sprite.position, to: desk.chairPosition)
+        let hustle: CGFloat = state.isActive ? 1.5 : 1.0
+        sprite.walk(to: desk.chairPosition, via: path, speedMultiplier: hustle) { [weak self, weak sprite] in
+            guard let self, let sprite else { return }
+            sprite.dockLaptopAtDesk()
+            self.applyMonitorState(deskID: desk.id, state: state)
+            sprite.playAnimation(for: state)
+        }
+    }
+
+    private func applyMonitorState(deskID: Int, state: AgentState) {
+        switch state {
+        case .idle, .deepThinking:
+            turnOffMonitor(deskID: deskID)
+        default:
+            turnOnMonitor(deskID: deskID, state: state)
+        }
+    }
+
+    /// Shows the claimed laptop on a desk with the "on" texture.
     private func turnOnMonitor(deskID: Int, state: AgentState) {
         guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
         let onTexture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOn)
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
+            monitor.isHidden = false
             monitor.texture = onTexture
         }
         updateMonitorGlow(deskID: deskID, state: state)
     }
 
-    /// Turns off the laptop on a desk
+    /// Shows the claimed laptop on a desk with the "off" texture.
     private func turnOffMonitor(deskID: Int) {
         guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
         let offTexture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOff)
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
+            monitor.isHidden = false
             monitor.texture = offTexture
+        }
+        if let glow = deskNode.childNode(withName: "monitorGlow_\(deskID)") as? SKShapeNode {
+            glow.removeAllActions()
+            glow.alpha = 0
+            glow.fillColor = .clear
+        }
+    }
+
+    /// Hides the laptop entirely for an unclaimed desk.
+    private func hideDeskLaptop(deskID: Int) {
+        guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
+            monitor.isHidden = true
+            monitor.texture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOff)
         }
         if let glow = deskNode.childNode(withName: "monitorGlow_\(deskID)") as? SKShapeNode {
             glow.removeAllActions()
@@ -1076,11 +1101,13 @@ public class OfficeScene: SKScene {
         }
     }
 
-    /// Updates all monitor states based on current agent assignments
+    /// Updates all desk laptops based on current agent assignments.
     private func updateMonitorStates(agents: [AgentInfo]) {
         for (deskID, agentID) in deskAssignments {
-            if let agent = agents.first(where: { $0.id == agentID }) {
-                updateMonitorGlow(deskID: deskID, state: agent.state)
+            if let sprite = agentSprites[agentID], !sprite.hasDockedLaptopAtDesk {
+                hideDeskLaptop(deskID: deskID)
+            } else if let agent = agents.first(where: { $0.id == agentID }) {
+                applyMonitorState(deskID: deskID, state: agent.state)
             }
         }
     }

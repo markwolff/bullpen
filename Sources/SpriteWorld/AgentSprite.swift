@@ -18,10 +18,13 @@ public class AgentSprite: SKSpriteNode {
     /// The desk this agent is assigned to (if any)
     public var assignedDeskID: Int? {
         didSet {
-            updateDesklessLaptopVisibility()
-            if assignedDeskID != oldValue && assignedDeskID != nil {
+            if assignedDeskID == nil {
+                isLaptopDockedAtDesk = false
+            } else if assignedDeskID != oldValue {
+                isLaptopDockedAtDesk = false
                 desklessPacingDestination = nil
             }
+            updateDesklessLaptopVisibility()
         }
     }
 
@@ -42,6 +45,9 @@ public class AgentSprite: SKSpriteNode {
 
     /// Laptop shown while an active agent is pacing without a desk.
     private let carriedLaptopNode: SKSpriteNode
+
+    /// Whether the laptop is currently docked at the assigned desk.
+    private var isLaptopDockedAtDesk = false
 
     /// The current animation state (for transition logic)
     private var currentAnimationState: AgentState?
@@ -322,7 +328,18 @@ public class AgentSprite: SKSpriteNode {
     }
 
     private func updateDesklessLaptopVisibility() {
-        carriedLaptopNode.isHidden = !(assignedDeskID == nil && agentInfo.state.isActive)
+        let shouldCarryLaptop = !isLaptopDockedAtDesk && (assignedDeskID != nil || agentInfo.state.isActive)
+        carriedLaptopNode.isHidden = !shouldCarryLaptop
+    }
+
+    public func dockLaptopAtDesk() {
+        guard assignedDeskID != nil else { return }
+        isLaptopDockedAtDesk = true
+        updateDesklessLaptopVisibility()
+    }
+
+    public func releaseDeskClaim() {
+        assignedDeskID = nil
     }
 
     /// Pulse animation on state change — task 4.8
@@ -702,6 +719,10 @@ public class AgentSprite: SKSpriteNode {
 
     public var isCarryingLaptop: Bool {
         !carriedLaptopNode.isHidden
+    }
+
+    public var hasDockedLaptopAtDesk: Bool {
+        isLaptopDockedAtDesk
     }
 
     /// Cancels idle roaming and walks back to desk if needed.
