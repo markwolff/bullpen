@@ -64,8 +64,8 @@ public class PairProgrammingManager {
             let layout = OfficeLayout.defaultLayout()
             guard let hostDesk = layout.desks.first(where: { $0.id == hostDeskID }) else { continue }
 
-            // Observer stands behind host's chair
-            let observePos = CGPoint(x: hostDesk.chairPosition.x, y: hostDesk.chairPosition.y - 20)
+            // Observer stands diagonally behind host's chair so both sprites are visible
+            let observePos = CGPoint(x: hostDesk.chairPosition.x + 35, y: hostDesk.chairPosition.y - 25)
 
             isPairing = true
             currentSession = (visitorID: visitor.id, hostID: host.id)
