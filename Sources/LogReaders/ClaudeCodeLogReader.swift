@@ -177,6 +177,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         let message = json["message"] as? [String: Any]
         let contentArray = message?["content"] as? [[String: Any]]
         let stopReason = message?["stop_reason"] as? String
+        let apiError = json["error"] as? String
+        let isApiErrorMessage = json["isApiErrorMessage"] as? Bool ?? false
 
         // Check for plan mode indicators in content
         let isPlanMode = detectPlanMode(in: contentArray, rawEntry: rawEntry)
@@ -194,6 +196,19 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             parentSessionID = jsonSessionID
         } else {
             parentSessionID = nil
+        }
+
+        if isApiErrorMessage, apiError == "rate_limit" {
+            let errorText = extractText(from: contentArray) ?? "Usage limit reached"
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .sessionEnd,
+                summary: "Rate limited: \(truncate(errorText, to: 120))",
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
+            )
         }
 
         // Check for error in tool results
@@ -458,6 +473,21 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             return string
         }
         return String(string.prefix(maxLength)) + "..."
+    }
+
+    private func extractText(from contentArray: [[String: Any]]?) -> String? {
+        guard let contentArray else { return nil }
+
+        for item in contentArray {
+            if let text = item["text"] as? String, !text.isEmpty {
+                return text
+            }
+            if let content = item["content"] as? String, !content.isEmpty {
+                return content
+            }
+        }
+
+        return nil
     }
 
     private func detectPlanMode(in contentArray: [[String: Any]]?, rawEntry: String) -> Bool {
