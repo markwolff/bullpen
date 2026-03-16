@@ -54,6 +54,13 @@ struct AgentDetailView: View {
                     .font(.caption)
             }
 
+            if agent.currentContextTokens > 0 {
+                LabeledContent("Context") {
+                    Text("\(agent.currentContextTokens.formatted()) tokens")
+                        .font(.caption)
+                }
+            }
+
             // Working directory
             if let dir = agent.workspacePath {
                 LabeledContent("Directory") {

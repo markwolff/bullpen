@@ -12,6 +12,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
             && lhs.nameRefined == rhs.nameRefined
             && lhs.name == rhs.name
             && lhs.roleTitle == rhs.roleTitle
+            && lhs.currentContextTokens == rhs.currentContextTokens
     }
 
     /// Unique identifier for this agent session (derived from log file or session ID)
@@ -49,6 +50,9 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
 
     /// Total output tokens produced during this session (7.7)
     public var totalOutputTokens: Int = 0
+
+    /// Current context window usage in tokens (latest input tokens from most recent API call)
+    public var currentContextTokens: Int = 0
 
     /// Recent tool-use activities, most recent first, capped at 5 (7.8)
     public var recentTools: [AgentActivity] = []

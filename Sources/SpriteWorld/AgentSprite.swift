@@ -105,16 +105,16 @@ public class AgentSprite: SKSpriteNode {
             addChild(roleLabel)
         }
 
-        // Token count label below role title
-        let totalTokens = agentInfo.totalInputTokens + agentInfo.totalOutputTokens
-        tokenLabel.text = totalTokens > 0 ? "\(AgentSprite.formatTokenCount(totalTokens)) tok" : ""
+        // Context usage label below role title
+        let contextTokens = agentInfo.currentContextTokens
+        tokenLabel.text = contextTokens > 0 ? "\(AgentSprite.formatTokenCount(contextTokens)) ctx" : ""
         tokenLabel.fontName = "Menlo"
         tokenLabel.fontSize = isSubagent ? 7 : 9
         tokenLabel.fontColor = SKColor(white: 1.0, alpha: 0.6)
         let tokenAnchorY = agentInfo.roleTitle != nil ? roleLabel.position.y : nameLabel.position.y
         tokenLabel.position = CGPoint(x: 0, y: tokenAnchorY - (isSubagent ? 10 : 13))
         tokenLabel.horizontalAlignmentMode = .center
-        if totalTokens > 0 {
+        if contextTokens > 0 {
             addChild(tokenLabel)
         }
 
@@ -160,10 +160,10 @@ public class AgentSprite: SKSpriteNode {
             tokenLabel.position = CGPoint(x: 0, y: tokenAnchorY - (isSubagent ? 10 : 13))
         }
 
-        // Update token count label
-        let totalTokens = newInfo.totalInputTokens + newInfo.totalOutputTokens
-        if totalTokens > 0 {
-            tokenLabel.text = "\(AgentSprite.formatTokenCount(totalTokens)) tok"
+        // Update context usage label
+        let contextTokens = newInfo.currentContextTokens
+        if contextTokens > 0 {
+            tokenLabel.text = "\(AgentSprite.formatTokenCount(contextTokens)) ctx"
             if tokenLabel.parent == nil {
                 addChild(tokenLabel)
             }

@@ -419,6 +419,11 @@ public final class AgentMonitorService: ObservableObject {
         agents[index].totalInputTokens += activity.inputTokens
         agents[index].totalOutputTokens += activity.outputTokens
 
+        // Track latest context usage (input tokens = context window size for this API call)
+        if activity.inputTokens > 0 {
+            agents[index].currentContextTokens = activity.inputTokens
+        }
+
         // 7.8: Track recent tool-use activities (FIFO, most recent first, cap at 5)
         if activity.activityType == .toolUse {
             agents[index].recentTools.insert(activity, at: 0)
