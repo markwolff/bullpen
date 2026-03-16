@@ -819,6 +819,7 @@ public class OfficeScene: SKScene {
                 if sprite.assignedDeskID == nil {
                     let occupiedDeskIDs = Set(deskAssignments.keys)
                     if let desk = layout.nextAvailableDesk(occupiedDeskIDs: occupiedDeskIDs) {
+                        sprite.cancelDesklessPacing()
                         sprite.assignedDeskID = desk.id
                         deskAssignments[desk.id] = agent.id
                         sprite.cancelIdleRoaming()
@@ -853,20 +854,24 @@ public class OfficeScene: SKScene {
     /// Creates and adds a new agent sprite to the scene.
     private func addAgentSprite(for agent: AgentInfo) {
         let sprite = AgentSprite(agentInfo: agent)
-
-        // Assign a desk
         let occupiedDeskIDs = Set(deskAssignments.keys)
-        if let desk = layout.nextAvailableDesk(occupiedDeskIDs: occupiedDeskIDs) {
+        let assignedDesk = layout.nextAvailableDesk(occupiedDeskIDs: occupiedDeskIDs)
+
+        if assignedDesk == nil && !agent.state.isActive {
+            return
+        }
+
+        let entrancePoint = layout.doorPosition
+        sprite.position = entrancePoint
+        sprite.zPosition = 5
+
+        addChild(sprite)
+        agentSprites[agent.id] = sprite
+        sprite.playAnimation(for: agent.state)
+
+        if let desk = assignedDesk {
             sprite.assignedDeskID = desk.id
             deskAssignments[desk.id] = agent.id
-
-            // Start at the door, then walk to desk
-            let entrancePoint = layout.doorPosition
-            sprite.position = entrancePoint
-            sprite.zPosition = 5
-
-            addChild(sprite)
-            agentSprites[agent.id] = sprite
 
             // Walk to assigned desk — hustle if already in an active state
             let path = layout.findPath(from: entrancePoint, to: desk.chairPosition)
@@ -878,9 +883,6 @@ public class OfficeScene: SKScene {
 
             // Turn on monitor
             turnOnMonitor(deskID: desk.id, state: agent.state)
-        } else {
-            // No desk available — don't add the agent to the scene
-            return
         }
     }
 
@@ -1193,6 +1195,18 @@ public class OfficeScene: SKScene {
         }
     }
 
+    /// Updates pacing behavior for active agents that have not yet claimed a desk.
+    private func updateDesklessPacing(for sprite: AgentSprite) {
+        guard sprite.assignedDeskID == nil, sprite.agentInfo.state.isActive else { return }
+
+        let occupiedPositions: [CGPoint] = agentSprites.values.compactMap { otherSprite -> CGPoint? in
+            guard otherSprite !== sprite else { return nil }
+            return otherSprite.position
+        }
+
+        sprite.updateDesklessPacing(in: layout, occupiedPositions: occupiedPositions)
+    }
+
     // MARK: - Update Loop
 
     public override func update(_ currentTime: TimeInterval) {
@@ -1210,6 +1224,7 @@ public class OfficeScene: SKScene {
             sprite.updateIdleZZZ(currentTime: currentTime)
             updateIdleBehavior(for: sprite, deltaTime: deltaTime)
             updateDeepThinkingBehavior(for: sprite, deltaTime: deltaTime)
+            updateDesklessPacing(for: sprite)
 
             // Y-based depth sorting: agents closer to bottom (lower Y) render in front
             // Map Y range to zPosition 5.0–5.9 so agents always stay in the agent layer

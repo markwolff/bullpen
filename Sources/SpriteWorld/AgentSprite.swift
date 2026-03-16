@@ -12,7 +12,14 @@ public class AgentSprite: SKSpriteNode {
     public let thoughtBubble: ThoughtBubble
 
     /// The desk this agent is assigned to (if any)
-    public var assignedDeskID: Int?
+    public var assignedDeskID: Int? {
+        didSet {
+            updateDesklessLaptopVisibility()
+            if assignedDeskID != oldValue && assignedDeskID != nil {
+                desklessPacingDestination = nil
+            }
+        }
+    }
 
     /// Whether the agent is currently walking to a destination
     public private(set) var isWalking: Bool = false
@@ -28,6 +35,9 @@ public class AgentSprite: SKSpriteNode {
 
     /// Visual state indicator (colored dot or square)
     public let statusIndicator: SKShapeNode
+
+    /// Laptop shown while an active agent is pacing without a desk.
+    private let carriedLaptopNode: SKSpriteNode
 
     /// The current animation state (for transition logic)
     private var currentAnimationState: AgentState?
@@ -47,6 +57,9 @@ public class AgentSprite: SKSpriteNode {
     /// Manages idle roaming behavior when the agent is not working
     public lazy var idleBehaviorManager = IdleBehaviorManager(isSubagent: agentInfo.isSubagent)
 
+    /// The current destination while pacing without a desk.
+    private var desklessPacingDestination: CGPoint?
+
     /// Whether this agent is a subagent (renders smaller)
     private var isSubagent: Bool { agentInfo.isSubagent }
 
@@ -58,6 +71,10 @@ public class AgentSprite: SKSpriteNode {
         self.nameLabel = SKLabelNode()
         self.roleLabel = SKLabelNode()
         self.tokenLabel = SKLabelNode()
+        self.carriedLaptopNode = SKSpriteNode(
+            texture: TextureManager.shared.texture(for: TextureManager.furnitureLaptopOn),
+            size: CGSize(width: 20, height: 15)
+        )
 
         let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4
         self.statusIndicator = SKShapeNode(circleOfRadius: indicatorRadius)
@@ -126,11 +143,21 @@ public class AgentSprite: SKSpriteNode {
         statusIndicator.name = "statusIndicator"
         addChild(statusIndicator)
 
+        carriedLaptopNode.position = CGPoint(x: size.width / 2 - 10, y: -4)
+        carriedLaptopNode.zPosition = 6
+        carriedLaptopNode.zRotation = -.pi / 16
+        carriedLaptopNode.name = "carried_laptop"
+        carriedLaptopNode.alpha = 0.95
+        carriedLaptopNode.isHidden = true
+        addChild(carriedLaptopNode)
+
         // Thought bubble above the sprite — high z so it renders above all furniture
         // Proportionally closer for subagents
         thoughtBubble.position = CGPoint(x: 0, y: size.height / 2 + (isSubagent ? 20 : 30))
         thoughtBubble.zPosition = 200
         addChild(thoughtBubble)
+
+        updateDesklessLaptopVisibility()
     }
 
     // MARK: - State Updates
@@ -180,6 +207,7 @@ public class AgentSprite: SKSpriteNode {
 
         // Update planning clipboard overlay
         updatePlanModeOverlay(isPlanMode: newInfo.isPlanMode)
+        updateDesklessLaptopVisibility()
 
         // Update thought bubble — determine best text once, call bubble once
         let desc = newInfo.currentTaskDescription
@@ -227,6 +255,10 @@ public class AgentSprite: SKSpriteNode {
             // Pulse animation on state change — task 4.8
             pulseStatusIndicator()
         }
+
+        if assignedDeskID == nil && !newInfo.state.isActive {
+            cancelDesklessPacing()
+        }
     }
 
     /// Updates status indicator to square for error, circle for everything else — task 4.8
@@ -268,6 +300,10 @@ public class AgentSprite: SKSpriteNode {
                 ]))
             }
         }
+    }
+
+    private func updateDesklessLaptopVisibility() {
+        carriedLaptopNode.isHidden = !(assignedDeskID == nil && agentInfo.state.isActive)
     }
 
     /// Pulse animation on state change — task 4.8
@@ -627,6 +663,10 @@ public class AgentSprite: SKSpriteNode {
         idleBehaviorManager.phase != .atDesk
     }
 
+    public var isCarryingLaptop: Bool {
+        !carriedLaptopNode.isHidden
+    }
+
     /// Cancels idle roaming and walks back to desk if needed.
     public func cancelIdleRoaming() {
         let wasRoaming = isRoaming
@@ -647,6 +687,49 @@ public class AgentSprite: SKSpriteNode {
                 }
             }
         }
+    }
+
+    public func updateDesklessPacing(in layout: OfficeLayout, occupiedPositions: [CGPoint]) {
+        guard assignedDeskID == nil, agentInfo.state.isActive else { return }
+        guard !isWalking else { return }
+
+        let destination = pickDesklessPacingDestination(in: layout, occupiedPositions: occupiedPositions)
+        desklessPacingDestination = destination
+
+        let path = layout.findPath(from: position, to: destination)
+        walk(to: destination, via: path, speedMultiplier: 1.15) { [weak self] in
+            self?.desklessPacingDestination = nil
+        }
+    }
+
+    public func cancelDesklessPacing() {
+        desklessPacingDestination = nil
+        stopWalking()
+    }
+
+    private func pickDesklessPacingDestination(in layout: OfficeLayout, occupiedPositions: [CGPoint]) -> CGPoint {
+        let minTravelDistance: CGFloat = 100
+        let minSpacing: CGFloat = 80
+        let shuffledCandidates = layout.desklessPacingPositions.shuffled()
+
+        if let candidate = shuffledCandidates.first(where: { candidate in
+            hypot(candidate.x - position.x, candidate.y - position.y) >= minTravelDistance &&
+            !occupiedPositions.contains(where: { other in
+                hypot(candidate.x - other.x, candidate.y - other.y) < minSpacing
+            })
+        }) {
+            return candidate
+        }
+
+        if let candidate = shuffledCandidates.first(where: { candidate in
+            hypot(candidate.x - position.x, candidate.y - position.y) >= minTravelDistance
+        }) {
+            return candidate
+        }
+
+        return shuffledCandidates.max(by: { lhs, rhs in
+            hypot(lhs.x - position.x, lhs.y - position.y) < hypot(rhs.x - position.x, rhs.y - position.y)
+        }) ?? position
     }
 
     /// Processes an idle action returned by the behavior manager.

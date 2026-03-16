@@ -273,6 +273,25 @@ public struct OfficeLayout: Sendable {
         CGPoint(x: 30, y: 500)
     }
 
+    /// Candidate pacing points for agents who are active but temporarily deskless.
+    public var desklessPacingPositions: [CGPoint] {
+        let aisleIntersections = corridorXPositions.flatMap { x in
+            aisleYPositions.map { y in CGPoint(x: x, y: y) }
+        }
+
+        return aisleIntersections + [
+            waterCoolerStandPosition,
+            bookshelfStandPosition,
+            bulletinBoardStandPosition,
+            windowStandPosition,
+            whiteboardStandPosition,
+            loungePosition,
+            radioStandPosition,
+            printerStandPosition,
+            baristaCustomerPosition,
+        ]
+    }
+
     /// Position for animated wall clock
     public var wallClockPosition: CGPoint {
         CGPoint(x: 800, y: sceneSize.height - 30)
