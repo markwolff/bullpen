@@ -431,6 +431,11 @@ public final class AgentMonitorService: ObservableObject {
                 agents[index].recentTools = Array(agents[index].recentTools.prefix(5))
             }
         }
+
+        if shouldImmediatelyDismiss(activity: activity) {
+            cleanupAgent(sessionID: sessionID)
+            agents.removeAll { $0.id == sessionID }
+        }
     }
 
     // MARK: - Private helpers
@@ -474,6 +479,10 @@ public final class AgentMonitorService: ObservableObject {
 
         // Default fallback
         return type.correspondingAgentState
+    }
+
+    private func shouldImmediatelyDismiss(activity: AgentActivity) -> Bool {
+        activity.activityType == .sessionEnd && activity.summary.hasPrefix("Rate limited:")
     }
 
     /// Creates an AgentInfo for a session and appends it to the agents array.
