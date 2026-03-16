@@ -1,0 +1,6 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Add a README file"}]},"timestamp":"2026-03-15T14:30:00Z","sessionId":"session-complete-001"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll create a README file for you."},{"type":"tool_use","id":"toolu_001","name":"Write","input":{"file_path":"/README.md","content":"# Project\nA sample project."}}],"model":"claude-sonnet-4-20250514","stop_reason":"tool_use","usage":{"input_tokens":500,"output_tokens":80}},"timestamp":"2026-03-15T14:30:02Z","sessionId":"session-complete-001"}
+{"type":"result","message":{"role":"tool","content":[{"type":"tool_result","tool_use_id":"toolu_001","content":"Successfully wrote /README.md"}]},"timestamp":"2026-03-15T14:30:03Z","sessionId":"session-complete-001"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done! I've created the README file with basic project info."}],"model":"claude-sonnet-4-20250514","stop_reason":"end_turn","usage":{"input_tokens":800,"output_tokens":30}},"timestamp":"2026-03-15T14:30:05Z","sessionId":"session-complete-001"}
+{"type":"system","subtype":"stop_hook_summary","hookCount":1,"stopReason":"","preventedContinuation":false}
+{"type":"system","subtype":"turn_duration","durationMs":5000,"isMeta":false}

@@ -104,8 +104,10 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             return parseResponseItem(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
         case "event_msg":
             return parseEventMsg(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
+        case "session_meta":
+            return parseSessionMeta(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
         default:
-            // session_meta, turn_context, etc. — not actionable activities
+            // turn_context, etc. — not actionable activities
             return nil
         }
     }
@@ -327,10 +329,88 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 summary: "Session started",
                 rawPayload: rawEntry
             )
+
+        case "task_complete":
+            let lastMessage = payload["last_agent_message"] as? String
+            let summary = lastMessage.map { truncate($0, to: 80) } ?? "Session completed"
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .sessionEnd,
+                summary: summary,
+                rawPayload: rawEntry
+            )
+
+        case "turn_aborted":
+            let reason = payload["reason"] as? String ?? "interrupted"
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .userMessage,
+                summary: "Turn aborted: \(reason)",
+                rawPayload: rawEntry
+            )
+
+        case "agent_message":
+            let phase = payload["phase"] as? String
+            if phase == "final_answer" {
+                let message = payload["message"] as? String
+                let summary = message.map { truncate($0, to: 80) } ?? "Final answer"
+                return AgentActivity(
+                    sessionID: sessionID,
+                    timestamp: timestamp,
+                    activityType: .assistantMessage,
+                    summary: summary,
+                    rawPayload: rawEntry
+                )
+            }
+            // Non-final agent_message events are redundant with response_items
+            return nil
+
         default:
-            // user_message, agent_message, token_count, etc. — skip (redundant with response_items)
+            // user_message, token_count, etc. — skip (redundant with response_items)
             return nil
         }
+    }
+
+    private func parseSessionMeta(
+        _ payload: [String: Any],
+        sessionID: String,
+        timestamp: Date,
+        rawEntry: String
+    ) -> AgentActivity? {
+        // Check for subagent metadata in source.subagent.thread_spawn
+        guard let source = payload["source"] as? [String: Any],
+              let subagent = source["subagent"] as? [String: Any],
+              let threadSpawn = subagent["thread_spawn"] as? [String: Any],
+              let parentThreadID = threadSpawn["parent_thread_id"] as? String
+        else {
+            // Regular (non-subagent) session_meta — not actionable
+            return nil
+        }
+
+        let agentRole = payload["agent_role"] as? String
+            ?? threadSpawn["agent_role"] as? String
+        let agentNickname = payload["agent_nickname"] as? String
+            ?? threadSpawn["agent_nickname"] as? String
+        var summary = "Subagent started"
+        if let nickname = agentNickname {
+            summary = "Subagent \(nickname) started"
+            if let role = agentRole {
+                summary += " (\(role))"
+            }
+        } else if let role = agentRole {
+            summary = "Subagent started (\(role))"
+        }
+
+        return AgentActivity(
+            sessionID: sessionID,
+            timestamp: timestamp,
+            activityType: .sessionStart,
+            summary: summary,
+            rawPayload: rawEntry,
+            parentSessionID: parentThreadID
+        )
     }
 
     // MARK: - Private: Helpers
