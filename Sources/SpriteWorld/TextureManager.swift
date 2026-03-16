@@ -157,6 +157,37 @@ public final class TextureManager: @unchecked Sendable {
         return frames
     }
 
+    /// Returns animation frames for a trait-based character.
+    /// Cache key includes a hash of the traits so each unique character is cached separately.
+    public func animationFrames(traits: CharacterTraits, state: AgentState) -> [SKTexture] {
+        let frameCount = Self.frameCount(for: state)
+        let gen = PixelArtGenerator.shared
+        let traitKey = "char_\(traits.hoodieColor)_\(traits.skinColor)_\(traits.hairStyle.rawValue)_\(traits.accessory.rawValue)"
+
+        var frames: [SKTexture] = []
+        for i in 0..<frameCount {
+            let cacheKey = "\(traitKey)_\(state.rawValue)_frame\(i)"
+
+            lock.lock()
+            if let cached = cache[cacheKey] {
+                lock.unlock()
+                frames.append(cached)
+                continue
+            }
+            lock.unlock()
+
+            let texture = gen.character(traits: traits, state: state.rawValue, frame: i)
+            texture.filteringMode = .nearest
+
+            lock.lock()
+            cache[cacheKey] = texture
+            lock.unlock()
+            frames.append(texture)
+        }
+
+        return frames
+    }
+
     /// Returns the expected frame count for a given state.
     public static func frameCount(for state: AgentState) -> Int {
         switch state {

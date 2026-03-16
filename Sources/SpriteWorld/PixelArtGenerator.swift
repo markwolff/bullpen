@@ -1,5 +1,6 @@
 import SpriteKit
 import AppKit
+import Models
 
 /// Generates Stardew Valley-style pixel art textures programmatically.
 /// All sprites are drawn at low resolution (16x16 to 32x32) with nearest-neighbor
@@ -298,6 +299,23 @@ public final class PixelArtGenerator: Sendable {
 
     // MARK: - Character Textures (16x24 pixel art characters)
 
+    /// Generates a character texture from a full trait set.
+    func character(traits: CharacterTraits, state: String, frame: Int = 0) -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            self.drawCharacter(ctx,
+                         hoodie: Self.RGB(traits.hoodieColor),
+                         hoodieDark: Self.RGB(traits.hoodieDarkColor),
+                         skin: Self.RGB(traits.skinColor),
+                         eyeColor: Self.RGB(traits.eyeColor),
+                         eyeDark: Self.RGB(traits.eyeDarkColor),
+                         state: state, frame: frame)
+            self.drawHair(ctx, style: traits.hairStyle, color: Self.RGB(traits.hairColor))
+            self.drawAccessory(ctx, accessory: traits.accessory,
+                         skin: Self.RGB(traits.skinColor),
+                         hoodie: Self.RGB(traits.hoodieColor))
+        }
+    }
+
     func claudeCharacter(state: String) -> SKTexture {
         drawTexture(width: 16, height: 24) { [self] ctx in
             self.drawCharacter(ctx, hoodie: Self.claudeHoodie, hoodieDark: Self.claudeHoodieDark,
@@ -595,6 +613,69 @@ public final class PixelArtGenerator: Sendable {
             self.drawCharacter(ctx, hoodie: Self.codexHoodie, hoodieDark: Self.codexHoodieDark,
                          skin: Self.codexSkin, eyeColor: Self.codexEye, eyeDark: Self.codexEye,
                          state: state, frame: frame)
+        }
+    }
+
+    // MARK: - Hair & Accessory Drawing
+
+    /// Draws hair pixels above the hood based on style.
+    private func drawHair(_ ctx: CGContext, style: HairStyle, color: NSColor) {
+        switch style {
+        case .spiky:
+            // 3 pointed tufts above hood
+            fill(ctx, rect: r(5, 23, 1, 1), color: color)
+            fill(ctx, rect: r(7, 23, 2, 1), color: color)
+            fill(ctx, rect: r(10, 23, 1, 1), color: color)
+        case .long:
+            // Hair flowing down sides of hood
+            fill(ctx, rect: r(5, 23, 6, 1), color: color)
+            fill(ctx, rect: r(3, 19, 1, 3), color: color)
+            fill(ctx, rect: r(12, 19, 1, 3), color: color)
+        case .curly:
+            // Rounded puffs above hood
+            fill(ctx, rect: r(5, 23, 2, 1), color: color)
+            fill(ctx, rect: r(9, 23, 2, 1), color: color)
+            fill(ctx, rect: r(6, 23, 1, 1), color: color)
+            fill(ctx, rect: r(10, 23, 1, 1), color: color)
+        case .bun:
+            // Small bun on top of hood
+            fill(ctx, rect: r(7, 23, 2, 1), color: color)
+            fill(ctx, rect: r(7, 22, 2, 1), color: color)
+        case .buzzcut:
+            // Subtle stubble line at hood edge
+            fill(ctx, rect: r(5, 22, 6, 1), color: color)
+        }
+    }
+
+    /// Draws an accessory on the character.
+    private func drawAccessory(_ ctx: CGContext, accessory: Accessory, skin: NSColor, hoodie: NSColor) {
+        switch accessory {
+        case .glasses:
+            // Glasses frames across eyes — dark frame color
+            let frame = Self.RGB(0x383838)
+            // Left lens frame
+            fill(ctx, rect: r(5, 19, 4, 1), color: frame)
+            fill(ctx, rect: r(5, 21, 4, 1), color: frame)
+            fill(ctx, rect: r(5, 19, 1, 3), color: frame)
+            fill(ctx, rect: r(8, 19, 1, 3), color: frame)
+            // Bridge
+            fill(ctx, rect: r(8, 20, 1, 1), color: frame)
+            // Right lens frame
+            fill(ctx, rect: r(9, 19, 3, 1), color: frame)
+            fill(ctx, rect: r(9, 21, 3, 1), color: frame)
+            fill(ctx, rect: r(9, 19, 1, 3), color: frame)
+            fill(ctx, rect: r(11, 19, 1, 3), color: frame)
+        case .headphones:
+            // Headband arc over the hood
+            let hpColor = Self.RGB(0x484848)
+            fill(ctx, rect: r(3, 22, 1, 1), color: hpColor)
+            fill(ctx, rect: r(4, 23, 8, 1), color: hpColor)
+            fill(ctx, rect: r(12, 22, 1, 1), color: hpColor)
+            // Ear cups
+            fill(ctx, rect: r(3, 20, 1, 2), color: hpColor)
+            fill(ctx, rect: r(12, 20, 1, 2), color: hpColor)
+        case .none:
+            break
         }
     }
 

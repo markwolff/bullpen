@@ -170,15 +170,18 @@ public final class AgentMonitorService: ObservableObject {
                     sessionFiles[sessionID] = fileURL
                     readOffsets[sessionID] = 0
 
-                    // Generate sequential name
-                    agentCounter += 1
-                    let name = "Agent \(agentCounter)"
+                    // Generate traits deterministically from session ID
+                    let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
+
+                    // Derive initial name from file path
+                    let name = Self.extractProjectName(from: fileURL)
 
                     // Create an AgentInfo for this new session
                     let agent = AgentInfo(
                         id: sessionID,
                         name: name,
                         agentType: reader.agentType,
+                        traits: traits,
                         state: .idle,
                         currentTaskDescription: "Starting up..."
                     )
@@ -246,6 +249,15 @@ public final class AgentMonitorService: ObservableObject {
         agents[index].state = newState
         agents[index].currentTaskDescription = activity.summary
         agents[index].lastUpdatedAt = activity.timestamp
+
+        // Refine name from first user message prompt
+        if !agents[index].nameRefined && activity.activityType == .userMessage,
+           let rawPayload = activity.rawPayload {
+            if let taskName = Self.extractTaskName(from: rawPayload) {
+                agents[index].name = taskName
+                agents[index].nameRefined = true
+            }
+        }
 
         // 7.10: Only update stateEnteredAt when the state actually transitions
         if oldState != newState {
@@ -366,5 +378,111 @@ public final class AgentMonitorService: ObservableObject {
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
         sessionFiles.removeValue(forKey: sessionID)
+    }
+
+    // MARK: - Smart Naming
+
+    /// Extracts a project name from the log file path.
+    /// Claude Code logs: ~/.claude/projects/<hash>/<session>.jsonl
+    /// We try to decode the project hash directory name, which is a
+    /// percent-encoded absolute path. Falls back to a short hash prefix.
+    static func extractProjectName(from fileURL: URL) -> String {
+        // Walk up from the session file to find the project directory
+        let projectDir = fileURL.deletingLastPathComponent()
+        let dirName = projectDir.lastPathComponent
+
+        // If this is a "sessions" subdirectory, go up one more
+        let effectiveDir: URL
+        if dirName == "sessions" {
+            effectiveDir = projectDir.deletingLastPathComponent()
+        } else {
+            effectiveDir = projectDir
+        }
+
+        let encodedName = effectiveDir.lastPathComponent
+
+        // Claude Code encodes the project path as the directory name
+        // e.g., "-Users-mark-projects-bullpen-london" → "london"
+        // Detect encoded paths (they start with "-")
+        let projectName: String
+        if encodedName.hasPrefix("-") {
+            let parts = encodedName.split(separator: "-").map(String.init)
+            projectName = parts.last ?? encodedName
+        } else {
+            projectName = encodedName
+        }
+
+        guard !projectName.isEmpty else { return "Agent" }
+
+        // Capitalize first letter
+        return projectName.prefix(1).uppercased() + projectName.dropFirst()
+    }
+
+    /// Extracts a short task name from a user message's raw JSON payload.
+    /// Parses the user's prompt text and produces a concise label.
+    static func extractTaskName(from rawPayload: String) -> String? {
+        guard let data = rawPayload.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = json["message"] as? [String: Any],
+              let content = message["content"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        // Find the text content in the user message
+        var promptText: String?
+        for item in content {
+            if (item["type"] as? String) == "text",
+               let text = item["text"] as? String {
+                promptText = text
+                break
+            }
+        }
+
+        // Also handle content as a plain string
+        if promptText == nil, let text = message["content"] as? String {
+            promptText = text
+        }
+
+        guard let text = promptText, !text.isEmpty else { return nil }
+
+        return shortenPrompt(text)
+    }
+
+    /// Distills a user prompt into a short display name (max 15 chars).
+    private static func shortenPrompt(_ text: String) -> String {
+        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Strip common prefixes
+        let prefixes = [
+            "please ", "can you ", "could you ", "i want you to ",
+            "i need you to ", "help me ", "let's ", "let's ",
+        ]
+        let lower = cleaned.lowercased()
+        for prefix in prefixes {
+            if lower.hasPrefix(prefix) {
+                cleaned = String(cleaned.dropFirst(prefix.count))
+                break
+            }
+        }
+
+        // Take first few meaningful words
+        let words = cleaned.split(separator: " ", maxSplits: 5, omittingEmptySubsequences: true)
+        guard !words.isEmpty else { return "Task" }
+
+        // Build name from first 3 words, capitalize each
+        let nameWords = words.prefix(3).map { word -> String in
+            let w = String(word)
+            return w.prefix(1).uppercased() + w.dropFirst().lowercased()
+        }
+
+        var result = nameWords.joined(separator: " ")
+
+        // Cap at 15 characters
+        if result.count > 15 {
+            result = String(result.prefix(15)).trimmingCharacters(in: .whitespaces)
+        }
+
+        return result.isEmpty ? "Task" : result
     }
 }
