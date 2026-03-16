@@ -12,6 +12,11 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
+            name: "BullpenScreenshot",
+            dependencies: ["Models", "SpriteWorld"],
+            path: "Sources/BullpenScreenshot"
+        ),
+        .executableTarget(
             name: "BullpenApp",
             dependencies: [
                 "LogReaders",
