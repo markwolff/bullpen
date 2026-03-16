@@ -253,16 +253,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         rawEntry: String
     ) -> AgentActivity? {
         let name = payload["name"] as? String ?? "unknown"
-        let argsString = payload["arguments"] as? String ?? "{}"
-
-        // Parse the arguments JSON string
-        let arguments: [String: Any]
-        if let argsData = argsString.data(using: .utf8),
-           let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
-            arguments = parsed
-        } else {
-            arguments = [:]
-        }
+        let arguments = parseArguments(payload["arguments"])
 
         let summary = buildToolSummary(name: name, arguments: arguments)
 
@@ -425,24 +416,59 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         return ""
     }
 
+    private func parseArguments(_ rawArguments: Any?) -> [String: Any] {
+        if let arguments = rawArguments as? [String: Any] {
+            return arguments
+        }
+
+        guard let argsString = rawArguments as? String,
+              let argsData = argsString.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any]
+        else {
+            return [:]
+        }
+
+        return parsed
+    }
+
     private func buildToolSummary(name: String, arguments: [String: Any]) -> String {
         switch name {
         case "exec_command":
             let cmd = arguments["cmd"] as? String ?? "unknown"
-            return "Running \(truncate(cmd, to: 60))"
+            return summarizeShellCommand(cmd)
+
+        case "read_thread_terminal":
+            return "Reading terminal output"
 
         case "spawn_agent":
-            let prompt = arguments["prompt"] as? String ?? "subtask"
+            let prompt = firstMeaningfulString(
+                arguments["message"] as? String,
+                arguments["prompt"] as? String
+            ) ?? "subtask"
+            if let agentType = firstMeaningfulString(arguments["agent_type"] as? String) {
+                return "Spawning \(agentType.replacingOccurrences(of: "_", with: " ")): \(truncate(prompt, to: 50))"
+            }
             return "Spawning agent: \(truncate(prompt, to: 50))"
+
+        case "send_input":
+            let message = firstMeaningfulString(arguments["message"] as? String)
+            if let message {
+                return "Directing agent: \(truncate(message, to: 50))"
+            }
+            return "Directing agent"
 
         case "write_stdin":
             return "Sending input to process"
 
         case "wait":
+            if let ids = arguments["ids"] as? [Any], !ids.isEmpty {
+                let suffix = ids.count == 1 ? "" : "s"
+                return "Waiting on \(ids.count) agent\(suffix)"
+            }
             return "Waiting for process"
 
         case "update_plan":
-            return "Updating plan"
+            return "Planning next steps"
 
         case "close_agent":
             return "Closing agent"
@@ -450,17 +476,121 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         case "view_image":
             return "Viewing image"
 
+        case "search_query":
+            if let query = firstMeaningfulString(arguments["q"] as? String) {
+                return "Searching web for \(truncate(query, to: 50))"
+            }
+            return "Searching web"
+
+        case "image_query":
+            if let query = firstMeaningfulString(arguments["q"] as? String) {
+                return "Searching images for \(truncate(query, to: 50))"
+            }
+            return "Searching images"
+
+        case "open":
+            return "Opening page"
+
+        case "click":
+            return "Following link"
+
+        case "find":
+            if let pattern = firstMeaningfulString(arguments["pattern"] as? String) {
+                return "Scanning page for \(truncate(pattern, to: 40))"
+            }
+            return "Scanning page"
+
         default:
             // MCP tools: mcp__sentry__search_issues, mcp__serena__read_file, etc.
             if name.hasPrefix("mcp__") {
-                let parts = name.split(separator: "__")
-                if parts.count >= 3 {
-                    let toolName = String(parts.last!)
-                    return "Using \(toolName)"
-                }
+                return summarizeMCPTool(name: name, arguments: arguments)
             }
             return "Using \(name)"
         }
+    }
+
+    private func summarizeShellCommand(_ cmd: String) -> String {
+        let trimmed = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Running command" }
+
+        if trimmed.hasPrefix("rg ") || trimmed == "rg" || trimmed.contains(" rg ") {
+            return "Searching codebase: \(truncate(trimmed, to: 60))"
+        }
+        if trimmed.hasPrefix("fd ") || trimmed.hasPrefix("find ") {
+            return "Finding files: \(truncate(trimmed, to: 60))"
+        }
+        if trimmed.hasPrefix("cat ")
+            || trimmed.hasPrefix("sed ")
+            || trimmed.hasPrefix("head ")
+            || trimmed.hasPrefix("tail ")
+            || trimmed.hasPrefix("less ")
+        {
+            return "Reading \(truncate(trimmed, to: 60))"
+        }
+        if trimmed.hasPrefix("ls ") || trimmed == "ls" || trimmed.hasPrefix("tree ") {
+            return "Listing \(truncate(trimmed, to: 60))"
+        }
+
+        return "Running \(truncate(trimmed, to: 60))"
+    }
+
+    private func summarizeMCPTool(name: String, arguments: [String: Any]) -> String {
+        let parts = name.split(separator: "__")
+        guard parts.count >= 3 else { return "Using \(name)" }
+
+        let toolName = String(parts.last!)
+        switch toolName {
+        case "read_file":
+            let path = arguments["relative_path"] as? String ?? "file"
+            return "Reading \(truncate(path, to: 50))"
+        case "get_symbols_overview":
+            let path = arguments["relative_path"] as? String ?? "file"
+            return "Inspecting symbols in \(truncate(path, to: 50))"
+        case "find_symbol":
+            let symbol = arguments["name_path_pattern"] as? String ?? "symbol"
+            return "Looking up symbol \(truncate(symbol, to: 50))"
+        case "find_referencing_symbols":
+            let symbol = arguments["name_path"] as? String ?? "symbol"
+            return "Finding references to \(truncate(symbol, to: 50))"
+        case "search_for_pattern":
+            let pattern = arguments["substring_pattern"] as? String ?? "pattern"
+            return "Searching codebase for \(truncate(pattern, to: 50))"
+        case "list_dir":
+            let path = arguments["relative_path"] as? String ?? "."
+            return "Listing \(truncate(path, to: 50))"
+        case "find_file":
+            let mask = arguments["file_mask"] as? String ?? "files"
+            return "Finding files matching \(truncate(mask, to: 40))"
+        case "execute_shell_command":
+            let command = arguments["command"] as? String ?? "command"
+            return summarizeShellCommand(command)
+        case "replace_content", "replace_symbol_body", "insert_after_symbol", "insert_before_symbol":
+            let path = arguments["relative_path"] as? String ?? "file"
+            return "Editing \(truncate(path, to: 50))"
+        case "create_text_file":
+            let path = arguments["relative_path"] as? String ?? "file"
+            return "Writing \(truncate(path, to: 50))"
+        case "rename_symbol":
+            let symbol = arguments["name_path"] as? String ?? "symbol"
+            return "Renaming \(truncate(symbol, to: 50))"
+        case "switch_modes":
+            return "Switching modes"
+        case "activate_project":
+            let project = arguments["project"] as? String ?? "project"
+            return "Opening project \(truncate(project, to: 40))"
+        default:
+            return "Using \(toolName)"
+        }
+    }
+
+    private func firstMeaningfulString(_ candidates: String?...) -> String? {
+        for candidate in candidates {
+            if let candidate,
+               !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return candidate
+            }
+        }
+        return nil
     }
 
     private func truncate(_ string: String, to maxLength: Int) -> String {

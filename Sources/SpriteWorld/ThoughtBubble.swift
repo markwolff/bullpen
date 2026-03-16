@@ -250,6 +250,11 @@ public class ThoughtBubble: SKNode {
         false
     }
 
+    /// The current visible bubble text after truncation.
+    public var displayedText: String? {
+        label.text
+    }
+
     // MARK: - Auto-Hide
 
     /// Schedules the bubble to fade out after 2.5 seconds.
