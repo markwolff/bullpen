@@ -353,8 +353,8 @@ public class OfficeScene: SKScene {
 
             let tableNode = SKShapeNode(rectOf: CGSize(width: tableWidth, height: 34), cornerRadius: 12)
             tableNode.fillColor = SKColor(red: 0.30, green: 0.31, blue: 0.27, alpha: 1.0)
-            tableNode.strokeColor = SKColor(red: 0.60, green: 0.66, blue: 0.60, alpha: 0.65)
-            tableNode.lineWidth = 1.5
+            tableNode.strokeColor = .clear
+            tableNode.lineWidth = 0
             tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
             tableNode.name = "table_\(table.id)"
             tableNode.zPosition = 1
@@ -513,7 +513,7 @@ public class OfficeScene: SKScene {
 
         let coolerTexture = tm.texture(for: TextureManager.decorationWaterCooler)
         let coolerNode = SKSpriteNode(texture: coolerTexture, size: CGSize(width: 40, height: 80))
-        coolerNode.position = CGPoint(x: 1084, y: 348)
+        coolerNode.position = CGPoint(x: 730, y: 348)
         coolerNode.name = "decoration_water_cooler"
         coolerNode.zPosition = 2
         addChild(coolerNode)
@@ -534,17 +534,11 @@ public class OfficeScene: SKScene {
 
         let printerTexture = tm.texture(for: TextureManager.decorationPrinter)
         let printerNode = SKSpriteNode(texture: printerTexture, size: CGSize(width: 30, height: 30))
-        printerNode.position = CGPoint(x: 1106, y: 114)
+        printerNode.position = CGPoint(x: 580, y: 114)
         printerNode.name = "decoration_printer"
         printerNode.zPosition = 2
         addChild(printerNode)
 
-        let coatRackTexture = tm.texture(for: TextureManager.decorationCoatRack)
-        let coatRackNode = SKSpriteNode(texture: coatRackTexture, size: CGSize(width: 18, height: 48))
-        coatRackNode.position = CGPoint(x: layout.doorPosition.x - 70, y: layout.doorPosition.y + 82)
-        coatRackNode.name = "decoration_coat_rack"
-        coatRackNode.zPosition = 2
-        addChild(coatRackNode)
     }
 
     // MARK: - 8.1-8.5: Ambient Animations
