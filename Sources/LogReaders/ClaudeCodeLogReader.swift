@@ -227,6 +227,42 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             )
         }
 
+        // Handle system messages (completion signals)
+        if type == "system" {
+            let subtype = json["subtype"] as? String
+            if subtype == "turn_duration" || subtype == "stop_hook_summary" {
+                return AgentActivity(
+                    sessionID: sessionID,
+                    timestamp: timestamp,
+                    activityType: .sessionEnd,
+                    summary: "Session completed",
+                    rawPayload: rawEntry,
+                    isPlanMode: isPlanMode,
+                    parentSessionID: parentSessionID
+                )
+            }
+            // Other system subtypes — not meaningful activity
+            return nil
+        }
+
+        // Handle progress messages (hook events)
+        if type == "progress" {
+            let progressData = json["data"] as? [String: Any]
+            if progressData?["hookEvent"] as? String == "Stop" {
+                return AgentActivity(
+                    sessionID: sessionID,
+                    timestamp: timestamp,
+                    activityType: .sessionEnd,
+                    summary: "Session stopping",
+                    rawPayload: rawEntry,
+                    isPlanMode: isPlanMode,
+                    parentSessionID: parentSessionID
+                )
+            }
+            // Other progress events — not meaningful activity
+            return nil
+        }
+
         // Handle user messages (including tool results, which arrive as type "user")
         if type == "user" {
             // Check if this is a tool_result (tool results come as user messages)
@@ -260,6 +296,36 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     }
                 }
             }
+
+            // Check for /exit command in user message content
+            if let content = contentArray {
+                for item in content {
+                    if let text = item["text"] as? String, text.contains("<command-name>/exit</command-name>") {
+                        return AgentActivity(
+                            sessionID: sessionID,
+                            timestamp: timestamp,
+                            activityType: .sessionEnd,
+                            summary: "User exited session",
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
+                        )
+                    }
+                }
+            }
+            // Also check message.content when it's a plain string
+            if let messageContent = message?["content"] as? String, messageContent.contains("<command-name>/exit</command-name>") {
+                return AgentActivity(
+                    sessionID: sessionID,
+                    timestamp: timestamp,
+                    activityType: .sessionEnd,
+                    summary: "User exited session",
+                    rawPayload: rawEntry,
+                    isPlanMode: isPlanMode,
+                    parentSessionID: parentSessionID
+                )
+            }
+
             return AgentActivity(
                 sessionID: sessionID,
                 timestamp: timestamp,
@@ -323,7 +389,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             )
         }
 
-        // Skip unknown/internal types (e.g. "system") — not meaningful activity
+        // Skip unknown/internal types — not meaningful activity
         return nil
     }
 
