@@ -61,9 +61,6 @@ struct ContentView: View {
             Image(systemName: "desktopcomputer")
                 .foregroundStyle(.secondary)
 
-            Text("The Bullpen")
-                .font(.headline)
-
             Spacer()
 
             // Agent count

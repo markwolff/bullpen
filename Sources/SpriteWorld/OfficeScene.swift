@@ -133,7 +133,6 @@ public class OfficeScene: SKScene {
         setupRug()
         setupDesks()
         setupDecorations()
-        setupTitleLabel()
         setupAmbientAnimations()
         setupCat()
         setupDog()
@@ -466,13 +465,13 @@ public class OfficeScene: SKScene {
 
         let windowTexture = tm.texture(for: TextureManager.decorationWindow)
         let windowNode = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
-        windowNode.position = CGPoint(x: 246, y: 670)
+        windowNode.position = CGPoint(x: 246, y: 706)
         windowNode.name = "decoration_window"
         windowNode.zPosition = 2
         addChild(windowNode)
 
         let windowNode2 = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
-        windowNode2.position = CGPoint(x: 898, y: 670)
+        windowNode2.position = CGPoint(x: 898, y: 706)
         windowNode2.name = "decoration_window_2"
         windowNode2.zPosition = 2
         addChild(windowNode2)
@@ -493,7 +492,7 @@ public class OfficeScene: SKScene {
 
         let posterTexture = tm.texture(for: TextureManager.decorationPoster)
         let posterNode = SKSpriteNode(texture: posterTexture, size: CGSize(width: 56, height: 72))
-        posterNode.position = CGPoint(x: 306, y: 672)
+        posterNode.position = CGPoint(x: 306, y: 706)
         posterNode.name = "decoration_poster"
         posterNode.zPosition = 2
         addChild(posterNode)
@@ -546,17 +545,6 @@ public class OfficeScene: SKScene {
         coatRackNode.name = "decoration_coat_rack"
         coatRackNode.zPosition = 2
         addChild(coatRackNode)
-    }
-
-    /// Sets up the title label with a cozy pixel-font feel.
-    private func setupTitleLabel() {
-        let titleLabel = SKLabelNode(text: "The Bullpen")
-        titleLabel.fontName = "Menlo-Bold"
-        titleLabel.fontSize = 14
-        titleLabel.fontColor = SKColor(red: 0.23, green: 0.27, blue: 0.23, alpha: 1.0)
-        titleLabel.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - 20)
-        titleLabel.zPosition = 10
-        addChild(titleLabel)
     }
 
     // MARK: - 8.1-8.5: Ambient Animations

@@ -157,9 +157,9 @@ public struct OfficeLayout: Sendable {
             Barrier(id: "build_glass_right", kind: .glassWall, rect: CGRect(x: 730, y: 264, width: 498, height: 8)),
             Barrier(id: "collab_glass_left", kind: .glassWall, rect: CGRect(x: 524, y: 436, width: 126, height: 8)),
             Barrier(id: "collab_glass_right", kind: .glassWall, rect: CGRect(x: 730, y: 436, width: 498, height: 8)),
-            Barrier(id: "coffee_bar", kind: .furniture, rect: CGRect(x: 1032, y: 300, width: 110, height: 44)),
-            Barrier(id: "water_cooler", kind: .furniture, rect: CGRect(x: 1144, y: 312, width: 40, height: 72)),
-            Barrier(id: "printer", kind: .furniture, rect: CGRect(x: 1148, y: 96, width: 36, height: 36)),
+            Barrier(id: "coffee_bar", kind: .furniture, rect: CGRect(x: 932, y: 300, width: 110, height: 44)),
+            Barrier(id: "water_cooler", kind: .furniture, rect: CGRect(x: 1064, y: 312, width: 40, height: 72)),
+            Barrier(id: "printer", kind: .furniture, rect: CGRect(x: 1088, y: 96, width: 36, height: 36)),
             Barrier(id: "ping_pong", kind: .furniture, rect: CGRect(x: 136, y: 118, width: 124, height: 60)),
         ]
 
@@ -227,11 +227,11 @@ public struct OfficeLayout: Sendable {
     // MARK: - Points of Interest
 
     public var waterCoolerStandPosition: CGPoint {
-        CGPoint(x: 1112, y: 314)
+        CGPoint(x: 1032, y: 314)
     }
 
     public var bookshelfStandPosition: CGPoint {
-        CGPoint(x: 130, y: 652)
+        CGPoint(x: 130, y: 674)
     }
 
     public var bulletinBoardStandPosition: CGPoint {
@@ -239,7 +239,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var windowStandPosition: CGPoint {
-        CGPoint(x: 904, y: 648)
+        CGPoint(x: 904, y: 672)
     }
 
     public var whiteboardStandPosition: CGPoint {
@@ -248,10 +248,10 @@ public struct OfficeLayout: Sendable {
 
     public var plantStandPositions: [CGPoint] {
         [
-            CGPoint(x: 86, y: 652),
-            CGPoint(x: 1152, y: 648),
+            CGPoint(x: 86, y: 674),
+            CGPoint(x: 1152, y: 674),
             CGPoint(x: 92, y: 96),
-            CGPoint(x: 1190, y: 96),
+            CGPoint(x: 1140, y: 96),
         ]
     }
 
@@ -280,7 +280,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var printerStandPosition: CGPoint {
-        CGPoint(x: 1112, y: 110)
+        CGPoint(x: 1052, y: 110)
     }
 
     public var coffeeMachinePosition: CGPoint {
@@ -312,7 +312,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var achievementShelfPosition: CGPoint {
-        CGPoint(x: 1060, y: 690)
+        CGPoint(x: 1060, y: 718)
     }
 
     public var radioPosition: CGPoint {
@@ -320,23 +320,23 @@ public struct OfficeLayout: Sendable {
     }
 
     public var birdCagePosition: CGPoint {
-        CGPoint(x: 1172, y: 690)
+        CGPoint(x: 1172, y: 718)
     }
 
     public var coffeeStationPosition: CGPoint {
-        CGPoint(x: 1040, y: 324)
+        CGPoint(x: 940, y: 324)
     }
 
     public var baristaPosition: CGPoint {
-        CGPoint(x: 1088, y: 324)
+        CGPoint(x: 988, y: 324)
     }
 
     public var baristaCustomerPosition: CGPoint {
-        CGPoint(x: 992, y: 324)
+        CGPoint(x: 892, y: 324)
     }
 
     public var coatHooksPosition: CGPoint {
-        CGPoint(x: 1170, y: 412)
+        CGPoint(x: 1170, y: 470)
     }
 
     public var coffeeRugPosition: CGPoint {
@@ -344,7 +344,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var poster2Position: CGPoint {
-        CGPoint(x: 92, y: 614)
+        CGPoint(x: 92, y: 672)
     }
 
     public var desklessPacingPositions: [CGPoint] {
@@ -371,7 +371,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var wallClockPosition: CGPoint {
-        CGPoint(x: 988, y: 700)
+        CGPoint(x: 988, y: 720)
     }
 
     // MARK: - Pathfinding
