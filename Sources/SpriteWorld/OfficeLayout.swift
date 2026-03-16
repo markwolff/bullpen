@@ -151,6 +151,8 @@ public struct OfficeLayout: Sendable {
             Barrier(id: "focus_glass_lower", kind: .glassWall, rect: CGRect(x: 426, y: 558, width: 8, height: 158)),
             Barrier(id: "lounge_wall_lower", kind: .solidWall, rect: CGRect(x: 388, y: 52, width: 8, height: 86)),
             Barrier(id: "lounge_wall_upper", kind: .solidWall, rect: CGRect(x: 388, y: 180, width: 8, height: 84)),
+            Barrier(id: "entry_wall_lower", kind: .solidWall, rect: CGRect(x: 1232, y: 40, width: 8, height: 264)),
+            Barrier(id: "entry_wall_upper", kind: .solidWall, rect: CGRect(x: 1232, y: 400, width: 8, height: 328)),
             Barrier(id: "build_glass_left", kind: .glassWall, rect: CGRect(x: 524, y: 264, width: 126, height: 8)),
             Barrier(id: "build_glass_right", kind: .glassWall, rect: CGRect(x: 730, y: 264, width: 498, height: 8)),
             Barrier(id: "collab_glass_left", kind: .glassWall, rect: CGRect(x: 524, y: 436, width: 126, height: 8)),
@@ -375,14 +377,23 @@ public struct OfficeLayout: Sendable {
     // MARK: - Pathfinding
 
     public func findPath(from start: CGPoint, to end: CGPoint) -> [CGPoint] {
-        guard hypot(end.x - start.x, end.y - start.y) > 8 else { return [end] }
+        let resolvedStart = nearestWalkablePoint(to: start)
+        let resolvedEnd = nearestWalkablePoint(to: end)
 
-        let startCell = nearestWalkableCell(to: start)
-        let endCell = nearestWalkableCell(to: end)
+        guard hypot(resolvedEnd.x - resolvedStart.x, resolvedEnd.y - resolvedStart.y) > 8 else {
+            return [resolvedEnd]
+        }
+
+        if canTravelDirectly(from: resolvedStart, to: resolvedEnd) {
+            return [resolvedEnd]
+        }
+
+        let startCell = nearestWalkableCell(to: resolvedStart)
+        let endCell = nearestWalkableCell(to: resolvedEnd)
         let cells = aStarPath(from: startCell, to: endCell)
 
-        guard !cells.isEmpty else { return [end] }
-        return condensedWaypoints(from: cells, end: end)
+        guard !cells.isEmpty else { return [resolvedEnd] }
+        return condensedWaypoints(from: cells, start: resolvedStart, end: resolvedEnd)
     }
 
     private var cellSize: CGFloat { 32 }
@@ -393,6 +404,14 @@ public struct OfficeLayout: Sendable {
 
     private var gridHeight: Int {
         Int(ceil(sceneSize.height / cellSize))
+    }
+
+    func nearestWalkablePoint(to point: CGPoint) -> CGPoint {
+        if isWalkablePoint(point) {
+            return point
+        }
+
+        return centerOfCell(nearestWalkableCell(to: point))
     }
 
     private func nearestWalkableCell(to point: CGPoint) -> GridCell {
@@ -419,9 +438,35 @@ public struct OfficeLayout: Sendable {
     }
 
     private func isWalkable(_ cell: GridCell) -> Bool {
-        let center = centerOfCell(cell)
-        guard walkableArea.contains(center) else { return false }
-        return !collisionObstacles.contains(where: { $0.contains(center) })
+        isWalkablePoint(centerOfCell(cell))
+    }
+
+    func isWalkablePoint(_ point: CGPoint, clearance: CGFloat = 6) -> Bool {
+        guard walkableArea.insetBy(dx: clearance, dy: clearance).contains(point) else { return false }
+        return !collisionObstacles.contains(where: { obstacle in
+            obstacle.insetBy(dx: -clearance, dy: -clearance).contains(point)
+        })
+    }
+
+    func canTravelDirectly(from start: CGPoint, to end: CGPoint, sampleStep: CGFloat = 8) -> Bool {
+        guard isWalkablePoint(start), isWalkablePoint(end) else { return false }
+
+        let distance = hypot(end.x - start.x, end.y - start.y)
+        let steps = max(Int(ceil(distance / sampleStep)), 1)
+
+        for step in 0...steps {
+            let progress = CGFloat(step) / CGFloat(steps)
+            let sample = CGPoint(
+                x: start.x + (end.x - start.x) * progress,
+                y: start.y + (end.y - start.y) * progress
+            )
+
+            if !isWalkablePoint(sample) {
+                return false
+            }
+        }
+
+        return true
     }
 
     private func centerOfCell(_ cell: GridCell) -> CGPoint {
@@ -489,49 +534,29 @@ public struct OfficeLayout: Sendable {
         abs(start.x - end.x) + abs(start.y - end.y)
     }
 
-    private func condensedWaypoints(from cells: [GridCell], end: CGPoint) -> [CGPoint] {
-        guard let first = cells.first else { return [end] }
-
-        var turningCells: [GridCell] = [first]
-        if cells.count > 2 {
-            for index in 1..<(cells.count - 1) {
-                let previous = cells[index - 1]
-                let current = cells[index]
-                let next = cells[index + 1]
-
-                let previousDelta = (x: current.x - previous.x, y: current.y - previous.y)
-                let nextDelta = (x: next.x - current.x, y: next.y - current.y)
-                if previousDelta.x != nextDelta.x || previousDelta.y != nextDelta.y {
-                    turningCells.append(current)
-                }
-            }
-        }
-        if let last = cells.last {
-            turningCells.append(last)
-        }
-
-        var waypoints = turningCells.dropFirst().map(centerOfCell)
-        if let last = waypoints.last, hypot(last.x - end.x, last.y - end.y) <= cellSize / 2 {
-            waypoints[waypoints.count - 1] = end
-        } else {
-            waypoints.append(end)
-        }
-
-        return deduplicated(waypoints)
+    private func condensedWaypoints(from cells: [GridCell], start: CGPoint, end: CGPoint) -> [CGPoint] {
+        let checkpoints = PathMovement.deduplicated([start] + cells.map(centerOfCell) + [end])
+        return smoothedPath(checkpoints)
     }
 
-    private func deduplicated(_ points: [CGPoint]) -> [CGPoint] {
-        var unique: [CGPoint] = []
-        for point in points {
-            guard let last = unique.last else {
-                unique.append(point)
-                continue
+    private func smoothedPath(_ checkpoints: [CGPoint]) -> [CGPoint] {
+        guard checkpoints.count > 1 else { return checkpoints }
+
+        var result: [CGPoint] = []
+        var anchorIndex = 0
+
+        while anchorIndex < checkpoints.count - 1 {
+            var furthestReachable = anchorIndex + 1
+
+            while furthestReachable + 1 < checkpoints.count,
+                  canTravelDirectly(from: checkpoints[anchorIndex], to: checkpoints[furthestReachable + 1]) {
+                furthestReachable += 1
             }
 
-            if hypot(last.x - point.x, last.y - point.y) > 0.5 {
-                unique.append(point)
-            }
+            result.append(checkpoints[furthestReachable])
+            anchorIndex = furthestReachable
         }
-        return unique
+
+        return PathMovement.deduplicated(result)
     }
 }

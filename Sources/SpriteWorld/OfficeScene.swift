@@ -729,6 +729,7 @@ public class OfficeScene: SKScene {
     /// Sets up the office cat sprite.
     private func setupCat() {
         let cat = CatSprite()
+        cat.navigationLayout = layout
         // Place near a corner initially
         cat.position = CGPoint(x: 80, y: 100)
         addChild(cat)
@@ -749,6 +750,7 @@ public class OfficeScene: SKScene {
 
         // Pancake the dog
         let dog = DogSprite()
+        dog.navigationLayout = layout
         dog.position = layout.dogSleepPosition
         dog.bowlPosition = layout.dogBowlPosition
         addChild(dog)
@@ -1414,6 +1416,7 @@ public class OfficeScene: SKScene {
             deltaTime: deltaTime,
             activeAgentCount: activeAgentCount,
             scene: self,
+            layout: layout,
             doorPosition: layout.doorPosition,
             dropPosition: layout.pizzaDropPosition
         )
