@@ -513,7 +513,7 @@ public class OfficeScene: SKScene {
 
         let coolerTexture = tm.texture(for: TextureManager.decorationWaterCooler)
         let coolerNode = SKSpriteNode(texture: coolerTexture, size: CGSize(width: 40, height: 80))
-        coolerNode.position = CGPoint(x: 1164, y: 348)
+        coolerNode.position = CGPoint(x: 1084, y: 348)
         coolerNode.name = "decoration_water_cooler"
         coolerNode.zPosition = 2
         addChild(coolerNode)
@@ -534,14 +534,14 @@ public class OfficeScene: SKScene {
 
         let printerTexture = tm.texture(for: TextureManager.decorationPrinter)
         let printerNode = SKSpriteNode(texture: printerTexture, size: CGSize(width: 30, height: 30))
-        printerNode.position = CGPoint(x: 1166, y: 114)
+        printerNode.position = CGPoint(x: 1106, y: 114)
         printerNode.name = "decoration_printer"
         printerNode.zPosition = 2
         addChild(printerNode)
 
         let coatRackTexture = tm.texture(for: TextureManager.decorationCoatRack)
         let coatRackNode = SKSpriteNode(texture: coatRackTexture, size: CGSize(width: 18, height: 48))
-        coatRackNode.position = CGPoint(x: layout.doorPosition.x - 70, y: layout.doorPosition.y + 34)
+        coatRackNode.position = CGPoint(x: layout.doorPosition.x - 70, y: layout.doorPosition.y + 82)
         coatRackNode.name = "decoration_coat_rack"
         coatRackNode.zPosition = 2
         addChild(coatRackNode)

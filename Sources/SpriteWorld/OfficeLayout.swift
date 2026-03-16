@@ -340,7 +340,7 @@ public struct OfficeLayout: Sendable {
     }
 
     public var coffeeRugPosition: CGPoint {
-        CGPoint(x: 1040, y: 304)
+        CGPoint(x: 940, y: 304)
     }
 
     public var poster2Position: CGPoint {
