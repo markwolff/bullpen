@@ -176,24 +176,6 @@ public class OfficeScene: SKScene {
         cornice.zPosition = -10
         bgContainer.addChild(cornice)
 
-        for x in stride(from: CGFloat(120), through: layout.sceneSize.width - 120, by: 220) {
-            let fixture = SKShapeNode(rectOf: CGSize(width: 120, height: 12), cornerRadius: 6)
-            fixture.fillColor = SKColor(white: 0.98, alpha: 0.85)
-            fixture.strokeColor = .clear
-            fixture.position = CGPoint(x: x, y: layout.sceneSize.height - 28)
-            fixture.zPosition = -9
-            bgContainer.addChild(fixture)
-        }
-
-        let wallPanelColor = SKColor(red: 0.84, green: 0.87, blue: 0.83, alpha: 0.55)
-        for x in stride(from: CGFloat(150), through: layout.sceneSize.width - 150, by: 260) {
-            let panel = SKShapeNode(rectOf: CGSize(width: 170, height: 52), cornerRadius: 12)
-            panel.fillColor = wallPanelColor
-            panel.strokeColor = .clear
-            panel.position = CGPoint(x: x, y: layout.sceneSize.height - 92)
-            panel.zPosition = -10
-            bgContainer.addChild(panel)
-        }
     }
 
     private func setupRoomArchitecture() {
@@ -477,7 +459,7 @@ public class OfficeScene: SKScene {
 
         let posterTexture = tm.texture(for: TextureManager.decorationPoster)
         let posterNode = SKSpriteNode(texture: posterTexture, size: CGSize(width: 56, height: 72))
-        posterNode.position = CGPoint(x: 306, y: 706)
+        posterNode.position = CGPoint(x: 306, y: 680)
         posterNode.name = "decoration_poster"
         posterNode.zPosition = 2
         addChild(posterNode)
@@ -752,7 +734,7 @@ public class OfficeScene: SKScene {
         radioSprite = radio
 
         let plant = GrowingPlantSprite()
-        plant.position = CGPoint(x: layout.coffeeStationPosition.x - 120, y: layout.coffeeStationPosition.y - 8)
+        plant.position = CGPoint(x: 620, y: layout.coffeeStationPosition.y - 8)
         plant.zPosition = 2
         addChild(plant)
         growingPlantSprite = plant
@@ -799,19 +781,7 @@ public class OfficeScene: SKScene {
         rug.zPosition = -6
         addChild(rug)
 
-        let coatTexture = TextureManager.shared.texture(for: TextureManager.decorationCoatHooks)
-        let coatHooks = SKSpriteNode(texture: coatTexture, size: CGSize(width: 60, height: 42))
-        coatHooks.position = layout.coatHooksPosition
-        coatHooks.name = "decoration_coat_hooks"
-        coatHooks.zPosition = 2
-        addChild(coatHooks)
 
-        let poster2Texture = TextureManager.shared.texture(for: TextureManager.decorationPoster2)
-        let poster2 = SKSpriteNode(texture: poster2Texture, size: CGSize(width: 56, height: 72))
-        poster2.position = layout.poster2Position
-        poster2.name = "decoration_poster2"
-        poster2.zPosition = 2
-        addChild(poster2)
     }
 
     private func setupCollisionGeometry() {
