@@ -339,6 +339,13 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
         // Handle assistant messages
         if type == "assistant" {
+            // Extract token usage from assistant messages (includes cached tokens in total)
+            let usage = message?["usage"] as? [String: Any]
+            let inputTokens = (usage?["input_tokens"] as? Int ?? 0)
+                + (usage?["cache_creation_input_tokens"] as? Int ?? 0)
+                + (usage?["cache_read_input_tokens"] as? Int ?? 0)
+            let outputTokens = usage?["output_tokens"] as? Int ?? 0
+
             // Check for end_turn — text-only responses without tool_use
             if stopReason == "end_turn" {
                 let hasToolUse = contentArray?.contains(where: { ($0["type"] as? String) == "tool_use" }) ?? false
@@ -351,6 +358,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                         activityType: .assistantMessage,
                         summary: "Response complete",
                         rawPayload: rawEntry,
+                        inputTokens: inputTokens,
+                        outputTokens: outputTokens,
                         isPlanMode: isPlanMode,
                         parentSessionID: parentSessionID
                     )
@@ -370,6 +379,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             activityType: .toolUse,
                             summary: summary,
                             rawPayload: rawEntry,
+                            inputTokens: inputTokens,
+                            outputTokens: outputTokens,
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -384,6 +395,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 activityType: .thinking,
                 summary: "Thinking...",
                 rawPayload: rawEntry,
+                inputTokens: inputTokens,
+                outputTokens: outputTokens,
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
