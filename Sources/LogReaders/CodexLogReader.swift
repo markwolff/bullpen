@@ -3,13 +3,17 @@ import Models
 
 /// Reads and parses Codex CLI agent logs.
 ///
-/// Codex CLI is OpenAI's coding agent. This reader discovers and parses
-/// its log files to determine agent activity. Codex stores complete JSON
-/// session files (not streaming JSONL) in `~/.codex/history/`.
+/// Codex CLI stores streaming JSONL log files with one JSON object per line.
+/// Each entry has a `type` field (`session_meta`, `response_item`, `event_msg`, `turn_context`)
+/// and a `payload` containing the actual data.
+///
+/// Session files are stored in:
+/// - Active sessions: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+/// - Archived sessions: `~/.codex/archived_sessions/rollout-*.jsonl`
 public struct CodexLogReader: AgentLogReader, Sendable {
     public let agentType: AgentType = .codexCLI
 
-    /// Base directory where Codex CLI stores its logs
+    /// Base directory where Codex CLI stores its data
     private let codexDirectory: URL
 
     public init(codexDirectory: URL? = nil) {
@@ -18,23 +22,24 @@ public struct CodexLogReader: AgentLogReader, Sendable {
     }
 
     public func discoverSessions() async throws -> [String: URL] {
-        let historyDir = codexDirectory.appendingPathComponent("history")
+        let fm = FileManager.default
 
-        guard FileManager.default.fileExists(atPath: historyDir.path) else {
+        guard fm.fileExists(atPath: codexDirectory.path) else {
             return [:]
         }
 
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: historyDir,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )
-
         var sessions: [String: URL] = [:]
-        for fileURL in contents {
-            guard fileURL.pathExtension == "json" else { continue }
-            let sessionID = fileURL.deletingPathExtension().lastPathComponent
-            sessions[sessionID] = fileURL
+
+        // Scan active sessions: sessions/YYYY/MM/DD/*.jsonl
+        let sessionsDir = codexDirectory.appendingPathComponent("sessions")
+        if fm.fileExists(atPath: sessionsDir.path) {
+            discoverSessionsRecursively(in: sessionsDir, fm: fm, sessions: &sessions)
+        }
+
+        // Scan archived sessions: archived_sessions/*.jsonl
+        let archivedDir = codexDirectory.appendingPathComponent("archived_sessions")
+        if fm.fileExists(atPath: archivedDir.path) {
+            discoverSessionFiles(in: archivedDir, fm: fm, sessions: &sessions)
         }
 
         return sessions
@@ -48,162 +53,333 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             return (activities: [], newOffset: afterOffset)
         }
 
-        let data = try Data(contentsOf: logFileURL)
+        guard let fileHandle = FileHandle(forReadingAtPath: logFileURL.path) else {
+            return (activities: [], newOffset: afterOffset)
+        }
+        defer { fileHandle.closeFile() }
+
+        fileHandle.seek(toFileOffset: afterOffset)
+        let data = fileHandle.readDataToEndOfFile()
 
         guard !data.isEmpty else {
             return (activities: [], newOffset: afterOffset)
         }
 
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let text = String(data: data, encoding: .utf8) else {
             return (activities: [], newOffset: afterOffset)
         }
 
-        guard let items = json["items"] as? [[String: Any]] else {
-            return (activities: [], newOffset: afterOffset)
-        }
+        // Derive session ID from filename (e.g., "rollout-2026-03-07T11-34-10-UUID" → use UUID part)
+        let sessionID = extractSessionID(from: logFileURL)
 
-        // Derive session ID from filename
-        let sessionID = logFileURL.deletingPathExtension().lastPathComponent
-
-        // Parse timestamps from the top-level session object
-        let sessionStartDate = parseISO8601(json["startTime"] as? String) ?? Date()
-
-        let skipCount = Int(afterOffset)
         var activities: [AgentActivity] = []
 
-        for (index, item) in items.enumerated() {
-            guard index >= skipCount else { continue }
+        let lines = text.components(separatedBy: "\n")
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
 
-            let itemActivities = parseItem(
-                item,
-                sessionID: sessionID,
-                timestamp: sessionStartDate,
-                rawJSON: item
-            )
-            activities.append(contentsOf: itemActivities)
+            if let activity = parseLogEntry(trimmed, sessionID: sessionID) {
+                activities.append(activity)
+            }
         }
 
-        let newOffset = UInt64(items.count)
+        let newOffset = afterOffset + UInt64(data.count)
         return (activities: activities, newOffset: newOffset)
     }
 
     public func parseLogEntry(_ rawEntry: String, sessionID: String) -> AgentActivity? {
         guard let data = rawEntry.data(using: .utf8),
-              let item = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = json["type"] as? String,
+              let payload = json["payload"] as? [String: Any]
         else {
             return nil
         }
 
-        let activities = parseItem(item, sessionID: sessionID, timestamp: Date(), rawJSON: item)
-        return activities.first
+        let timestamp = parseISO8601(json["timestamp"] as? String) ?? Date()
+
+        switch type {
+        case "response_item":
+            return parseResponseItem(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
+        case "event_msg":
+            return parseEventMsg(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
+        default:
+            // session_meta, turn_context, etc. — not actionable activities
+            return nil
+        }
     }
 
-    // MARK: - Private
+    // MARK: - Private: Discovery
 
-    /// Parse a single item from the items array, producing one or more activities.
-    private func parseItem(
-        _ item: [String: Any],
+    /// Recursively discover `.jsonl` files in nested date directories (sessions/YYYY/MM/DD/)
+    private func discoverSessionsRecursively(
+        in directory: URL,
+        fm: FileManager,
+        sessions: inout [String: URL]
+    ) {
+        guard let contents = try? fm.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for item in contents {
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: item.path, isDirectory: &isDir), isDir.boolValue {
+                discoverSessionsRecursively(in: item, fm: fm, sessions: &sessions)
+            } else if item.pathExtension == "jsonl" {
+                addSessionIfRecent(fileURL: item, fm: fm, sessions: &sessions)
+            }
+        }
+    }
+
+    /// Discover `.jsonl` files in a flat directory (archived_sessions/)
+    private func discoverSessionFiles(
+        in directory: URL,
+        fm: FileManager,
+        sessions: inout [String: URL]
+    ) {
+        guard let contents = try? fm.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for file in contents {
+            guard file.pathExtension == "jsonl" else { continue }
+            addSessionIfRecent(fileURL: file, fm: fm, sessions: &sessions)
+        }
+    }
+
+    /// Only include sessions modified in the last 10 minutes
+    private func addSessionIfRecent(
+        fileURL: URL,
+        fm: FileManager,
+        sessions: inout [String: URL]
+    ) {
+        if let attrs = try? fm.attributesOfItem(atPath: fileURL.path),
+           let modDate = attrs[.modificationDate] as? Date,
+           Date().timeIntervalSince(modDate) > 600 {
+            return
+        }
+
+        let sessionID = extractSessionID(from: fileURL)
+        sessions[sessionID] = fileURL
+    }
+
+    /// Extract session ID from filename.
+    /// Filenames look like: `rollout-2026-03-07T11-34-10-019cc926-349f-7970-b7ac-17588a0174f0.jsonl`
+    /// We use the full filename (without extension) as the session ID for uniqueness.
+    private func extractSessionID(from fileURL: URL) -> String {
+        fileURL.deletingPathExtension().lastPathComponent
+    }
+
+    // MARK: - Private: Parsing
+
+    private func parseResponseItem(
+        _ payload: [String: Any],
         sessionID: String,
         timestamp: Date,
-        rawJSON: [String: Any]
-    ) -> [AgentActivity] {
-        let role = item["role"] as? String ?? ""
+        rawEntry: String
+    ) -> AgentActivity? {
+        guard let itemType = payload["type"] as? String else { return nil }
 
-        if role == "user" {
-            return [AgentActivity(
-                sessionID: sessionID,
-                timestamp: timestamp,
-                activityType: .userMessage,
-                summary: truncate(item["content"] as? String ?? "User message", to: 60),
-                rawPayload: serializeJSON(rawJSON)
-            )]
-        }
+        switch itemType {
+        case "message":
+            return parseMessage(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
 
-        guard role == "assistant" else {
-            return []
-        }
+        case "function_call":
+            return parseFunctionCall(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
 
-        guard let functionCalls = item["functionCalls"] as? [[String: Any]],
-              !functionCalls.isEmpty
-        else {
-            // Assistant text without function calls → thinking
-            return [AgentActivity(
+        case "function_call_output":
+            return parseFunctionCallOutput(payload, sessionID: sessionID, timestamp: timestamp, rawEntry: rawEntry)
+
+        case "reasoning":
+            return AgentActivity(
                 sessionID: sessionID,
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: serializeJSON(rawJSON)
-            )]
-        }
-
-        // One activity per function call
-        var activities: [AgentActivity] = []
-        for call in functionCalls {
-            let name = call["name"] as? String ?? ""
-            let arguments = call["arguments"] as? [String: Any] ?? [:]
-            let output = call["output"] as? String ?? ""
-
-            let (activityType, summary) = mapFunctionCall(
-                name: name,
-                arguments: arguments,
-                output: output
+                rawPayload: rawEntry
             )
 
-            activities.append(AgentActivity(
-                sessionID: sessionID,
-                timestamp: timestamp,
-                activityType: activityType,
-                summary: summary,
-                rawPayload: serializeJSON(rawJSON)
-            ))
+        default:
+            return nil
         }
-
-        return activities
     }
 
-    /// Map a Codex function call to an activity type and summary string.
-    private func mapFunctionCall(
-        name: String,
-        arguments: [String: Any],
-        output: String
-    ) -> (ActivityType, String) {
+    private func parseMessage(
+        _ payload: [String: Any],
+        sessionID: String,
+        timestamp: Date,
+        rawEntry: String
+    ) -> AgentActivity? {
+        let role = payload["role"] as? String ?? ""
+
+        if role == "user" {
+            // Extract text from content array
+            let text = extractTextFromContent(payload["content"])
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .userMessage,
+                summary: truncate(text.isEmpty ? "User message" : text, to: 60),
+                rawPayload: rawEntry
+            )
+        }
+
+        if role == "assistant" {
+            let text = extractTextFromContent(payload["content"])
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .assistantMessage,
+                summary: truncate(text.isEmpty ? "Codex response" : text, to: 60),
+                rawPayload: rawEntry
+            )
+        }
+
+        // developer, system, etc. — skip
+        return nil
+    }
+
+    private func parseFunctionCall(
+        _ payload: [String: Any],
+        sessionID: String,
+        timestamp: Date,
+        rawEntry: String
+    ) -> AgentActivity? {
+        let name = payload["name"] as? String ?? "unknown"
+        let argsString = payload["arguments"] as? String ?? "{}"
+
+        // Parse the arguments JSON string
+        let arguments: [String: Any]
+        if let argsData = argsString.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+            arguments = parsed
+        } else {
+            arguments = [:]
+        }
+
+        let summary = buildToolSummary(name: name, arguments: arguments)
+
+        return AgentActivity(
+            sessionID: sessionID,
+            timestamp: timestamp,
+            activityType: .toolUse,
+            summary: summary,
+            rawPayload: rawEntry
+        )
+    }
+
+    private func parseFunctionCallOutput(
+        _ payload: [String: Any],
+        sessionID: String,
+        timestamp: Date,
+        rawEntry: String
+    ) -> AgentActivity? {
+        let output = payload["output"] as? String ?? ""
+
+        // Detect errors from exit code and error patterns
+        let isError = output.contains("exit code: 1")
+            || output.contains("Process exited with code 1")
+            || output.contains("[ERROR]")
+            || output.contains("FATAL:")
+
+        if isError {
+            // Extract a meaningful error summary
+            let errorLine = output.components(separatedBy: "\n")
+                .first { $0.contains("[ERROR]") || $0.contains("FATAL:") || $0.contains("exit code:") }
+                ?? "Command failed"
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .error,
+                summary: "Error: \(truncate(errorLine, to: 120))",
+                rawPayload: rawEntry
+            )
+        }
+
+        return AgentActivity(
+            sessionID: sessionID,
+            timestamp: timestamp,
+            activityType: .toolResult,
+            summary: "Tool result received",
+            rawPayload: rawEntry
+        )
+    }
+
+    private func parseEventMsg(
+        _ payload: [String: Any],
+        sessionID: String,
+        timestamp: Date,
+        rawEntry: String
+    ) -> AgentActivity? {
+        guard let msgType = payload["type"] as? String else { return nil }
+
+        switch msgType {
+        case "task_started":
+            return AgentActivity(
+                sessionID: sessionID,
+                timestamp: timestamp,
+                activityType: .sessionStart,
+                summary: "Session started",
+                rawPayload: rawEntry
+            )
+        default:
+            // user_message, agent_message, token_count, etc. — skip (redundant with response_items)
+            return nil
+        }
+    }
+
+    // MARK: - Private: Helpers
+
+    private func extractTextFromContent(_ content: Any?) -> String {
+        guard let contentArray = content as? [[String: Any]] else { return "" }
+        for item in contentArray {
+            if let text = item["text"] as? String, !text.isEmpty {
+                return text
+            }
+        }
+        return ""
+    }
+
+    private func buildToolSummary(name: String, arguments: [String: Any]) -> String {
         switch name {
-        case "file_read":
-            let path = arguments["path"] as? String ?? "unknown"
-            return (.toolUse, "Reading \(path)")
+        case "exec_command":
+            let cmd = arguments["cmd"] as? String ?? "unknown"
+            return "Running \(truncate(cmd, to: 60))"
 
-        case "file_write":
-            let path = arguments["path"] as? String ?? "unknown"
-            return (.toolUse, "Writing \(path)")
+        case "spawn_agent":
+            let prompt = arguments["prompt"] as? String ?? "subtask"
+            return "Spawning agent: \(truncate(prompt, to: 50))"
 
-        case "file_edit":
-            let path = arguments["path"] as? String ?? "unknown"
-            return (.toolUse, "Editing \(path)")
+        case "write_stdin":
+            return "Sending input to process"
 
-        case "shell":
-            let commandParts: [String]
-            if let arr = arguments["command"] as? [String] {
-                commandParts = arr
-            } else if let str = arguments["command"] as? String {
-                commandParts = [str]
-            } else {
-                commandParts = ["unknown"]
-            }
-            let commandStr = commandParts.joined(separator: " ")
-            let truncatedCommand = truncate(commandStr, to: 40)
+        case "wait":
+            return "Waiting for process"
 
-            // Detect errors: output containing error indicators or exit code
-            let isError = output.contains("exit code: 1")
-                || output.contains("[ERROR]")
-                || output.contains("FATAL:")
+        case "update_plan":
+            return "Updating plan"
 
-            if isError {
-                return (.error, "Running \(truncatedCommand)")
-            }
-            return (.toolUse, "Running \(truncatedCommand)")
+        case "close_agent":
+            return "Closing agent"
+
+        case "view_image":
+            return "Viewing image"
 
         default:
-            return (.toolUse, "\(name)")
+            // MCP tools: mcp__sentry__search_issues, mcp__serena__read_file, etc.
+            if name.hasPrefix("mcp__") {
+                let parts = name.split(separator: "__")
+                if parts.count >= 3 {
+                    let toolName = String(parts.last!)
+                    return "Using \(toolName)"
+                }
+            }
+            return "Using \(name)"
         }
     }
 
@@ -217,14 +393,9 @@ public struct CodexLogReader: AgentLogReader, Sendable {
     private func parseISO8601(_ string: String?) -> Date? {
         guard let string else { return nil }
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) { return date }
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: string)
-    }
-
-    private func serializeJSON(_ json: [String: Any]) -> String? {
-        guard let data = try? JSONSerialization.data(withJSONObject: json) else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
     }
 }
