@@ -80,11 +80,11 @@ public struct OfficeLayout: Sendable {
         )
     }
 
-    /// Returns the nearest unoccupied desk position.
+    /// Returns a random unoccupied desk position.
     /// - Parameter occupiedDeskIDs: IDs of desks that already have an agent assigned
     /// - Returns: An available desk, or nil if the office is full
     public func nextAvailableDesk(occupiedDeskIDs: Set<Int>) -> DeskPosition? {
-        desks.first { !occupiedDeskIDs.contains($0.id) }
+        desks.filter { !occupiedDeskIDs.contains($0.id) }.randomElement()
     }
 
     // MARK: - Table Obstacles

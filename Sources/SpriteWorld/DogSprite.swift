@@ -314,7 +314,7 @@ public class DogSprite: SKSpriteNode {
     }
 
     /// Returns the energy-adjusted walk speed for normal (non-zoomie) walking.
-    private var energyAdjustedWalkSpeed: CGFloat {
+    var normalWalkSpeed: CGFloat {
         if energyLevel > 0.7 {
             return walkSpeed * 1.3
         } else if energyLevel < 0.3 {
@@ -322,6 +322,11 @@ public class DogSprite: SKSpriteNode {
         } else {
             return walkSpeed
         }
+    }
+
+    /// Returns the speed used during zoomies, relative to the dog's normal walk speed.
+    var zoomiesSpeed: CGFloat {
+        normalWalkSpeed * 5
     }
 
     /// Starts walking to a destination point.
@@ -334,7 +339,7 @@ public class DogSprite: SKSpriteNode {
         isZooming: Bool = false,
         speed: CGFloat? = nil
     ) {
-        dogState = .walking
+        dogState = isZooming ? .zoomies : .walking
         wagShown = false
         currentDeskID = deskID
 
@@ -354,8 +359,8 @@ public class DogSprite: SKSpriteNode {
         let animKey = isZooming ? "zoomiesAnimation" : "walkAnimation"
         run(SKAction.repeatForever(walkAnim), withKey: animKey)
 
-        // Movement - use provided speed, or energy-adjusted speed
-        let effectiveSpeed = speed ?? energyAdjustedWalkSpeed
+        // Movement - use provided speed, or current normal walking speed
+        let effectiveSpeed = speed ?? normalWalkSpeed
         let distance = hypot(destination.x - position.x, destination.y - position.y)
         let duration = TimeInterval(distance / effectiveSpeed)
         let moveAction = SKAction.move(to: destination, duration: duration)
@@ -503,7 +508,7 @@ public class DogSprite: SKSpriteNode {
             deskID: -1,
             isActiveDeskID: false,
             isZooming: true,
-            speed: walkSpeed * 3
+            speed: zoomiesSpeed
         )
     }
 
@@ -518,7 +523,7 @@ public class DogSprite: SKSpriteNode {
                 deskID: -1,
                 isActiveDeskID: false,
                 isZooming: true,
-                speed: walkSpeed * 3
+                speed: zoomiesSpeed
             )
         } else {
             // Zoomies finished
