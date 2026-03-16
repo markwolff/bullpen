@@ -237,7 +237,7 @@ public class AgentSprite: SKSpriteNode {
         // Update thought bubble — determine best text once, call bubble once
         let desc = newInfo.currentTaskDescription
         let bubbleText: String
-        if !newInfo.recentTools.isEmpty && newInfo.state != .finished && newInfo.state != .idle {
+        if shouldPreferRecentToolBubble(for: newInfo) {
             bubbleText = newInfo.recentTools.first!.summary
         } else if newInfo.isPlanMode && !desc.isEmpty {
             bubbleText = "Planning: \(desc)"
@@ -373,6 +373,26 @@ public class AgentSprite: SKSpriteNode {
         // Direct animation swap — SpriteKit handles texture changes seamlessly
         playAnimation(for: newState)
         currentAnimationState = newState
+    }
+
+    private func shouldPreferRecentToolBubble(for info: AgentInfo) -> Bool {
+        guard !info.recentTools.isEmpty,
+              info.state != .finished,
+              info.state != .idle
+        else {
+            return false
+        }
+
+        let genericDescriptions: Set<String> = [
+            "",
+            "Thinking...",
+            "Tool result received",
+            "Supervising...",
+            "Starting up...",
+            "Waiting for input",
+        ]
+
+        return genericDescriptions.contains(info.currentTaskDescription)
     }
 
     // MARK: - Animations (6.5–6.13)

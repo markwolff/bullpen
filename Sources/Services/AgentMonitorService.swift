@@ -381,6 +381,12 @@ public final class AgentMonitorService: ObservableObject {
 
         // Register parent-child relationship from activity metadata
         if let parentID = activity.parentSessionID {
+            agents[index].isSubagent = true
+            if let roleTitle = Self.extractCodexSubagentRoleTitle(from: activity.rawPayload) {
+                agents[index].roleTitle = roleTitle
+            } else if agents[index].roleTitle == "Developer" || agents[index].roleTitle == nil {
+                agents[index].roleTitle = "Subagent"
+            }
             registerParentChild(parentID: parentID, childID: sessionID)
         }
 
@@ -464,7 +470,14 @@ public final class AgentMonitorService: ObservableObject {
         if summary == "Thinking..." {
             return .thinking
         }
-        if summary.hasPrefix("Reading") || summary.hasPrefix("Searching for") {
+        if summary.hasPrefix("Reading")
+            || summary.hasPrefix("Searching for")
+            || summary.hasPrefix("Inspecting")
+            || summary.hasPrefix("Looking up")
+            || summary.hasPrefix("Listing")
+            || summary.hasPrefix("Opening")
+            || summary.hasPrefix("Scanning")
+        {
             return .readingFiles
         }
         if summary.hasPrefix("Writing") || summary.hasPrefix("Editing") {
@@ -473,8 +486,17 @@ public final class AgentMonitorService: ObservableObject {
         if summary.hasPrefix("Running") {
             return .runningCommand
         }
-        if summary.hasPrefix("Searching") || summary.hasPrefix("Fetching") {
+        if summary.hasPrefix("Searching")
+            || summary.hasPrefix("Fetching")
+            || summary.hasPrefix("Finding")
+        {
             return .searching
+        }
+        if summary.hasPrefix("Spawning")
+            || summary.hasPrefix("Directing")
+            || summary.hasPrefix("Waiting on")
+        {
+            return .supervisingAgents
         }
 
         // Default fallback
@@ -495,25 +517,30 @@ public final class AgentMonitorService: ObservableObject {
     ) {
         let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
         let name = Self.generateAgentName(from: sessionID)
-        let isSubagent = fileURL.path.contains("/subagents/")
-
+        var isSubagent = fileURL.path.contains("/subagents/")
         var parentSessionID: String?
+        var roleTitle: String = "Developer"
+
         if isSubagent {
             let subagentsDir = fileURL.deletingLastPathComponent()
             if subagentsDir.lastPathComponent == "subagents" {
                 let parentDir = subagentsDir.deletingLastPathComponent()
                 parentSessionID = parentDir.lastPathComponent
             }
+            roleTitle = Self.readSubagentRole(from: fileURL) ?? "Subagent"
         }
 
-        // Determine role title: for subagents, read the companion meta.json
-        // that Claude Code writes alongside each subagent log. For main agents,
-        // default to "Developer" (dynamically updated to "Planner"/"Lead" based on state).
-        let roleTitle: String
-        if isSubagent {
-            roleTitle = Self.readSubagentRole(from: fileURL) ?? "Subagent"
-        } else {
-            roleTitle = "Developer"
+        if reader.agentType == .codexCLI,
+           let codexMetadata = Self.readCodexSessionMetadata(from: fileURL) {
+            if let parentID = codexMetadata.parentSessionID {
+                parentSessionID = parentID
+                isSubagent = true
+            }
+            if let codexRoleTitle = codexMetadata.roleTitle {
+                roleTitle = codexRoleTitle
+            } else if isSubagent {
+                roleTitle = "Subagent"
+            }
         }
 
         let agent = AgentInfo(
@@ -712,6 +739,78 @@ public final class AgentMonitorService: ObservableObject {
         }
 
         return mapAgentTypeToTitle(agentType)
+    }
+
+    /// Reads Codex session metadata directly from the JSONL file so subagents
+    /// created as top-level session files still get correct parent/role data.
+    static func readCodexSessionMetadata(from logFileURL: URL) -> (parentSessionID: String?, roleTitle: String?)? {
+        guard let handle = FileHandle(forReadingAtPath: logFileURL.path) else { return nil }
+        defer { try? handle.close() }
+
+        let data = handle.readData(ofLength: 32 * 1024)
+        guard !data.isEmpty,
+              let text = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let data = trimmed.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  (json["type"] as? String) == "session_meta",
+                  let payload = json["payload"] as? [String: Any]
+            else {
+                continue
+            }
+
+            let parentSessionID = extractCodexParentSessionID(from: payload)
+            let roleTitle = extractCodexRoleTitle(from: payload)
+            return (parentSessionID: parentSessionID, roleTitle: roleTitle)
+        }
+
+        return nil
+    }
+
+    private static func extractCodexParentSessionID(from payload: [String: Any]) -> String? {
+        guard let source = payload["source"] as? [String: Any],
+              let subagent = source["subagent"] as? [String: Any],
+              let threadSpawn = subagent["thread_spawn"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        return threadSpawn["parent_thread_id"] as? String
+    }
+
+    private static func extractCodexRoleTitle(from payload: [String: Any]) -> String? {
+        if let role = payload["agent_role"] as? String, !role.isEmpty {
+            return mapAgentTypeToTitle(role)
+        }
+
+        guard let source = payload["source"] as? [String: Any],
+              let subagent = source["subagent"] as? [String: Any],
+              let threadSpawn = subagent["thread_spawn"] as? [String: Any],
+              let role = threadSpawn["agent_role"] as? String,
+              !role.isEmpty
+        else {
+            return nil
+        }
+
+        return mapAgentTypeToTitle(role)
+    }
+
+    private static func extractCodexSubagentRoleTitle(from rawPayload: String?) -> String? {
+        guard let rawPayload,
+              let data = rawPayload.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = json["payload"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        return extractCodexRoleTitle(from: payload)
     }
 
     /// Maps a raw Claude Code subagent type string to a clean display title.
