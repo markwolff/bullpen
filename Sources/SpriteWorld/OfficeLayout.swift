@@ -235,6 +235,48 @@ public struct OfficeLayout: Sendable {
         CGPoint(x: 130, y: sceneSize.height - 80)
     }
 
+    // MARK: - New Decoration Positions
+
+    /// Position for the bird cage on the back wall
+    public var birdCagePosition: CGPoint {
+        CGPoint(x: 1050, y: sceneSize.height - 75)
+    }
+
+    /// Position for the coffee station (left wall, between tables)
+    public var coffeeStationPosition: CGPoint {
+        CGPoint(x: 100, y: 345)
+    }
+
+    /// Position where the barista stands (behind the station)
+    public var baristaPosition: CGPoint {
+        CGPoint(x: 100, y: 330)
+    }
+
+    /// Position where an agent stands to order coffee from barista
+    public var baristaCustomerPosition: CGPoint {
+        CGPoint(x: 150, y: 330)
+    }
+
+    /// Position for coat hooks near the door
+    public var coatHooksPosition: CGPoint {
+        CGPoint(x: sceneSize.width - 50, y: 500)
+    }
+
+    /// Position for a small rug under the coffee station
+    public var coffeeRugPosition: CGPoint {
+        CGPoint(x: 110, y: 330)
+    }
+
+    /// Position for motivational poster on left wall
+    public var poster2Position: CGPoint {
+        CGPoint(x: 30, y: 500)
+    }
+
+    /// Position for animated wall clock
+    public var wallClockPosition: CGPoint {
+        CGPoint(x: 800, y: sceneSize.height - 30)
+    }
+
     // MARK: - Pathfinding
 
     /// Generates a corridor-based path from one point to another, routing through aisles.

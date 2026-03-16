@@ -73,6 +73,24 @@ public final class TextureManager: @unchecked Sendable {
     public static let decorationCoatRack = "decoration_coat_rack"
     public static let decorationAchievementShelf = "decoration_achievement_shelf"
     public static let decorationRadio = "decoration_radio"
+    public static let decorationBirdCage = "decoration_bird_cage"
+    public static let decorationCoffeeStation = "decoration_coffee_station"
+
+    // Bird textures
+    public static let birdIdleFrame0 = "bird_idle_frame0"
+    public static let birdIdleFrame1 = "bird_idle_frame1"
+    public static let birdIdleFrame2 = "bird_idle_frame2"
+
+    // Barista textures
+    public static let baristaIdleFrame0 = "barista_idle_frame0"
+    public static let baristaIdleFrame1 = "barista_idle_frame1"
+    public static let baristaServe = "barista_serve"
+
+    // Extra decoration textures
+    public static let decorationCoatHooks = "decoration_coat_hooks"
+    public static let decorationSmallRug = "decoration_small_rug"
+    public static let decorationPoster2 = "decoration_poster2"
+    public static let decorationWallClock = "decoration_wall_clock"
 
     // Item textures
     public static let itemStickyNoteYellow = "item_sticky_note_yellow"
@@ -139,7 +157,11 @@ public final class TextureManager: @unchecked Sendable {
         decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
         decorationBookshelf, decorationBulletinBoard, decorationWaterCooler, decorationPoster, decorationDoor,
         decorationCouch, decorationPrinter, decorationCoatRack,
-        decorationAchievementShelf, decorationRadio,
+        decorationAchievementShelf, decorationRadio, decorationBirdCage,
+        decorationCoffeeStation, decorationCoatHooks, decorationSmallRug,
+        decorationPoster2, decorationWallClock,
+        birdIdleFrame0, birdIdleFrame1, birdIdleFrame2,
+        baristaIdleFrame0, baristaIdleFrame1, baristaServe,
         itemStickyNoteYellow, itemStickyNotePink, itemStickyNoteBlue,
         itemCrumpledPaper, itemRubberDuck, itemCoffeeCup, itemPizzaBox, itemPlanningClipboard,
         npcJanitor, npcPizzaDelivery,
@@ -329,6 +351,31 @@ public final class TextureManager: @unchecked Sendable {
         if name == Self.decorationCoatRack { return gen.coatRack() }
         if name == Self.decorationAchievementShelf { return gen.achievementShelf() }
         if name == Self.decorationRadio { return gen.officeRadio() }
+        if name == Self.decorationBirdCage { return gen.birdCage() }
+        if name == Self.decorationCoffeeStation { return gen.coffeeStation() }
+        if name == Self.decorationCoatHooks { return gen.coatHooks() }
+        if name == Self.decorationSmallRug { return gen.smallRug() }
+        if name == Self.decorationPoster2 { return gen.motivationalPoster2() }
+        if name == Self.decorationWallClock { return gen.wallClock() }
+
+        // Bird frame variants (bird_idle_frame0, bird_idle_frame1, etc.)
+        if name.hasPrefix("bird_idle_frame") {
+            let frameStr = String(name.dropFirst("bird_idle_frame".count))
+            return gen.birdIdle(frame: Int(frameStr) ?? 0)
+        }
+
+        // Barista frame variants
+        if name == Self.baristaServe { return gen.baristaServe() }
+        if name.hasPrefix("barista_idle_frame") {
+            let frameStr = String(name.dropFirst("barista_idle_frame".count))
+            return gen.baristaIdle(frame: Int(frameStr) ?? 0)
+        }
+
+        // Wall clock frame variants
+        if name.hasPrefix("wall_clock_frame") {
+            let frameStr = String(name.dropFirst("wall_clock_frame".count))
+            return gen.wallClock(frame: Int(frameStr) ?? 0)
+        }
 
         // Items
         if name == Self.itemStickyNoteYellow { return gen.stickyNote(color: PixelArtGenerator.RGB(0xFFF8A0)) }

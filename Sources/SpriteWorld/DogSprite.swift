@@ -2,12 +2,12 @@ import SpriteKit
 import Models
 
 /// Pancake the apricot Maltipoo - the office dog that wanders around, eats from her bowl,
-/// wags her tail when agents visit, and occasionally follows agents between desks.
+/// wags her tail when agents visit, plays with toys, gets the zoomies, and occasionally barks.
 public class DogSprite: SKSpriteNode {
 
     /// The possible states of the office dog.
     public enum DogState {
-        case idle, walking, sleeping, eating, wagging
+        case idle, walking, sleeping, eating, wagging, playing, zoomies, barking
     }
 
     /// The dog's current behavioral state.
@@ -45,6 +45,36 @@ public class DogSprite: SKSpriteNode {
 
     /// Timer for tail wag animation.
     private var wagTimer: TimeInterval = 0
+
+    /// Positions of toys in the scene (set by OfficeScene).
+    public var toyPositions: [CGPoint] = []
+
+    /// Timer for play behavior.
+    private var playTimer: TimeInterval = 0
+
+    /// Duration the dog will play before stopping.
+    private var playDuration: TimeInterval = 0
+
+    /// Timer for zoomies.
+    private var zoomiesTimer: TimeInterval = 0
+
+    /// Number of zoomie laps remaining.
+    private var zoomiesLapsRemaining: Int = 0
+
+    /// Timer for bark cooldown.
+    private var barkCooldown: TimeInterval = 0
+
+    /// Timer for bark state duration.
+    private var barkTimer: TimeInterval = 0
+
+    /// Energy level affects behavior probability (0.0 = sleepy, 1.0 = hyper).
+    private var energyLevel: Double = 0.5
+
+    /// Base energy set on wake-up, used for sinusoidal fluctuation.
+    private var baseEnergy: Double = 0.5
+
+    /// Accumulated time for energy oscillation.
+    private var energyTimer: TimeInterval = 0
 
     // MARK: - Initialization
 
@@ -87,6 +117,17 @@ public class DogSprite: SKSpriteNode {
     ) {
         let hasActiveAgents = agents.contains { $0.state != .idle && $0.state != .finished }
 
+        // Decrease bark cooldown each frame
+        if barkCooldown > 0 {
+            barkCooldown -= deltaTime
+        }
+
+        // Update energy oscillation
+        if dogState != .sleeping {
+            energyTimer += deltaTime
+            energyLevel = min(1.0, max(0.0, baseEnergy + 0.2 * sin(energyTimer * 0.1)))
+        }
+
         switch dogState {
         case .sleeping:
             if hasActiveAgents {
@@ -109,13 +150,7 @@ public class DogSprite: SKSpriteNode {
             wanderTimer += deltaTime
 
             if wanderTimer >= nextWanderTime {
-                // 20% chance to go eat from bowl, 80% chance to visit a desk
-                if Double.random(in: 0...1) < 0.2 && bowlPosition != .zero {
-                    startWalking(to: bowlPosition, deskID: -1, isActiveDeskID: false, goingToBowl: true)
-                } else {
-                    let destination = pickDestination(deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
-                    startWalking(to: destination.position, deskID: destination.id, isActiveDeskID: activeDeskIDs.contains(destination.id))
-                }
+                pickBehavior(deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
             }
 
         case .walking:
@@ -138,6 +173,91 @@ public class DogSprite: SKSpriteNode {
                 stopWagging()
                 scheduleNextWander()
             }
+
+        case .playing:
+            playTimer += deltaTime
+            if playTimer >= playDuration {
+                stopPlaying()
+                scheduleNextWander()
+            }
+
+        case .zoomies:
+            zoomiesTimer += deltaTime
+
+        case .barking:
+            barkTimer += deltaTime
+            if barkTimer >= 1.5 {
+                stopBarking()
+                scheduleNextWander()
+            }
+        }
+    }
+
+    // MARK: - Behavior Selection
+
+    /// Picks a behavior based on the dog's current energy level.
+    private func pickBehavior(
+        deskPositions: [(id: Int, position: CGPoint)],
+        activeDeskIDs: Set<Int>
+    ) {
+        let roll = Double.random(in: 0...1)
+
+        if energyLevel > 0.7 {
+            // High energy: 30% zoomies, 15% play, 15% bark, 20% bowl, 20% wander to desk
+            if roll < 0.30 {
+                startZoomies()
+                return
+            } else if roll < 0.45 && !toyPositions.isEmpty {
+                let toy = toyPositions.randomElement()!
+                startWalking(to: toy, deskID: -1, isActiveDeskID: false, goingToToy: true)
+                return
+            } else if roll < 0.60 && barkCooldown <= 0 {
+                startBarking()
+                return
+            } else if roll < 0.80 && bowlPosition != .zero {
+                startWalking(to: bowlPosition, deskID: -1, isActiveDeskID: false, goingToBowl: true)
+                return
+            }
+            // Fallthrough: wander to a desk
+            let destination = pickDestination(deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+            startWalking(to: destination.position, deskID: destination.id, isActiveDeskID: activeDeskIDs.contains(destination.id))
+
+        } else if energyLevel >= 0.3 {
+            // Medium energy: 5% zoomies, 25% play, 10% bark, 20% bowl, 40% wander to desk
+            if roll < 0.05 {
+                startZoomies()
+                return
+            } else if roll < 0.30 && !toyPositions.isEmpty {
+                let toy = toyPositions.randomElement()!
+                startWalking(to: toy, deskID: -1, isActiveDeskID: false, goingToToy: true)
+                return
+            } else if roll < 0.40 && barkCooldown <= 0 {
+                startBarking()
+                return
+            } else if roll < 0.60 && bowlPosition != .zero {
+                startWalking(to: bowlPosition, deskID: -1, isActiveDeskID: false, goingToBowl: true)
+                return
+            }
+            // Fallthrough: wander to a desk
+            let destination = pickDestination(deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+            startWalking(to: destination.position, deskID: destination.id, isActiveDeskID: activeDeskIDs.contains(destination.id))
+
+        } else {
+            // Low energy: 0% zoomies, 10% play, 5% bark, 20% bowl (more likely to eat/sleep), 65% wander
+            if roll < 0.10 && !toyPositions.isEmpty {
+                let toy = toyPositions.randomElement()!
+                startWalking(to: toy, deskID: -1, isActiveDeskID: false, goingToToy: true)
+                return
+            } else if roll < 0.15 && barkCooldown <= 0 {
+                startBarking()
+                return
+            } else if roll < 0.35 && bowlPosition != .zero {
+                startWalking(to: bowlPosition, deskID: -1, isActiveDeskID: false, goingToBowl: true)
+                return
+            }
+            // Fallthrough: wander to a desk
+            let destination = pickDestination(deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+            startWalking(to: destination.position, deskID: destination.id, isActiveDeskID: activeDeskIDs.contains(destination.id))
         }
     }
 
@@ -150,6 +270,8 @@ public class DogSprite: SKSpriteNode {
         removeAction(forKey: "walkAnimation")
         removeAction(forKey: "eatAnimation")
         removeAction(forKey: "wagAnimation")
+        removeAction(forKey: "playAnimation")
+        removeAction(forKey: "zoomiesAnimation")
         let sleepTexture = TextureManager.shared.texture(for: "dog_sleep")
         self.texture = sleepTexture
         noAgentTimer = 0
@@ -167,16 +289,44 @@ public class DogSprite: SKSpriteNode {
         noAgentTimer = 0
         wanderTimer = 0
         idleTimer = 0
+        baseEnergy = Double.random(in: 0.4...0.9)
+        energyLevel = baseEnergy
+        energyTimer = 0
     }
 
-    /// Schedules the next wander time (20-80 seconds — maltipoos are more active than cats).
+    /// Schedules the next wander time, adjusted by energy level.
     private func scheduleNextWander() {
         wanderTimer = 0
-        nextWanderTime = TimeInterval.random(in: 20...80)
+        if energyLevel > 0.7 {
+            nextWanderTime = TimeInterval.random(in: 10...40)
+        } else if energyLevel < 0.3 {
+            nextWanderTime = TimeInterval.random(in: 40...120)
+        } else {
+            nextWanderTime = TimeInterval.random(in: 20...80)
+        }
+    }
+
+    /// Returns the energy-adjusted walk speed for normal (non-zoomie) walking.
+    private var energyAdjustedWalkSpeed: CGFloat {
+        if energyLevel > 0.7 {
+            return walkSpeed * 1.3
+        } else if energyLevel < 0.3 {
+            return walkSpeed * 0.7
+        } else {
+            return walkSpeed
+        }
     }
 
     /// Starts walking to a destination point.
-    public func startWalking(to destination: CGPoint, deskID: Int, isActiveDeskID: Bool, goingToBowl: Bool = false) {
+    public func startWalking(
+        to destination: CGPoint,
+        deskID: Int,
+        isActiveDeskID: Bool,
+        goingToBowl: Bool = false,
+        goingToToy: Bool = false,
+        isZooming: Bool = false,
+        speed: CGFloat? = nil
+    ) {
         dogState = .walking
         wagShown = false
         currentDeskID = deskID
@@ -188,22 +338,29 @@ public class DogSprite: SKSpriteNode {
             xScale = abs(xScale)
         }
 
-        // Walk animation
+        // Walk animation - faster frame rate for zoomies
         let tm = TextureManager.shared
         let frame0 = tm.texture(for: "dog_walk_frame0")
         let frame1 = tm.texture(for: "dog_walk_frame1")
-        let walkAnim = SKAction.animate(with: [frame0, frame1], timePerFrame: 0.25)
-        run(SKAction.repeatForever(walkAnim), withKey: "walkAnimation")
+        let frameRate: TimeInterval = isZooming ? 0.1 : 0.25
+        let walkAnim = SKAction.animate(with: [frame0, frame1], timePerFrame: frameRate)
+        let animKey = isZooming ? "zoomiesAnimation" : "walkAnimation"
+        run(SKAction.repeatForever(walkAnim), withKey: animKey)
 
-        // Movement
+        // Movement - use provided speed, or energy-adjusted speed
+        let effectiveSpeed = speed ?? energyAdjustedWalkSpeed
         let distance = hypot(destination.x - position.x, destination.y - position.y)
-        let duration = TimeInterval(distance / walkSpeed)
+        let duration = TimeInterval(distance / effectiveSpeed)
         let moveAction = SKAction.move(to: destination, duration: duration)
-        moveAction.timingMode = .easeInEaseOut
+        moveAction.timingMode = isZooming ? .linear : .easeInEaseOut
 
         let arrive = SKAction.run { [weak self] in
-            if goingToBowl {
+            if isZooming {
+                self?.zoomieNextLap()
+            } else if goingToBowl {
                 self?.startEating()
+            } else if goingToToy {
+                self?.beginPlayingAtCurrentPosition()
             } else {
                 self?.arriveAtDesk(isActive: isActiveDeskID)
             }
@@ -275,6 +432,145 @@ public class DogSprite: SKSpriteNode {
         removeAction(forKey: "wagAnimation")
         let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
         self.texture = idleTexture
+    }
+
+    // MARK: - Playing
+
+    /// Starts walking to a toy position and then plays on arrival.
+    public func startPlaying(at toyPosition: CGPoint) {
+        startWalking(to: toyPosition, deskID: -1, isActiveDeskID: false, goingToToy: true)
+    }
+
+    /// Called when the dog arrives at a toy position; begins the play animation.
+    private func beginPlayingAtCurrentPosition() {
+        dogState = .playing
+        playTimer = 0
+        playDuration = TimeInterval.random(in: 6...12)
+        removeAction(forKey: "walkAnimation")
+
+        let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
+        self.texture = idleTexture
+
+        // Play animation: rock side to side and small hops
+        let flipRight = SKAction.run { [weak self] in
+            guard let self = self else { return }
+            self.xScale = abs(self.xScale)
+        }
+        let flipLeft = SKAction.run { [weak self] in
+            guard let self = self else { return }
+            self.xScale = -abs(self.xScale)
+        }
+        let waitFlip = SKAction.wait(forDuration: 0.4)
+        let hopUp = SKAction.moveBy(x: 0, y: 4, duration: 0.15)
+        let hopDown = SKAction.moveBy(x: 0, y: -4, duration: 0.15)
+        let hop = SKAction.sequence([hopUp, hopDown])
+
+        let rockRight = SKAction.group([flipRight, hop])
+        let rockLeft = SKAction.group([flipLeft, hop])
+        let playSequence = SKAction.sequence([rockRight, waitFlip, rockLeft, waitFlip])
+        run(SKAction.repeatForever(playSequence), withKey: "playAnimation")
+    }
+
+    /// Stops playing with a toy.
+    private func stopPlaying() {
+        dogState = .idle
+        removeAction(forKey: "playAnimation")
+        let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
+        self.texture = idleTexture
+        // Restore xScale to positive
+        xScale = abs(xScale)
+    }
+
+    // MARK: - Zoomies
+
+    /// Starts a zoomies burst -- the dog runs around at high speed for 3-5 laps.
+    public func startZoomies() {
+        dogState = .zoomies
+        zoomiesTimer = 0
+        zoomiesLapsRemaining = Int.random(in: 3...5)
+
+        // Pick first random target and start running
+        let target = randomZoomiePoint()
+        startWalking(
+            to: target,
+            deskID: -1,
+            isActiveDeskID: false,
+            isZooming: true,
+            speed: walkSpeed * 3
+        )
+    }
+
+    /// Called when the dog arrives at a zoomie waypoint. Picks next point or stops.
+    private func zoomieNextLap() {
+        zoomiesLapsRemaining -= 1
+
+        if zoomiesLapsRemaining > 0 {
+            let target = randomZoomiePoint()
+            startWalking(
+                to: target,
+                deskID: -1,
+                isActiveDeskID: false,
+                isZooming: true,
+                speed: walkSpeed * 3
+            )
+        } else {
+            // Zoomies finished
+            dogState = .idle
+            removeAction(forKey: "zoomiesAnimation")
+            removeAction(forKey: "walk")
+            let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
+            self.texture = idleTexture
+            scheduleNextWander()
+        }
+    }
+
+    /// Returns a random point within the scene bounds for zoomie laps.
+    private func randomZoomiePoint() -> CGPoint {
+        CGPoint(
+            x: CGFloat.random(in: 80...500),
+            y: CGFloat.random(in: 60...120)
+        )
+    }
+
+    // MARK: - Barking
+
+    /// Starts barking -- shows "Woof!" or "Arf!" text and pauses briefly.
+    public func startBarking() {
+        dogState = .barking
+        barkTimer = 0
+        barkCooldown = TimeInterval.random(in: 30...60)
+
+        removeAction(forKey: "walkAnimation")
+        let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
+        self.texture = idleTexture
+
+        // 30% chance of "Arf!" instead of "Woof!"
+        let barkText = Double.random(in: 0...1) < 0.3 ? "Arf!" : "Woof!"
+
+        let label = SKLabelNode(text: barkText)
+        label.fontName = "Menlo-Bold"
+        label.fontSize = 10
+        label.fontColor = SKColor(white: 1.0, alpha: 1.0)
+        label.position = CGPoint(x: 0, y: size.height / 2 + 10)
+        label.zPosition = 102
+        label.name = "bark_label"
+        addChild(label)
+
+        // Float up and fade out over 1.5 seconds
+        let drift = SKAction.moveBy(x: 0, y: 20, duration: 1.5)
+        let fade = SKAction.fadeOut(withDuration: 1.5)
+        let group = SKAction.group([drift, fade])
+        label.run(SKAction.sequence([group, SKAction.removeFromParent()]))
+    }
+
+    /// Stops barking and returns to idle.
+    private func stopBarking() {
+        dogState = .idle
+        // Remove bark label if still present
+        if let label = childNode(withName: "bark_label") {
+            label.removeAllActions()
+            label.removeFromParent()
+        }
     }
 
     // MARK: - Destination Picking
@@ -380,5 +676,17 @@ public class DogSprite: SKSpriteNode {
 
     public var hasWagAnimation: Bool {
         action(forKey: "wagAnimation") != nil
+    }
+
+    public var hasPlayAnimation: Bool {
+        action(forKey: "playAnimation") != nil
+    }
+
+    public var hasZoomiesAnimation: Bool {
+        action(forKey: "zoomiesAnimation") != nil
+    }
+
+    public var currentEnergyLevel: Double {
+        energyLevel
     }
 }

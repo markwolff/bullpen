@@ -78,6 +78,36 @@ public final class PixelArtGenerator: Sendable {
     static let dogEye = RGB(0x282828)            // Dark eyes
     static let dogTongue = RGB(0xF08080)         // Pink tongue (for panting)
 
+    // Bird cage
+    static let cageGold = RGB(0xC8A850)
+    static let cageBars = RGB(0xA08840)
+    static let cageBase = RGB(0x907830)
+    static let birdYellow = RGB(0xF8D830)
+    static let birdWing = RGB(0xE8C020)
+    static let birdBeak = RGB(0xF08030)
+    static let birdEye = RGB(0x282828)
+
+    // Barista
+    static let baristaApron = RGB(0x4A7A4A)
+    static let baristaApronDark = RGB(0x3A6A3A)
+    static let baristaHair = RGB(0x3A2A1A)
+    static let baristaSkin = RGB(0xE8C8A0)
+    static let baristaSkinDark = RGB(0xD0B088)
+    static let espressoMachine = RGB(0x606060)
+    static let espressoDark = RGB(0x484848)
+    static let counterTop = RGB(0x8B7355)
+    static let counterFront = RGB(0x7A6345)
+
+    // Extra decorations
+    static let rugWarm = RGB(0xA04040)
+    static let rugPattern = RGB(0xC06050)
+    static let rugBorder = RGB(0x803030)
+    static let coatBlue = RGB(0x4060A0)
+    static let coatBrown = RGB(0x8B6B3D)
+    static let hookMetal = RGB(0x888888)
+    static let posterFrame2 = RGB(0x6A5A4A)
+    static let posterArt = RGB(0x50A0D0)
+
     // MARK: - Tile Textures (16x16)
 
     func floorTile() -> SKTexture {
@@ -765,6 +795,194 @@ public final class PixelArtGenerator: Sendable {
     func catSleep(frame: Int) -> SKTexture {
         drawTexture(width: 12, height: 12) { [self] ctx in
             self.drawCat(ctx, sleeping: true, sleepFrame: frame)
+        }
+    }
+
+    // MARK: - Barista Textures
+
+    func baristaIdle(frame: Int = 0) -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            // Legs
+            fill(ctx, rect: r(5, 0, 3, 6), color: Self.woodDark)
+            fill(ctx, rect: r(8, 0, 3, 6), color: Self.woodDark)
+            // Apron (long, covers torso and upper legs)
+            fill(ctx, rect: r(4, 4, 8, 10), color: Self.baristaApron)
+            fill(ctx, rect: r(3, 6, 10, 8), color: Self.baristaApron)
+            fill(ctx, rect: r(4, 5, 8, 1), color: Self.baristaApronDark)
+            // Arms
+            if frame == 0 {
+                fill(ctx, rect: r(2, 8, 2, 4), color: Self.baristaSkin)
+                fill(ctx, rect: r(12, 8, 2, 4), color: Self.baristaSkin)
+            } else {
+                // Wiping motion - one arm extended
+                fill(ctx, rect: r(2, 8, 2, 4), color: Self.baristaSkin)
+                fill(ctx, rect: r(13, 9, 2, 3), color: Self.baristaSkin)
+            }
+            // Head
+            fill(ctx, rect: r(5, 15, 6, 6), color: Self.baristaSkin)
+            // Hair
+            fill(ctx, rect: r(5, 20, 6, 3), color: Self.baristaHair)
+            fill(ctx, rect: r(4, 18, 1, 4), color: Self.baristaHair)
+            fill(ctx, rect: r(11, 18, 1, 4), color: Self.baristaHair)
+            // Eyes
+            fill(ctx, rect: r(6, 17, 1, 1), color: Self.birdEye)
+            fill(ctx, rect: r(9, 17, 1, 1), color: Self.birdEye)
+            // Mouth (friendly smile)
+            fill(ctx, rect: r(7, 15, 2, 1), color: Self.baristaSkinDark)
+        }
+    }
+
+    func baristaServe() -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            // Same base as idle
+            // Legs
+            fill(ctx, rect: r(5, 0, 3, 6), color: Self.woodDark)
+            fill(ctx, rect: r(8, 0, 3, 6), color: Self.woodDark)
+            // Apron
+            fill(ctx, rect: r(4, 4, 8, 10), color: Self.baristaApron)
+            fill(ctx, rect: r(3, 6, 10, 8), color: Self.baristaApron)
+            fill(ctx, rect: r(4, 5, 8, 1), color: Self.baristaApronDark)
+            // Arms - one hand out with cup
+            fill(ctx, rect: r(2, 8, 2, 4), color: Self.baristaSkin)
+            fill(ctx, rect: r(13, 10, 3, 3), color: Self.baristaSkin)
+            // Small cup in hand
+            fill(ctx, rect: r(14, 12, 2, 3), color: Self.mugWhite)
+            fill(ctx, rect: r(14, 14, 2, 1), color: Self.mugBrown)
+            // Head
+            fill(ctx, rect: r(5, 15, 6, 6), color: Self.baristaSkin)
+            // Hair
+            fill(ctx, rect: r(5, 20, 6, 3), color: Self.baristaHair)
+            fill(ctx, rect: r(4, 18, 1, 4), color: Self.baristaHair)
+            fill(ctx, rect: r(11, 18, 1, 4), color: Self.baristaHair)
+            // Eyes
+            fill(ctx, rect: r(6, 17, 1, 1), color: Self.birdEye)
+            fill(ctx, rect: r(9, 17, 1, 1), color: Self.birdEye)
+            // Smile
+            fill(ctx, rect: r(7, 15, 2, 1), color: Self.baristaSkinDark)
+        }
+    }
+
+    func coffeeStation() -> SKTexture {
+        drawTexture(width: 32, height: 24) { [self] ctx in
+            // Counter body
+            fill(ctx, rect: r(0, 0, 32, 14), color: Self.counterFront)
+            fill(ctx, rect: r(0, 14, 32, 2), color: Self.counterTop)
+            // Counter top surface highlight
+            fill(ctx, rect: r(1, 15, 30, 1), color: Self.woodHighlight)
+            // Espresso machine on counter
+            fill(ctx, rect: r(4, 16, 10, 7), color: Self.espressoMachine)
+            fill(ctx, rect: r(5, 23, 8, 1), color: Self.espressoDark)
+            // Machine details
+            fill(ctx, rect: r(6, 18, 3, 2), color: Self.espressoDark)
+            fill(ctx, rect: r(7, 19, 1, 1), color: Self.lampYellow) // indicator light
+            // Steam nozzle
+            fill(ctx, rect: r(8, 16, 2, 1), color: Self.espressoDark)
+            // Cup stack on counter
+            fill(ctx, rect: r(20, 16, 4, 3), color: Self.mugWhite)
+            fill(ctx, rect: r(21, 19, 4, 3), color: Self.mugWhite)
+            fill(ctx, rect: r(22, 22, 4, 2), color: Self.mugWhite)
+            // Menu board on wall above
+            fill(ctx, rect: r(16, 18, 12, 6), color: Self.woodDark)
+            fill(ctx, rect: r(17, 19, 10, 4), color: Self.woodMid)
+            // Menu text squiggles
+            fill(ctx, rect: r(18, 21, 4, 1), color: Self.whiteboardWhite)
+            fill(ctx, rect: r(18, 20, 3, 1), color: Self.whiteboardWhite)
+        }
+    }
+
+    // MARK: - Extra Decoration Textures
+
+    func smallRug() -> SKTexture {
+        drawTexture(width: 24, height: 12) { [self] ctx in
+            // Border
+            fill(ctx, rect: r(0, 0, 24, 12), color: Self.rugBorder)
+            // Inner area
+            fill(ctx, rect: r(1, 1, 22, 10), color: Self.rugWarm)
+            // Pattern - diamond shapes
+            fill(ctx, rect: r(6, 3, 2, 2), color: Self.rugPattern)
+            fill(ctx, rect: r(11, 5, 2, 2), color: Self.rugPattern)
+            fill(ctx, rect: r(16, 3, 2, 2), color: Self.rugPattern)
+            fill(ctx, rect: r(8, 7, 2, 2), color: Self.rugPattern)
+            fill(ctx, rect: r(14, 7, 2, 2), color: Self.rugPattern)
+            // Center motif
+            fill(ctx, rect: r(10, 4, 4, 4), color: Self.rugBorder)
+            fill(ctx, rect: r(11, 5, 2, 2), color: Self.rugPattern)
+        }
+    }
+
+    func coatHooks() -> SKTexture {
+        drawTexture(width: 20, height: 14) { [self] ctx in
+            // Wall-mounted board
+            fill(ctx, rect: r(0, 10, 20, 4), color: Self.woodMid)
+            fill(ctx, rect: r(0, 10, 20, 1), color: Self.woodDark)
+            // Hooks
+            fill(ctx, rect: r(3, 8, 1, 3), color: Self.hookMetal)
+            fill(ctx, rect: r(10, 8, 1, 3), color: Self.hookMetal)
+            fill(ctx, rect: r(17, 8, 1, 3), color: Self.hookMetal)
+            // Coat 1 - blue jacket
+            fill(ctx, rect: r(1, 2, 5, 7), color: Self.coatBlue)
+            fill(ctx, rect: r(2, 1, 3, 2), color: Self.coatBlue)
+            // Coat 2 - brown jacket
+            fill(ctx, rect: r(8, 3, 5, 6), color: Self.coatBrown)
+            fill(ctx, rect: r(9, 2, 3, 2), color: Self.coatBrown)
+            // Scarf on hook 3
+            fill(ctx, rect: r(16, 4, 3, 5), color: Self.rugWarm)
+            fill(ctx, rect: r(15, 6, 2, 3), color: Self.rugWarm)
+        }
+    }
+
+    func motivationalPoster2() -> SKTexture {
+        drawTexture(width: 14, height: 18) { [self] ctx in
+            // Frame
+            fill(ctx, rect: r(0, 0, 14, 18), color: Self.posterFrame2)
+            // Inner white
+            fill(ctx, rect: r(1, 1, 12, 16), color: Self.whiteboardWhite)
+            // Abstract mountain art
+            fill(ctx, rect: r(2, 2, 10, 1), color: Self.plantGreen)
+            fill(ctx, rect: r(3, 3, 8, 1), color: Self.plantGreen)
+            fill(ctx, rect: r(4, 4, 3, 4), color: Self.posterArt)
+            fill(ctx, rect: r(8, 4, 3, 3), color: Self.posterArt)
+            // Sun
+            fill(ctx, rect: r(9, 10, 3, 3), color: Self.lampYellow)
+            fill(ctx, rect: r(10, 13, 1, 1), color: Self.lampYellow)
+            // Motivational text squiggle
+            fill(ctx, rect: r(3, 8, 8, 1), color: Self.woodDark)
+            fill(ctx, rect: r(4, 9, 6, 1), color: Self.woodDark)
+        }
+    }
+
+    func wallClock(frame: Int = 0) -> SKTexture {
+        drawTexture(width: 10, height: 10) { [self] ctx in
+            // Circular frame (approximated with rects)
+            fill(ctx, rect: r(2, 0, 6, 1), color: Self.clockFrame)
+            fill(ctx, rect: r(1, 1, 8, 1), color: Self.clockFrame)
+            fill(ctx, rect: r(0, 2, 10, 6), color: Self.clockFrame)
+            fill(ctx, rect: r(1, 8, 8, 1), color: Self.clockFrame)
+            fill(ctx, rect: r(2, 9, 6, 1), color: Self.clockFrame)
+            // Face
+            fill(ctx, rect: r(2, 2, 6, 6), color: Self.clockFace)
+            fill(ctx, rect: r(3, 1, 4, 1), color: Self.clockFace)
+            fill(ctx, rect: r(3, 8, 4, 1), color: Self.clockFace)
+            fill(ctx, rect: r(1, 3, 1, 4), color: Self.clockFace)
+            fill(ctx, rect: r(8, 3, 1, 4), color: Self.clockFace)
+            // Hour markers
+            fill(ctx, rect: r(5, 8, 1, 1), color: Self.woodDark) // 12
+            fill(ctx, rect: r(7, 5, 1, 1), color: Self.woodDark) // 3
+            fill(ctx, rect: r(5, 2, 1, 1), color: Self.woodDark) // 6
+            fill(ctx, rect: r(2, 5, 1, 1), color: Self.woodDark) // 9
+            // Center dot
+            fill(ctx, rect: r(5, 5, 1, 1), color: Self.woodDark)
+            // Hands
+            if frame == 0 {
+                // Hour hand pointing up, minute at 12
+                fill(ctx, rect: r(5, 6, 1, 2), color: Self.woodDark)
+                fill(ctx, rect: r(5, 6, 1, 2), color: Self.woodDark)
+                fill(ctx, rect: r(6, 5, 2, 1), color: Self.espressoMachine)
+            } else {
+                // Minute hand moved to 3
+                fill(ctx, rect: r(5, 6, 1, 2), color: Self.woodDark)
+                fill(ctx, rect: r(5, 6, 2, 1), color: Self.espressoMachine)
+            }
         }
     }
 
@@ -1536,6 +1754,62 @@ public final class PixelArtGenerator: Sendable {
             // Antenna
             fill(ctx, rect: r(8, 7, 1, 1), color: Self.RGB(0x808080))
             fill(ctx, rect: r(9, 6, 1, 2), color: Self.RGB(0x808080))
+        }
+    }
+
+    // MARK: - Bird Cage Textures
+
+    /// Bird cage — 16x24 pixel art (dome cage on a stand)
+    func birdCage() -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            // Stand base
+            fill(ctx, rect: r(5, 0, 6, 1), color: Self.woodDark)
+            fill(ctx, rect: r(6, 1, 4, 1), color: Self.woodMid)
+            // Stand pole
+            fill(ctx, rect: r(7, 2, 2, 3), color: Self.woodMid)
+            fill(ctx, rect: r(7, 2, 1, 3), color: Self.woodLight)
+            // Cage ring at bottom
+            fill(ctx, rect: r(4, 5, 8, 1), color: Self.RGB(0xC8A800))
+            // Cage bars (vertical)
+            for x in [4, 6, 8, 10, 11] {
+                fill(ctx, rect: r(x, 5, 1, 14), color: Self.RGB(0xE0C840))
+            }
+            // Left and right bars
+            fill(ctx, rect: r(3, 8, 1, 8), color: Self.RGB(0xE0C840))
+            fill(ctx, rect: r(12, 8, 1, 8), color: Self.RGB(0xE0C840))
+            // Cage dome top arcs (horizontal rings)
+            fill(ctx, rect: r(5, 19, 6, 1), color: Self.RGB(0xC8A800))
+            fill(ctx, rect: r(4, 16, 8, 1), color: Self.RGB(0xE0C840))
+            fill(ctx, rect: r(3, 13, 10, 1), color: Self.RGB(0xE0C840))
+            fill(ctx, rect: r(4, 10, 8, 1), color: Self.RGB(0xE0C840))
+            fill(ctx, rect: r(5, 7, 6, 1), color: Self.RGB(0xE0C840))
+            // Cage ring at bottom of bars
+            fill(ctx, rect: r(4, 5, 8, 1), color: Self.RGB(0xC8A800))
+            // Top hook
+            fill(ctx, rect: r(7, 20, 2, 2), color: Self.RGB(0xC8A800))
+            fill(ctx, rect: r(7, 22, 2, 1), color: Self.RGB(0xE0C840))
+            // Perch bar inside cage
+            fill(ctx, rect: r(5, 9, 6, 1), color: Self.woodLight)
+        }
+    }
+
+    /// Bird idle animation frame — 6x6 pixel art small parakeet
+    func birdIdle(frame: Int = 0) -> SKTexture {
+        drawTexture(width: 6, height: 6) { [self] ctx in
+            // Body
+            fill(ctx, rect: r(1, 1, 4, 3), color: Self.RGB(0x40C060))
+            fill(ctx, rect: r(2, 2, 2, 2), color: Self.RGB(0x60E080))
+            // Head
+            fill(ctx, rect: r(2, 4, 2, 2), color: Self.RGB(0xFFE040))
+            // Eye
+            fill(ctx, rect: r(3, 5, 1, 1), color: Self.RGB(0x202020))
+            // Beak
+            fill(ctx, rect: r(4, 4, 1, 1), color: Self.RGB(0xE08020))
+            // Tail
+            fill(ctx, rect: r(0, 1, 1, 2), color: Self.RGB(0x3090A0))
+            // Wing variation per frame
+            let wingColor: Int = frame == 1 ? 0x80E0A0 : (frame == 2 ? 0x20A040 : 0x50C070)
+            fill(ctx, rect: r(1, 2, 3, 1), color: Self.RGB(wingColor))
         }
     }
 

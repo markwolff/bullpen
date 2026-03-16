@@ -82,6 +82,12 @@ public class OfficeScene: SKScene {
     /// Growing plant sprite reference
     private var growingPlantSprite: GrowingPlantSprite?
 
+    /// Bird cage decoration
+    private var birdCageSprite: BirdCageSprite?
+
+    /// Barista NPC
+    private var baristaSprite: BaristaSprite?
+
     /// Whiteboard stats overlay reference
     private var whiteboardOverlay: WhiteboardStatsOverlay?
 
@@ -733,6 +739,44 @@ public class OfficeScene: SKScene {
 
         // Weekend vibes check
         weekendVibesManager.update(scene: self, catSprite: catSprite)
+
+        // Bird cage on back wall
+        let birdCage = BirdCageSprite()
+        birdCage.position = layout.birdCagePosition
+        birdCage.zPosition = 2
+        addChild(birdCage)
+        birdCageSprite = birdCage
+
+        // Barista and coffee station
+        let barista = BaristaSprite()
+        barista.position = layout.baristaPosition
+        barista.zPosition = 2
+        addChild(barista)
+        baristaSprite = barista
+
+        // Coffee station rug
+        let rugTexture = TextureManager.shared.texture(for: TextureManager.decorationSmallRug)
+        let rug = SKSpriteNode(texture: rugTexture, size: CGSize(width: 96, height: 48))
+        rug.position = layout.coffeeRugPosition
+        rug.name = "decoration_rug"
+        rug.zPosition = -6
+        addChild(rug)
+
+        // Coat hooks near door
+        let coatTexture = TextureManager.shared.texture(for: TextureManager.decorationCoatHooks)
+        let coatHooks = SKSpriteNode(texture: coatTexture, size: CGSize(width: 60, height: 42))
+        coatHooks.position = layout.coatHooksPosition
+        coatHooks.name = "decoration_coat_hooks"
+        coatHooks.zPosition = 2
+        addChild(coatHooks)
+
+        // Motivational poster on left wall
+        let poster2Texture = TextureManager.shared.texture(for: TextureManager.decorationPoster2)
+        let poster2 = SKSpriteNode(texture: poster2Texture, size: CGSize(width: 56, height: 72))
+        poster2.position = layout.poster2Position
+        poster2.name = "decoration_poster2"
+        poster2.zPosition = 2
+        addChild(poster2)
     }
 
     // MARK: - Agent Management
@@ -1111,15 +1155,19 @@ public class OfficeScene: SKScene {
         // Radio waves (1B)
         radioSprite?.updateWaves(hasActiveAgents: activeAgentCount > 0)
 
+        // Bird cage chirps
+        birdCageSprite?.update(hasActiveAgents: activeAgentCount > 0)
+
         // Coffee runs (3A)
         let coffeeTriggered = coffeeRunManager.update(deltaTime: deltaTime, agents: agents, deskAssignments: deskAssignments)
         for agentID in coffeeTriggered {
             if let sprite = agentSprites[agentID], let deskID = sprite.assignedDeskID {
-                let coffeeDest = layout.coffeeMachinePosition
+                let coffeeDest = layout.baristaCustomerPosition
                 let path = layout.findPath(from: sprite.position, to: coffeeDest)
                 sprite.walk(to: coffeeDest, via: path) { [weak self, weak sprite] in
                     guard let self, let sprite else { return }
                     // Pause at coffee machine, then walk back
+                    self.baristaSprite?.serveCustomer()
                     sprite.run(SKAction.wait(forDuration: 5.0)) {
                         let desk = self.layout.desks.first { $0.id == deskID }
                         if let chairPos = desk?.chairPosition {
