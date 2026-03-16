@@ -49,10 +49,10 @@ public class ThoughtBubble: SKNode {
         label.horizontalAlignmentMode = .center
 
         // Configure the bubble background
-        bubbleBackground.fillColor = .white
-        bubbleBackground.strokeColor = SKColor(white: 0.7, alpha: 1.0)
+        bubbleBackground.fillColor = SKColor(white: 1.0, alpha: 0.65)
+        bubbleBackground.strokeColor = SKColor(white: 0.7, alpha: 0.7)
         bubbleBackground.lineWidth = 1.5
-        bubbleBackground.alpha = 0.92
+        bubbleBackground.alpha = 1.0
 
         addChild(bubbleBackground)
         addChild(label)

@@ -65,6 +65,18 @@ public struct OfficeLayout: Sendable {
         desks.first { !occupiedDeskIDs.contains($0.id) }
     }
 
+    // MARK: - Door Position
+
+    /// Position of the office door (right wall, between desk rows)
+    public var doorPosition: CGPoint {
+        CGPoint(x: sceneSize.width - 30, y: sceneSize.height / 2 + 10)
+    }
+
+    /// Position an agent walks to before exiting through the door
+    public var doorExitPosition: CGPoint {
+        CGPoint(x: sceneSize.width - 60, y: sceneSize.height / 2 + 10)
+    }
+
     // MARK: - Points of Interest (standing positions for idle behaviors)
 
     /// Position in front of the water cooler

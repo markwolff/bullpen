@@ -244,14 +244,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             )
         }
 
-        // Fallback for unknown types
-        return AgentActivity(
-            sessionID: sessionID,
-            timestamp: timestamp,
-            activityType: .assistantMessage,
-            summary: "Claude Code: \(type)",
-            rawPayload: rawEntry
-        )
+        // Skip unknown/internal types (e.g. "system") — not meaningful activity
+        return nil
     }
 
     // MARK: - Private helpers

@@ -60,6 +60,7 @@ public final class TextureManager: @unchecked Sendable {
     public static let decorationBulletinBoard = "decoration_bulletin_board"
     public static let decorationWaterCooler = "decoration_water_cooler"
     public static let decorationPoster = "decoration_poster"
+    public static let decorationDoor = "decoration_door"
 
     // Tile textures
     public static let tileFloor = "tile_floor"
@@ -81,7 +82,7 @@ public final class TextureManager: @unchecked Sendable {
         furnitureDesk, furnitureChair, furnitureMonitorOff, furnitureMonitorOn,
         furnitureLamp, furnitureCoffeeMug,
         decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
-        decorationBookshelf, decorationBulletinBoard, decorationWaterCooler, decorationPoster,
+        decorationBookshelf, decorationBulletinBoard, decorationWaterCooler, decorationPoster, decorationDoor,
         tileFloor, tileWall,
         catIdle, catSleep, catWalk,
     ]
@@ -251,6 +252,7 @@ public final class TextureManager: @unchecked Sendable {
         if name == Self.decorationBulletinBoard { return gen.bulletinBoard() }
         if name == Self.decorationWaterCooler { return gen.waterCooler() }
         if name == Self.decorationPoster { return gen.poster() }
+        if name == Self.decorationDoor { return gen.door() }
 
         // Cat (frame variants use the parameterized methods directly)
         if name == Self.catIdle { return gen.catIdle() }

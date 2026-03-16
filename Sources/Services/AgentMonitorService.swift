@@ -158,27 +158,31 @@ public final class AgentMonitorService: ObservableObject {
         for reader in logReaders {
             do {
                 let sessions = try await reader.discoverSessions()
+                // Collect new sessions first, then process them
+                // (avoids reentrancy issues from Tasks spawned in setupWatcher)
+                var newSessions: [(id: String, url: URL)] = []
                 for (sessionID, fileURL) in sessions {
                     guard sessionFiles[sessionID] == nil else { continue }
-
-                    // Enforce max agents limit
-                    guard agents.count < maxAgents else {
+                    guard agents.count + newSessions.count < maxAgents else {
                         print("Bullpen: Max agents (\(maxAgents)) reached, skipping session \(sessionID)")
-                        return
+                        break
                     }
+                    newSessions.append((id: sessionID, url: fileURL))
+                }
 
-                    sessionFiles[sessionID] = fileURL
-                    readOffsets[sessionID] = 0
+                for session in newSessions {
+                    sessionFiles[session.id] = session.url
+                    readOffsets[session.id] = 0
 
                     // Generate traits deterministically from session ID
-                    let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
+                    let traits = CharacterTraits.from(sessionID: session.id, agentType: reader.agentType)
 
                     // Derive initial name from file path
-                    let name = Self.extractProjectName(from: fileURL)
+                    let name = Self.extractProjectName(from: session.url)
 
                     // Create an AgentInfo for this new session
                     let agent = AgentInfo(
-                        id: sessionID,
+                        id: session.id,
                         name: name,
                         agentType: reader.agentType,
                         traits: traits,
@@ -188,7 +192,7 @@ public final class AgentMonitorService: ObservableObject {
                     agents.append(agent)
 
                     // Set up a file watcher for this session's log
-                    setupWatcher(for: sessionID, fileURL: fileURL, reader: reader)
+                    setupWatcher(for: session.id, fileURL: session.url, reader: reader)
                 }
             } catch {
                 print("Bullpen: Error discovering sessions for \(reader.agentType): \(error)")

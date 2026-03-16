@@ -596,6 +596,42 @@ public final class PixelArtGenerator: Sendable {
         }
     }
 
+    /// Office door — 14x24 pixel art (wooden door with frame and handle)
+    func door() -> SKTexture {
+        drawTexture(width: 14, height: 24) { [self] ctx in
+            // Door frame (darker wood surround)
+            fill(ctx, rect: r(0, 0, 14, 24), color: Self.woodDark)
+
+            // Door panel (medium wood)
+            fill(ctx, rect: r(2, 0, 10, 22), color: Self.woodMid)
+
+            // Top panel inset
+            fill(ctx, rect: r(3, 14, 8, 6), color: Self.woodLight)
+            fill(ctx, rect: r(4, 15, 6, 4), color: Self.woodMid)
+
+            // Bottom panel inset
+            fill(ctx, rect: r(3, 2, 8, 9), color: Self.woodLight)
+            fill(ctx, rect: r(4, 3, 6, 7), color: Self.woodMid)
+
+            // Horizontal divider between panels
+            fill(ctx, rect: r(2, 12, 10, 2), color: Self.woodDark)
+
+            // Door handle (brass/gold)
+            fill(ctx, rect: r(9, 11, 2, 3), color: Self.RGB(0xD4A847))
+            fill(ctx, rect: r(10, 12, 1, 1), color: Self.RGB(0xE8C060)) // highlight
+
+            // Frame shadow on left edge
+            fill(ctx, rect: r(1, 0, 1, 22), color: Self.RGB(0x4A2A12))
+
+            // Threshold / floor strip at bottom
+            fill(ctx, rect: r(0, 0, 14, 1), color: Self.RGB(0x706050))
+
+            // Transom window above door
+            fill(ctx, rect: r(3, 21, 8, 2), color: Self.RGB(0x88C8F0))
+            fill(ctx, rect: r(7, 21, 1, 2), color: Self.woodDark) // divider
+        }
+    }
+
     // MARK: - Animation Frame Variants
 
     /// Generates a character texture with per-frame pixel variations for animation.

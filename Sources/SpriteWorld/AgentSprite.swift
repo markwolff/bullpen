@@ -541,7 +541,7 @@ public class AgentSprite: SKSpriteNode {
     }
 
     /// Removes the action bubble if present.
-    private func removeActionBubble() {
+    func removeActionBubble() {
         childNode(withName: "action_bubble")?.removeFromParent()
     }
 }

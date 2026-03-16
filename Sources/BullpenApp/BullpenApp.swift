@@ -55,8 +55,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var parallaxResetWorkItem: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Set activation policy to accessory (no dock icon) — task 4.12
-        NSApplication.shared.setActivationPolicy(.accessory)
+        // Set activation policy to regular (visible in Dock and Cmd+Tab)
+        NSApplication.shared.setActivationPolicy(.regular)
 
         // Set up menu bar status item (7.1)
         setupStatusItem()

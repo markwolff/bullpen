@@ -379,6 +379,14 @@ public class OfficeScene: SKScene {
         coolerNode.name = "decoration_water_cooler"
         coolerNode.zPosition = 2
         addChild(coolerNode)
+
+        // Office door on right wall — 14x24 pixel art scaled 4x = 56x96
+        let doorTexture = tm.texture(for: TextureManager.decorationDoor)
+        let doorNode = SKSpriteNode(texture: doorTexture, size: CGSize(width: 56, height: 96))
+        doorNode.position = layout.doorPosition
+        doorNode.name = "decoration_door"
+        doorNode.zPosition = 2
+        addChild(doorNode)
     }
 
     /// Sets up the title label with a cozy pixel-font feel.
@@ -635,7 +643,7 @@ public class OfficeScene: SKScene {
         }
     }
 
-    /// Removes an agent sprite from the scene.
+    /// Removes an agent sprite from the scene by walking it to the door.
     private func removeAgentSprite(id: String) {
         guard let sprite = agentSprites.removeValue(forKey: id) else { return }
 
@@ -648,14 +656,25 @@ public class OfficeScene: SKScene {
         // Track this ID as fading out so updateAgents won't re-add it
         fadingOutAgentIDs.insert(id)
 
-        // Fade out, then clean up and remove from scene
-        sprite.run(SKAction.sequence([
-            SKAction.fadeOut(withDuration: 0.5),
-            SKAction.run { [weak self] in
-                self?.fadingOutAgentIDs.remove(id)
-            },
-            SKAction.removeFromParent()
-        ]))
+        // Stop any idle roaming and reset state
+        sprite.stopWalking()
+        sprite.removeActionBubble()
+
+        // Walk to the door, then fade out through it
+        let exitPos = layout.doorExitPosition
+        let doorPos = layout.doorPosition
+        let path = layout.findPath(from: sprite.position, to: exitPos)
+        sprite.walk(to: exitPos, via: path) { [weak self] in
+            // Arrived at the door — walk into it and fade out
+            sprite.run(SKAction.sequence([
+                SKAction.move(to: doorPos, duration: 0.3),
+                SKAction.fadeOut(withDuration: 0.3),
+                SKAction.run {
+                    self?.fadingOutAgentIDs.remove(id)
+                },
+                SKAction.removeFromParent()
+            ]))
+        }
     }
 
     // MARK: - Monitor Management — task 4.4, 4.11, 6.3
