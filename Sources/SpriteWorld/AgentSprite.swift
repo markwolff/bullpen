@@ -589,46 +589,23 @@ public class AgentSprite: SKSpriteNode {
         guard !isWalking else { return }
         isWalking = true
 
-        var actions: [SKAction] = []
         let speed: CGFloat = 100 * speedMultiplier
-
-        let allPoints = deduplicatedPath(waypoints + [destination])
-        var previous = position
-
-        for point in allPoints {
-            let distance = hypot(point.x - previous.x, point.y - previous.y)
-            guard distance > 0.5 else { continue }
-            let duration = TimeInterval(distance / speed)
-            let move = SKAction.move(to: point, duration: duration)
-            move.timingMode = .easeInEaseOut
-            actions.append(move)
-            previous = point
-        }
-
-        let complete = SKAction.run { [weak self] in
+        let sequence = PathMovement.sequence(
+            from: position,
+            points: waypoints + [destination],
+            speed: speed,
+            completion: { [weak self] in
             self?.isWalking = false
             completion?()
-        }
-        actions.append(complete)
-        let sequence = SKAction.sequence(actions)
-        run(sequence, withKey: "walk")
-    }
-
-    private func deduplicatedPath(_ points: [CGPoint]) -> [CGPoint] {
-        var result: [CGPoint] = []
-        for point in points {
-            guard let last = result.last else {
-                result.append(point)
-                continue
             }
+        )
 
-            let deltaX = last.x - point.x
-            let deltaY = last.y - point.y
-            if hypot(deltaX, deltaY) > 0.5 {
-                result.append(point)
-            }
+        if let sequence {
+            run(sequence, withKey: "walk")
+        } else {
+            isWalking = false
+            completion?()
         }
-        return result
     }
 
     /// Stops any in-progress walk immediately.

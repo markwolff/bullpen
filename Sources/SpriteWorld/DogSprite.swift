@@ -40,6 +40,9 @@ public class DogSprite: SKSpriteNode {
     /// Position of the dog bowl in the scene.
     public var bowlPosition: CGPoint = .zero
 
+    /// Layout used for navigation.
+    public var navigationLayout: OfficeLayout = .defaultLayout()
+
     /// Timer for eating behavior.
     private var eatTimer: TimeInterval = 0
 
@@ -343,13 +346,6 @@ public class DogSprite: SKSpriteNode {
         wagShown = false
         currentDeskID = deskID
 
-        // Flip xScale based on direction
-        if destination.x < position.x {
-            xScale = -abs(xScale)
-        } else {
-            xScale = abs(xScale)
-        }
-
         // Walk animation - faster frame rate for zoomies
         let tm = TextureManager.shared
         let frame0 = tm.texture(for: "dog_walk_frame0")
@@ -361,24 +357,40 @@ public class DogSprite: SKSpriteNode {
 
         // Movement - use provided speed, or current normal walking speed
         let effectiveSpeed = speed ?? normalWalkSpeed
-        let distance = hypot(destination.x - position.x, destination.y - position.y)
-        let duration = TimeInterval(distance / effectiveSpeed)
-        let moveAction = SKAction.move(to: destination, duration: duration)
-        moveAction.timingMode = isZooming ? .linear : .easeInEaseOut
+        let path = navigationLayout.findPath(from: position, to: destination)
 
-        let arrive = SKAction.run { [weak self] in
-            if isZooming {
-                self?.zoomieNextLap()
-            } else if goingToBowl {
-                self?.startEating()
-            } else if goingToToy {
-                self?.beginPlayingAtCurrentPosition()
-            } else {
-                self?.arriveAtDesk(isActive: isActiveDeskID)
+        let sequence = PathMovement.sequence(
+            from: position,
+            points: path,
+            speed: effectiveSpeed,
+            timingMode: isZooming ? .linear : .easeInEaseOut,
+            beforeSegment: { [weak self] start, end in
+                self?.faceToward(end, from: start)
+            },
+            completion: { [weak self] in
+                if isZooming {
+                    self?.zoomieNextLap()
+                } else if goingToBowl {
+                    self?.startEating()
+                } else if goingToToy {
+                    self?.beginPlayingAtCurrentPosition()
+                } else {
+                    self?.arriveAtDesk(isActive: isActiveDeskID)
+                }
             }
+        )
+
+        if let sequence {
+            run(sequence, withKey: "walk")
+        } else if isZooming {
+            zoomieNextLap()
+        } else if goingToBowl {
+            startEating()
+        } else if goingToToy {
+            beginPlayingAtCurrentPosition()
+        } else {
+            arriveAtDesk(isActive: isActiveDeskID)
         }
-        let sequence = SKAction.sequence([moveAction, arrive])
-        run(sequence, withKey: "walk")
     }
 
     /// Called when the dog arrives at a desk.
@@ -596,25 +608,29 @@ public class DogSprite: SKSpriteNode {
         removeAction(forKey: "wagAnimation")
 
         // Pick a random spot for the "ball" to land — offset from the thrower
-        let ballLanding = CGPoint(
+        let intendedLanding = CGPoint(
             x: throwerPosition.x + CGFloat.random(in: 80...180) * (Bool.random() ? 1 : -1),
             y: CGFloat.random(in: 65...115)
         )
+        let ballLanding = navigationLayout.nearestWalkablePoint(to: intendedLanding)
 
-        // Run to the ball at excited speed
-        startWalking(to: ballLanding, deskID: -1, isActiveDeskID: false, isZooming: false, speed: walkSpeed * 2)
-
-        // Override the arrival callback: when the walk action completes, run back
-        removeAction(forKey: "walk")
-        let distance = hypot(ballLanding.x - position.x, ballLanding.y - position.y)
-        let duration = TimeInterval(distance / (walkSpeed * 2))
-        let move = SKAction.move(to: ballLanding, duration: duration)
-        move.timingMode = .easeOut
-
-        let pauseAndReturn = SKAction.run { [weak self] in
-            self?.fetchPickUpBall()
+        let path = navigationLayout.findPath(from: position, to: ballLanding)
+        if let sequence = PathMovement.sequence(
+            from: position,
+            points: path,
+            speed: walkSpeed * 2,
+            timingMode: .easeOut,
+            beforeSegment: { [weak self] start, end in
+                self?.faceToward(end, from: start)
+            },
+            completion: { [weak self] in
+                self?.fetchPickUpBall()
+            }
+        ) {
+            run(sequence, withKey: "walk")
+        } else {
+            fetchPickUpBall()
         }
-        run(SKAction.sequence([move, pauseAndReturn]), withKey: "walk")
     }
 
     /// Dog pauses briefly at the ball, then runs back to the thrower.
@@ -633,13 +649,6 @@ public class DogSprite: SKSpriteNode {
 
     /// Dog runs back to the agent who threw the ball, then wags.
     private func fetchReturnToThrower() {
-        // Flip toward thrower
-        if fetchReturnPosition.x < position.x {
-            xScale = -abs(xScale)
-        } else {
-            xScale = abs(xScale)
-        }
-
         // Walk animation
         let tm = TextureManager.shared
         let frame0 = tm.texture(for: "dog_walk_frame0")
@@ -647,15 +656,28 @@ public class DogSprite: SKSpriteNode {
         let walkAnim = SKAction.animate(with: [frame0, frame1], timePerFrame: 0.15)
         run(SKAction.repeatForever(walkAnim), withKey: "walkAnimation")
 
-        let distance = hypot(fetchReturnPosition.x - position.x, fetchReturnPosition.y - position.y)
-        let duration = TimeInterval(distance / (walkSpeed * 2))
-        let move = SKAction.move(to: fetchReturnPosition, duration: duration)
-        move.timingMode = .easeIn
-
-        let arrive = SKAction.run { [weak self] in
-            self?.fetchComplete()
+        let path = navigationLayout.findPath(from: position, to: fetchReturnPosition)
+        if let sequence = PathMovement.sequence(
+            from: position,
+            points: path,
+            speed: walkSpeed * 2,
+            timingMode: .easeIn,
+            beforeSegment: { [weak self] start, end in
+                self?.faceToward(end, from: start)
+            },
+            completion: { [weak self] in
+                self?.fetchComplete()
+            }
+        ) {
+            run(sequence, withKey: "walk")
+        } else {
+            fetchComplete()
         }
-        run(SKAction.sequence([move, arrive]), withKey: "walk")
+    }
+
+    private func faceToward(_ destination: CGPoint, from origin: CGPoint) {
+        guard abs(destination.x - origin.x) > 0.5 else { return }
+        xScale = destination.x < origin.x ? -abs(xScale) : abs(xScale)
     }
 
     /// Fetch is done — wag tail and show heart.

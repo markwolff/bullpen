@@ -28,6 +28,7 @@ public class PizzaDeliveryManager {
         deltaTime: TimeInterval,
         activeAgentCount: Int,
         scene: SKScene,
+        layout: OfficeLayout,
         doorPosition: CGPoint,
         dropPosition: CGPoint
     ) {
@@ -45,11 +46,11 @@ public class PizzaDeliveryManager {
         if !isDelivering
             && activeAgentCount >= agentThreshold
             && cooldownTimer >= cooldownDuration {
-            triggerDelivery(scene: scene, doorPosition: doorPosition, dropPosition: dropPosition)
+            triggerDelivery(scene: scene, layout: layout, doorPosition: doorPosition, dropPosition: dropPosition)
         }
     }
 
-    private func triggerDelivery(scene: SKScene, doorPosition: CGPoint, dropPosition: CGPoint) {
+    private func triggerDelivery(scene: SKScene, layout: OfficeLayout, doorPosition: CGPoint, dropPosition: CGPoint) {
         isDelivering = true
         cooldownTimer = 0
 
@@ -59,9 +60,16 @@ public class PizzaDeliveryManager {
         scene.addChild(npc)
 
         let walkSpeed: CGFloat = 80
-        let distanceToDrop = hypot(dropPosition.x - doorPosition.x, dropPosition.y - doorPosition.y)
-        let walkToDrop = SKAction.move(to: dropPosition, duration: TimeInterval(distanceToDrop / walkSpeed))
-        walkToDrop.timingMode = .easeInEaseOut
+        let toDropPath = layout.findPath(from: doorPosition, to: dropPosition)
+        let walkToDrop = PathMovement.sequence(
+            from: doorPosition,
+            points: toDropPath,
+            speed: walkSpeed,
+            beforeSegment: { [weak npc] start, end in
+                guard let npc, abs(end.x - start.x) > 0.5 else { return }
+                npc.xScale = end.x < start.x ? -abs(npc.xScale) : abs(npc.xScale)
+            }
+        ) ?? SKAction.wait(forDuration: 0)
 
         let pause = SKAction.wait(forDuration: 3.0)
 
@@ -69,8 +77,16 @@ public class PizzaDeliveryManager {
             self?.placePizzaBox(at: dropPosition, scene: scene)
         }
 
-        let walkBack = SKAction.move(to: doorPosition, duration: TimeInterval(distanceToDrop / walkSpeed))
-        walkBack.timingMode = .easeInEaseOut
+        let backPath = layout.findPath(from: dropPosition, to: doorPosition)
+        let walkBack = PathMovement.sequence(
+            from: dropPosition,
+            points: backPath,
+            speed: walkSpeed,
+            beforeSegment: { [weak npc] start, end in
+                guard let npc, abs(end.x - start.x) > 0.5 else { return }
+                npc.xScale = end.x < start.x ? -abs(npc.xScale) : abs(npc.xScale)
+            }
+        ) ?? SKAction.wait(forDuration: 0)
 
         let fadeAndRemove = SKAction.sequence([
             SKAction.fadeOut(withDuration: 0.3),

@@ -35,8 +35,16 @@ public class WeekendVibesManager {
         if let cat = catSprite {
             let deskID = Int.random(in: 0..<16)
             if let desk = scene.childNode(withName: "desk_\(deskID)") {
-                cat.startSleeping()
-                cat.run(SKAction.move(to: CGPoint(x: desk.position.x, y: desk.position.y + 5), duration: 1.0))
+                let destination = CGPoint(x: desk.position.x, y: desk.position.y + 5)
+                cat.removeAllActions()
+                cat.run(SKAction.sequence([
+                    SKAction.fadeOut(withDuration: 0.2),
+                    SKAction.run {
+                        cat.position = destination
+                        cat.startSleeping()
+                    },
+                    SKAction.fadeIn(withDuration: 0.2)
+                ]))
             }
         }
     }

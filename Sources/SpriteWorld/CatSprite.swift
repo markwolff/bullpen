@@ -38,6 +38,9 @@ public class CatSprite: SKSpriteNode {
     /// Walk speed in points per second.
     private let walkSpeed: CGFloat = 20.0
 
+    /// Layout used for wander pathfinding.
+    public var navigationLayout: OfficeLayout = .defaultLayout()
+
     // MARK: - Initialization
 
     public init() {
@@ -144,13 +147,6 @@ public class CatSprite: SKSpriteNode {
         heartShown = false
         currentDeskID = deskID
 
-        // Flip xScale based on direction
-        if destination.x < position.x {
-            xScale = -abs(xScale)
-        } else {
-            xScale = abs(xScale)
-        }
-
         // Walk animation (2 distinct walk frames with alternating legs)
         let tm = TextureManager.shared
         let frame0 = tm.texture(for: "cat_walk_frame0")
@@ -158,17 +154,32 @@ public class CatSprite: SKSpriteNode {
         let walkAnim = SKAction.animate(with: [frame0, frame1], timePerFrame: 0.3)
         run(SKAction.repeatForever(walkAnim), withKey: "walkAnimation")
 
-        // Movement
-        let distance = hypot(destination.x - position.x, destination.y - position.y)
-        let duration = TimeInterval(distance / walkSpeed)
-        let moveAction = SKAction.move(to: destination, duration: duration)
-        moveAction.timingMode = .easeInEaseOut
-
-        let arrive = SKAction.run { [weak self] in
-            self?.arriveAtDesk(isActive: isActiveDeskID)
+        let path = navigationLayout.findPath(from: position, to: destination)
+        if let firstStep = path.first {
+            faceToward(firstStep, from: position)
         }
-        let sequence = SKAction.sequence([moveAction, arrive])
-        run(sequence, withKey: "walk")
+        let sequence = PathMovement.sequence(
+            from: position,
+            points: path,
+            speed: walkSpeed,
+            beforeSegment: { [weak self] start, end in
+                self?.faceToward(end, from: start)
+            },
+            completion: { [weak self] in
+                self?.arriveAtDesk(isActive: isActiveDeskID)
+            }
+        )
+
+        if let sequence {
+            run(sequence, withKey: "walk")
+        } else {
+            arriveAtDesk(isActive: isActiveDeskID)
+        }
+    }
+
+    private func faceToward(_ destination: CGPoint, from origin: CGPoint) {
+        guard abs(destination.x - origin.x) > 0.5 else { return }
+        xScale = destination.x < origin.x ? -abs(xScale) : abs(xScale)
     }
 
     /// Called when the cat arrives at a desk.
