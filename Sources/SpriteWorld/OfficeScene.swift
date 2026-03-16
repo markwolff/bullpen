@@ -801,16 +801,13 @@ public class OfficeScene: SKScene {
             }
         }
 
-        // Release desks for idle agents
+        // Turn off desk visuals for idle agents (but keep desk assigned so they return to the same seat)
         for agent in agents {
             guard let sprite = agentSprites[agent.id] else { continue }
             if (agent.state == .idle || agent.state == .deepThinking), let deskID = sprite.assignedDeskID {
-                // Release the desk
-                deskAssignments.removeValue(forKey: deskID)
                 turnOffMonitor(deskID: deskID)
                 deskClutterManager.clearClutter(forDeskID: deskID, scene: self)
                 coffeeRunManager.removeCup(deskID: deskID, scene: self)
-                sprite.assignedDeskID = nil
             }
         }
 
