@@ -9,10 +9,11 @@ public enum IdleBehavior: CaseIterable, Sendable {
     case lookOutWindow
     case petTheCat
     case whiteboard
-    case visitColleague
-    case stretchAtDesk
     case waterPlant
     case getCoffee
+    case loungeCouch
+    case radioArea
+    case printerArea
 }
 
 /// Manages idle behavior state machine for a single agent sprite.
@@ -86,7 +87,7 @@ public class IdleBehaviorManager {
             // Show effect once at start of activity
             if !effectShown {
                 effectShown = true
-                return .showEffect(currentBehavior ?? .stretchAtDesk)
+                return .showEffect(currentBehavior ?? .waterCooler)
             }
 
             if performTimer >= performDuration {
@@ -160,9 +161,19 @@ public class IdleBehaviorManager {
             candidates.removeAll { $0 == .petTheCat }
         }
 
-        // Remove visitColleague if no other idle agents at desks
-        if context.otherIdleAgentDeskPositions.isEmpty {
-            candidates.removeAll { $0 == .visitColleague }
+        // Remove loungeCouch if no lounge position available
+        if context.loungePosition == nil {
+            candidates.removeAll { $0 == .loungeCouch }
+        }
+
+        // Remove radioArea if no radio stand position available
+        if context.radioStandPosition == nil {
+            candidates.removeAll { $0 == .radioArea }
+        }
+
+        // Remove printerArea if no printer stand position available
+        if context.printerStandPosition == nil {
+            candidates.removeAll { $0 == .printerArea }
         }
 
         // Avoid repeating the same behavior
@@ -170,7 +181,18 @@ public class IdleBehaviorManager {
             candidates.removeAll { $0 == current }
         }
 
-        return candidates.randomElement() ?? .stretchAtDesk
+        // Social distancing: remove destinations where another agent is within 60px
+        candidates = candidates.filter { behavior in
+            guard let dest = destinationForBehavior(behavior, context: context) else { return true }
+            for otherPos in context.otherRoamingAgentPositions {
+                if hypot(dest.x - otherPos.x, dest.y - otherPos.y) < 60 {
+                    return false
+                }
+            }
+            return true
+        }
+
+        return candidates.randomElement() ?? .waterCooler
     }
 
     private func destinationForBehavior(_ behavior: IdleBehavior, context: IdleContext) -> CGPoint? {
@@ -187,16 +209,17 @@ public class IdleBehaviorManager {
             return context.catPosition
         case .whiteboard:
             return context.whiteboardStandPosition
-        case .visitColleague:
-            return context.otherIdleAgentDeskPositions.randomElement()
-        case .stretchAtDesk:
-            // Stand just above the desk chair
-            return CGPoint(x: context.deskChairPosition.x, y: context.deskChairPosition.y + 30)
         case .waterPlant:
             return context.plantPositions.randomElement()
         case .getCoffee:
             // Walk to water cooler then back (simplified: just water cooler)
             return context.waterCoolerStandPosition
+        case .loungeCouch:
+            return context.loungePosition
+        case .radioArea:
+            return context.radioStandPosition
+        case .printerArea:
+            return context.printerStandPosition
         }
     }
 }
@@ -212,6 +235,10 @@ public struct IdleContext {
     public let plantPositions: [CGPoint]
     public let catPosition: CGPoint?
     public let otherIdleAgentDeskPositions: [CGPoint]
+    public let loungePosition: CGPoint?
+    public let radioStandPosition: CGPoint?
+    public let printerStandPosition: CGPoint?
+    public let otherRoamingAgentPositions: [CGPoint]
 }
 
 /// An action the idle behavior manager requests the agent/scene to perform.

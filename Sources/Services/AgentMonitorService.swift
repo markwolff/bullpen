@@ -23,6 +23,9 @@ public final class AgentMonitorService: ObservableObject {
     /// Known session log file paths (sessionID -> URL)
     private var sessionFiles: [String: URL] = [:]
 
+    /// Sessions that have been removed — skip during re-discovery
+    private var dismissedSessions: Set<String> = []
+
     /// How often to scan for new sessions (seconds)
     private let discoveryInterval: TimeInterval
 
@@ -67,7 +70,7 @@ public final class AgentMonitorService: ObservableObject {
         discoveryInterval: TimeInterval = 10.0,
         idleTimeout: TimeInterval = 30.0,
         finishedRemovalTimeout: TimeInterval = 120.0,
-        idleRemovalTimeout: TimeInterval = 300.0
+        idleRemovalTimeout: TimeInterval = 120.0
     ) {
         self.logReaders = logReaders ?? [
             ClaudeCodeLogReader(),
@@ -130,6 +133,7 @@ public final class AgentMonitorService: ObservableObject {
         agents.removeAll()
         readOffsets.removeAll()
         sessionFiles.removeAll()
+        dismissedSessions.removeAll()
     }
 
     // MARK: - Public methods for testing
@@ -163,6 +167,7 @@ public final class AgentMonitorService: ObservableObject {
                 var newSessions: [(id: String, url: URL)] = []
                 for (sessionID, fileURL) in sessions {
                     guard sessionFiles[sessionID] == nil else { continue }
+                    guard !dismissedSessions.contains(sessionID) else { continue }
                     guard agents.count + newSessions.count < maxAgents else {
                         print("Bullpen: Max agents (\(maxAgents)) reached, skipping session \(sessionID)")
                         break
@@ -177,8 +182,12 @@ public final class AgentMonitorService: ObservableObject {
                     // Generate traits deterministically from session ID
                     let traits = CharacterTraits.from(sessionID: session.id, agentType: reader.agentType)
 
-                    // Derive initial name from file path
-                    let name = Self.extractProjectName(from: session.url)
+                    // Derive project name from file path and generate unique agent name
+                    let projectName = Self.extractProjectName(from: session.url)
+                    let name = Self.generateAgentName(from: session.id)
+
+                    // Detect subagents by checking if the path contains "/subagents/"
+                    let isSubagent = session.url.path.contains("/subagents/")
 
                     // Create an AgentInfo for this new session
                     let agent = AgentInfo(
@@ -187,7 +196,9 @@ public final class AgentMonitorService: ObservableObject {
                         agentType: reader.agentType,
                         traits: traits,
                         state: .idle,
-                        currentTaskDescription: "Starting up..."
+                        currentTaskDescription: "Starting up...",
+                        isSubagent: isSubagent,
+                        projectName: projectName
                     )
                     agents.append(agent)
 
@@ -282,6 +293,13 @@ public final class AgentMonitorService: ObservableObject {
                     await service.notifyAgentError(agent: agent, windowVisible: visible)
                 }
             }
+        }
+
+        // Propagate plan mode (sticky: stays true until explicitly false)
+        if activity.isPlanMode {
+            agents[index].isPlanMode = true
+        } else if activity.activityType == .sessionEnd {
+            agents[index].isPlanMode = false
         }
 
         // 7.7: Accumulate token usage
@@ -385,12 +403,41 @@ public final class AgentMonitorService: ObservableObject {
     /// performDiscovery() won't re-discover this session and cause
     /// the agent sprite to disappear and reappear.
     private func cleanupAgent(sessionID: String) {
+        dismissedSessions.insert(sessionID)
         watchers[sessionID]?.stopWatching()
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
     }
 
     // MARK: - Smart Naming
+
+    /// Generates a deterministic unique display name from a session ID.
+    /// Uses adjective+animal pairs (like Docker container names) for memorable identification.
+    static func generateAgentName(from sessionID: String) -> String {
+        let adjectives = [
+            "Swift", "Bold", "Calm", "Keen", "Sage",
+            "Warm", "Cool", "Deft", "Fair", "Glad",
+            "Hale", "Just", "Kind", "Live", "Neat",
+            "Pure", "Rare", "Safe", "True", "Wise",
+        ]
+        let animals = [
+            "Fox", "Owl", "Elk", "Jay", "Ram",
+            "Bee", "Ant", "Cat", "Dog", "Bat",
+            "Hen", "Cow", "Emu", "Yak", "Asp",
+            "Cod", "Eel", "Gnu", "Koi", "Pug",
+        ]
+
+        // Use a simple hash of the session ID for deterministic selection
+        var hash: UInt64 = 5381
+        for byte in sessionID.utf8 {
+            hash = hash &* 33 &+ UInt64(byte)
+        }
+
+        let adjIndex = Int(hash % UInt64(adjectives.count))
+        let animalIndex = Int((hash / UInt64(adjectives.count)) % UInt64(animals.count))
+
+        return "\(adjectives[adjIndex]) \(animals[animalIndex])"
+    }
 
     /// Extracts a project name from the log file path.
     /// Claude Code logs: ~/.claude/projects/<hash>/<session>.jsonl
@@ -409,7 +456,18 @@ public final class AgentMonitorService: ObservableObject {
             effectiveDir = projectDir
         }
 
-        let encodedName = effectiveDir.lastPathComponent
+        // If we landed on a "subagents" directory, walk up past the
+        // session UUID directory to the actual project hash directory.
+        let effectiveName = effectiveDir.lastPathComponent
+        let resolvedDir: URL
+        if effectiveName == "subagents" {
+            // subagents → session-uuid → project-hash
+            resolvedDir = effectiveDir.deletingLastPathComponent().deletingLastPathComponent()
+        } else {
+            resolvedDir = effectiveDir
+        }
+
+        let encodedName = resolvedDir.lastPathComponent
 
         // Claude Code encodes the project path as the directory name
         // e.g., "-Users-mark-projects-bullpen-london" → "london"
@@ -459,7 +517,7 @@ public final class AgentMonitorService: ObservableObject {
         return shortenPrompt(text)
     }
 
-    /// Distills a user prompt into a short display name (max 15 chars).
+    /// Distills a user prompt into a short display name (max 25 chars).
     private static func shortenPrompt(_ text: String) -> String {
         var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -467,6 +525,7 @@ public final class AgentMonitorService: ObservableObject {
         let prefixes = [
             "please ", "can you ", "could you ", "i want you to ",
             "i need you to ", "help me ", "let's ", "let's ",
+            "i'd like you to ", "go ahead and ", "we need to ", "you should ",
         ]
         let lower = cleaned.lowercased()
         for prefix in prefixes {
@@ -480,17 +539,17 @@ public final class AgentMonitorService: ObservableObject {
         let words = cleaned.split(separator: " ", maxSplits: 5, omittingEmptySubsequences: true)
         guard !words.isEmpty else { return "Task" }
 
-        // Build name from first 3 words, capitalize each
-        let nameWords = words.prefix(3).map { word -> String in
+        // Build name from first 4 words, capitalize each
+        let nameWords = words.prefix(4).map { word -> String in
             let w = String(word)
             return w.prefix(1).uppercased() + w.dropFirst().lowercased()
         }
 
         var result = nameWords.joined(separator: " ")
 
-        // Cap at 15 characters
-        if result.count > 15 {
-            result = String(result.prefix(15)).trimmingCharacters(in: .whitespaces)
+        // Cap at 25 characters
+        if result.count > 25 {
+            result = String(result.prefix(25)).trimmingCharacters(in: .whitespaces)
         }
 
         return result.isEmpty ? "Task" : result

@@ -20,6 +20,9 @@ public class AgentSprite: SKSpriteNode {
     /// Name label below the sprite
     private let nameLabel: SKLabelNode
 
+    /// Project name subtitle below the name label
+    private let projectLabel: SKLabelNode
+
     /// Visual state indicator (colored dot or square)
     public let statusIndicator: SKShapeNode
 
@@ -41,20 +44,28 @@ public class AgentSprite: SKSpriteNode {
     /// Manages idle roaming behavior when the agent is not working
     public let idleBehaviorManager = IdleBehaviorManager()
 
+    /// Whether this agent is a subagent (renders smaller)
+    private var isSubagent: Bool { agentInfo.isSubagent }
+
     // MARK: - Initialization
 
     public init(agentInfo: AgentInfo) {
         self.agentInfo = agentInfo
         self.thoughtBubble = ThoughtBubble()
         self.nameLabel = SKLabelNode()
-        self.statusIndicator = SKShapeNode(circleOfRadius: 4)
+        self.projectLabel = SKLabelNode()
 
-        // Load trait-based texture — 16x24 pixel art scaled 3x = 48x72
+        let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4
+        self.statusIndicator = SKShapeNode(circleOfRadius: indicatorRadius)
+
+        // Load trait-based texture — 16x24 pixel art
+        // Normal agents: scaled 3x = 48x72, Subagents: scaled 2x = 32x48
         let texture = PixelArtGenerator.shared.character(
             traits: agentInfo.traits,
             state: agentInfo.state.rawValue
         )
-        let spriteSize = CGSize(width: 48, height: 72)
+        let scaleFactor: CGFloat = agentInfo.isSubagent ? 2.5 : 3.0
+        let spriteSize = CGSize(width: 16 * scaleFactor, height: 24 * scaleFactor)
 
         super.init(texture: texture, color: .clear, size: spriteSize)
 
@@ -70,23 +81,37 @@ public class AgentSprite: SKSpriteNode {
 
     private func setupChildNodes() {
         // Name label below the sprite — pixel font style
+        // Subagents use smaller font to match their smaller size
         nameLabel.text = agentInfo.name
         nameLabel.fontName = "Menlo-Bold"
-        nameLabel.fontSize = 11
+        nameLabel.fontSize = isSubagent ? 9 : 11
         nameLabel.fontColor = .white
-        nameLabel.position = CGPoint(x: 0, y: -size.height / 2 - 14)
+        nameLabel.position = CGPoint(x: 0, y: -size.height / 2 - (isSubagent ? 10 : 14))
         nameLabel.horizontalAlignmentMode = .center
         addChild(nameLabel)
 
-        // Status indicator dot
+        // Project name subtitle below name label
+        projectLabel.text = agentInfo.projectName ?? ""
+        projectLabel.fontName = "Menlo"
+        projectLabel.fontSize = isSubagent ? 7 : 9
+        projectLabel.fontColor = SKColor(white: 0.7, alpha: 1.0)
+        projectLabel.position = CGPoint(x: 0, y: nameLabel.position.y - (isSubagent ? 10 : 13))
+        projectLabel.horizontalAlignmentMode = .center
+        if agentInfo.projectName != nil {
+            addChild(projectLabel)
+        }
+
+        // Status indicator dot — smaller for subagents
         statusIndicator.fillColor = AgentSprite.colorForState(agentInfo.state)
         statusIndicator.strokeColor = .clear
-        statusIndicator.position = CGPoint(x: size.width / 2 + 6, y: size.height / 2 - 6)
+        let indicatorOffset: CGFloat = isSubagent ? 5 : 6
+        statusIndicator.position = CGPoint(x: size.width / 2 + indicatorOffset, y: size.height / 2 - indicatorOffset)
         statusIndicator.name = "statusIndicator"
         addChild(statusIndicator)
 
         // Thought bubble above the sprite — high z so it renders above all furniture
-        thoughtBubble.position = CGPoint(x: 0, y: size.height / 2 + 30)
+        // Proportionally closer for subagents
+        thoughtBubble.position = CGPoint(x: 0, y: size.height / 2 + (isSubagent ? 20 : 30))
         thoughtBubble.zPosition = 200
         addChild(thoughtBubble)
     }
@@ -97,6 +122,7 @@ public class AgentSprite: SKSpriteNode {
     public func update(with newInfo: AgentInfo) {
         let oldState = agentInfo.state
         let oldName = agentInfo.name
+        let oldProjectName = agentInfo.projectName
         agentInfo = newInfo
 
         let stateColor = AgentSprite.colorForState(newInfo.state)
@@ -106,16 +132,62 @@ public class AgentSprite: SKSpriteNode {
             nameLabel.text = newInfo.name
         }
 
+        // Update project label if project name changed
+        if newInfo.projectName != oldProjectName {
+            projectLabel.text = newInfo.projectName ?? ""
+            if projectLabel.parent == nil && newInfo.projectName != nil {
+                addChild(projectLabel)
+            }
+        }
+
         // Update status indicator color and shape — task 4.8
-        statusIndicator.fillColor = stateColor
+        // Plan mode overrides status color to purple/indigo
+        if newInfo.isPlanMode {
+            statusIndicator.fillColor = SKColor(red: 0.502, green: 0.376, blue: 0.816, alpha: 1.0)
+        } else {
+            statusIndicator.fillColor = stateColor
+        }
         updateStatusIndicatorShape(for: newInfo.state)
 
-        // Update thought bubble
-        thoughtBubble.update(text: newInfo.currentTaskDescription, for: newInfo.state)
+        // Update planning clipboard overlay
+        updatePlanModeOverlay(isPlanMode: newInfo.isPlanMode)
+
+        // Update thought bubble — prefix with "Planning..." when in plan mode
+        let desc = newInfo.currentTaskDescription
+        let bubbleText: String
+        if newInfo.isPlanMode && !desc.isEmpty {
+            bubbleText = "Planning: \(desc)"
+        } else {
+            bubbleText = desc
+        }
+        thoughtBubble.update(text: bubbleText, for: newInfo.state)
+
+        // Refresh thought bubble cycle from recent tools
+        if !newInfo.recentTools.isEmpty {
+            let summaries = newInfo.recentTools.prefix(5).map(\.summary)
+            thoughtBubble.refreshCycle(recentTools: Array(summaries))
+        }
 
         // Trigger animation change if state changed
         if oldState != newInfo.state {
             transitionToState(newInfo.state, from: oldState)
+
+            // Scoot closer to desk when working, back to chair when not
+            if let deskID = assignedDeskID {
+                let layout = OfficeLayout.defaultLayout()
+                if let desk = layout.desks.first(where: { $0.id == deskID }) {
+                    let isWorking = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching].contains(newInfo.state)
+                    let targetY = isWorking ? desk.chairPosition.y + 15 : desk.chairPosition.y
+                    let targetPos = CGPoint(x: desk.chairPosition.x, y: targetY)
+
+                    // Only move if not currently walking (idle roaming)
+                    if !isWalking {
+                        let moveAction = SKAction.move(to: targetPos, duration: 0.3)
+                        moveAction.timingMode = .easeInEaseOut
+                        run(moveAction, withKey: "deskScoot")
+                    }
+                }
+            }
 
             // Pulse animation on state change — task 4.8
             pulseStatusIndicator()
@@ -124,16 +196,42 @@ public class AgentSprite: SKSpriteNode {
 
     /// Updates status indicator to square for error, circle for everything else — task 4.8
     private func updateStatusIndicatorShape(for state: AgentState) {
+        let r: CGFloat = isSubagent ? 3 : 4
         if state == .error {
             statusIndicator.path = CGPath(
-                rect: CGRect(x: -4, y: -4, width: 8, height: 8),
+                rect: CGRect(x: -r, y: -r, width: r * 2, height: r * 2),
                 transform: nil
             )
         } else {
             statusIndicator.path = CGPath(
-                ellipseIn: CGRect(x: -4, y: -4, width: 8, height: 8),
+                ellipseIn: CGRect(x: -r, y: -r, width: r * 2, height: r * 2),
                 transform: nil
             )
+        }
+    }
+
+    /// Shows or hides the planning clipboard overlay based on plan mode.
+    private func updatePlanModeOverlay(isPlanMode: Bool) {
+        let overlayName = "planningClipboard"
+        if isPlanMode {
+            guard childNode(withName: overlayName) == nil else { return }
+            let clipboard = SKSpriteNode(
+                texture: TextureManager.shared.texture(for: TextureManager.itemPlanningClipboard),
+                size: CGSize(width: 18, height: 24)
+            )
+            clipboard.position = CGPoint(x: -size.width / 2 - 6, y: 0)
+            clipboard.zPosition = 6
+            clipboard.name = overlayName
+            clipboard.alpha = 0
+            addChild(clipboard)
+            clipboard.run(SKAction.fadeIn(withDuration: 0.3))
+        } else {
+            if let clipboard = childNode(withName: overlayName) {
+                clipboard.run(SKAction.sequence([
+                    SKAction.fadeOut(withDuration: 0.3),
+                    SKAction.removeFromParent()
+                ]))
+            }
         }
     }
 
@@ -298,7 +396,7 @@ public class AgentSprite: SKSpriteNode {
     private func addConfettiEmitter() {
         let emitter = SKEmitterNode()
         emitter.particleBirthRate = 40
-        emitter.numParticlesToEmit = 40
+        emitter.numParticlesToEmit = 60
         emitter.particleLifetime = 2.0
         emitter.particleLifetimeRange = 0.5
         emitter.particleColor = .green
@@ -308,7 +406,7 @@ public class AgentSprite: SKSpriteNode {
         emitter.particleColorGreenRange = 1.0
         emitter.particleColorBlueRange = 1.0
         emitter.particleColorAlphaSpeed = -0.5
-        emitter.particleSpeed = 60
+        emitter.particleSpeed = 80
         emitter.particleSpeedRange = 30
         emitter.emissionAngle = .pi / 2
         emitter.emissionAngleRange = .pi
@@ -319,6 +417,16 @@ public class AgentSprite: SKSpriteNode {
         emitter.name = "confettiEmitter"
         emitter.zPosition = 5
         emitter.targetNode = self
+
+        // Brief shake action on celebration
+        if self.parent != nil {
+            let shakeRight = SKAction.moveBy(x: 2, y: 0, duration: 0.05)
+            let shakeLeft = SKAction.moveBy(x: -4, y: 0, duration: 0.05)
+            let shakeBack = SKAction.moveBy(x: 2, y: 0, duration: 0.05)
+            let shake = SKAction.sequence([shakeRight, shakeLeft, shakeBack, shakeRight, shakeLeft, shakeBack])
+            self.run(shake, withKey: "celebrationShake")
+        }
+
         addChild(emitter)
         stateEmitter = emitter
 
@@ -517,10 +625,11 @@ public class AgentSprite: SKSpriteNode {
         case .lookOutWindow: emoji = "🌤"
         case .petTheCat: emoji = "❤️"
         case .whiteboard: emoji = "💡"
-        case .visitColleague: emoji = "💬"
-        case .stretchAtDesk: emoji = "🙆"
         case .waterPlant: emoji = "🌱"
         case .getCoffee: emoji = "☕️"
+        case .loungeCouch: emoji = "🛋"
+        case .radioArea: emoji = "🎵"
+        case .printerArea: emoji = "🖨"
         }
 
         let bubble = SKLabelNode(text: emoji)

@@ -178,6 +178,9 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         let contentArray = message?["content"] as? [[String: Any]]
         let stopReason = message?["stop_reason"] as? String
 
+        // Check for plan mode indicators in content
+        let isPlanMode = detectPlanMode(in: contentArray, rawEntry: rawEntry)
+
         // Parse timestamp
         let timestamp = parseTimestamp(from: json["timestamp"] as? String)
 
@@ -193,7 +196,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .error,
                             summary: summary,
-                            rawPayload: rawEntry
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode
                         )
                     }
                 }
@@ -204,7 +208,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .toolResult,
                 summary: "Tool result received",
-                rawPayload: rawEntry
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode
             )
         }
 
@@ -223,7 +228,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                                 timestamp: timestamp,
                                 activityType: .error,
                                 summary: summary,
-                                rawPayload: rawEntry
+                                rawPayload: rawEntry,
+                                isPlanMode: isPlanMode
                             )
                         }
                         // Non-error tool result
@@ -232,7 +238,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolResult,
                             summary: "Tool result received",
-                            rawPayload: rawEntry
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode
                         )
                     }
                 }
@@ -242,7 +249,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: "User message",
-                rawPayload: rawEntry
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode
             )
         }
 
@@ -258,7 +266,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                         timestamp: timestamp,
                         activityType: .sessionEnd,
                         summary: "Finished",
-                        rawPayload: rawEntry
+                        rawPayload: rawEntry,
+                        isPlanMode: isPlanMode
                     )
                 }
             }
@@ -275,7 +284,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolUse,
                             summary: summary,
-                            rawPayload: rawEntry
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode
                         )
                     }
                 }
@@ -287,7 +297,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: rawEntry
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode
             )
         }
 
@@ -347,5 +358,22 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             return string
         }
         return String(string.prefix(maxLength)) + "..."
+    }
+
+    private func detectPlanMode(in contentArray: [[String: Any]]?, rawEntry: String) -> Bool {
+        // Check raw entry for plan mode system reminders
+        if rawEntry.contains("Plan mode is active") || rawEntry.contains("Plan mode still active") {
+            return true
+        }
+        // Check content blocks for plan mode text
+        if let content = contentArray {
+            for item in content {
+                if let text = item["text"] as? String,
+                   (text.contains("Plan mode is active") || text.contains("Plan mode still active")) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

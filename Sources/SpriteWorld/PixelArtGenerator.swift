@@ -112,27 +112,37 @@ public final class PixelArtGenerator: Sendable {
     // MARK: - Furniture Textures
 
     func desk() -> SKTexture {
-        // 24x16 pixel desk, displayed at 96x64
-        drawTexture(width: 24, height: 16) { [self] ctx in
+        // 60x16 pixel desk, displayed at 240x64
+        drawTexture(width: 60, height: 16) { [self] ctx in
             // Desktop surface
-            fill(ctx, rect: r(0, 8, 24, 6), color: Self.woodMid)
-            fill(ctx, rect: r(0, 14, 24, 2), color: Self.woodLight) // front edge highlight
-            fill(ctx, rect: r(0, 8, 24, 1), color: Self.woodDark)   // back edge
+            fill(ctx, rect: r(0, 8, 60, 6), color: Self.woodMid)
+            fill(ctx, rect: r(0, 14, 60, 2), color: Self.woodLight) // front edge highlight
+            fill(ctx, rect: r(0, 8, 60, 1), color: Self.woodDark)   // back edge
 
-            // Legs
+            // Four legs for a longer desk
             fill(ctx, rect: r(2, 0, 2, 8), color: Self.woodDark)
             fill(ctx, rect: r(20, 0, 2, 8), color: Self.woodDark)
+            fill(ctx, rect: r(38, 0, 2, 8), color: Self.woodDark)
+            fill(ctx, rect: r(56, 0, 2, 8), color: Self.woodDark)
+
+            // Drawer on the left
+            fill(ctx, rect: r(8, 2, 5, 5), color: Self.woodMid)
+            fill(ctx, rect: r(8, 2, 5, 1), color: Self.woodDark)
+            fill(ctx, rect: r(8, 6, 5, 1), color: Self.woodDark)
+            fill(ctx, rect: r(10, 4, 1, 1), color: Self.woodHighlight)
 
             // Drawer on the right
-            fill(ctx, rect: r(15, 2, 5, 5), color: Self.woodMid)
-            fill(ctx, rect: r(15, 2, 5, 1), color: Self.woodDark) // top
-            fill(ctx, rect: r(15, 6, 5, 1), color: Self.woodDark) // bottom
-            fill(ctx, rect: r(17, 4, 1, 1), color: Self.woodHighlight) // knob
+            fill(ctx, rect: r(47, 2, 5, 5), color: Self.woodMid)
+            fill(ctx, rect: r(47, 2, 5, 1), color: Self.woodDark)
+            fill(ctx, rect: r(47, 6, 5, 1), color: Self.woodDark)
+            fill(ctx, rect: r(49, 4, 1, 1), color: Self.woodHighlight)
 
             // Wood grain on desktop
             fill(ctx, rect: r(4, 10, 3, 1), color: Self.woodHighlight)
-            fill(ctx, rect: r(10, 11, 4, 1), color: Self.woodHighlight)
-            fill(ctx, rect: r(18, 10, 3, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(15, 11, 4, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(28, 10, 3, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(40, 11, 4, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(52, 10, 3, 1), color: Self.woodHighlight)
         }
     }
 
@@ -829,6 +839,514 @@ public final class PixelArtGenerator: Sendable {
         }
     }
 
+    // MARK: - Laptop Desk Textures
+
+    /// Laptop desk — 16x10 pixel art, compact startup-style desk
+    func laptopDesk() -> SKTexture {
+        drawTexture(width: 16, height: 10) { [self] ctx in
+            // Desktop surface
+            fill(ctx, rect: r(0, 4, 16, 5), color: Self.woodMid)
+            fill(ctx, rect: r(0, 9, 16, 1), color: Self.woodLight) // front edge
+            fill(ctx, rect: r(0, 4, 16, 1), color: Self.woodDark) // back edge
+            // Two legs
+            fill(ctx, rect: r(1, 0, 2, 4), color: Self.woodDark)
+            fill(ctx, rect: r(13, 0, 2, 4), color: Self.woodDark)
+            // Wood grain
+            fill(ctx, rect: r(4, 6, 3, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(10, 7, 3, 1), color: Self.woodHighlight)
+        }
+    }
+
+    /// Open laptop with code on screen — 8x6 pixel art
+    func laptopOn() -> SKTexture {
+        drawTexture(width: 8, height: 6) { [self] ctx in
+            // Screen (back panel)
+            fill(ctx, rect: r(0, 2, 8, 4), color: Self.monitorFrame)
+            fill(ctx, rect: r(1, 3, 6, 2), color: Self.monitorScreenOn)
+            // Code lines
+            fill(ctx, rect: r(2, 4, 3, 1), color: Self.RGB(0x80D0FF))
+            fill(ctx, rect: r(2, 3, 4, 1), color: Self.RGB(0xA0FF90))
+            // Keyboard base
+            fill(ctx, rect: r(0, 0, 8, 2), color: Self.RGB(0x484848))
+            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0x585858))
+        }
+    }
+
+    /// Closed/dark laptop — 8x6 pixel art
+    func laptopOff() -> SKTexture {
+        drawTexture(width: 8, height: 6) { [self] ctx in
+            // Screen (dark)
+            fill(ctx, rect: r(0, 2, 8, 4), color: Self.monitorFrame)
+            fill(ctx, rect: r(1, 3, 6, 2), color: Self.monitorScreen)
+            // Keyboard base
+            fill(ctx, rect: r(0, 0, 8, 2), color: Self.RGB(0x484848))
+            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0x585858))
+        }
+    }
+
+    /// Laptop screensaver — 8x6 pixel art with colorful pattern
+    func laptopScreensaver() -> SKTexture {
+        drawTexture(width: 8, height: 6) { [self] ctx in
+            // Screen with screensaver
+            fill(ctx, rect: r(0, 2, 8, 4), color: Self.monitorFrame)
+            fill(ctx, rect: r(1, 3, 6, 2), color: Self.RGB(0x203048))
+            // Colorful bouncing pattern
+            fill(ctx, rect: r(2, 4, 2, 1), color: Self.RGB(0xFF6080))
+            fill(ctx, rect: r(4, 3, 2, 1), color: Self.RGB(0x60D0FF))
+            // Keyboard base
+            fill(ctx, rect: r(0, 0, 8, 2), color: Self.RGB(0x484848))
+            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0x585858))
+        }
+    }
+
+    /// Lounge couch — 20x12 pixel art
+    func couch() -> SKTexture {
+        drawTexture(width: 20, height: 12) { [self] ctx in
+            // Couch body
+            fill(ctx, rect: r(2, 2, 16, 6), color: Self.RGB(0x6B4C3B))
+            fill(ctx, rect: r(3, 3, 14, 4), color: Self.RGB(0x8B6B4F))
+            // Armrests
+            fill(ctx, rect: r(0, 2, 3, 8), color: Self.RGB(0x5B3C2B))
+            fill(ctx, rect: r(17, 2, 3, 8), color: Self.RGB(0x5B3C2B))
+            // Back
+            fill(ctx, rect: r(2, 8, 16, 4), color: Self.RGB(0x5B3C2B))
+            fill(ctx, rect: r(3, 9, 14, 2), color: Self.RGB(0x6B4C3B))
+            // Cushions (dividing line)
+            fill(ctx, rect: r(10, 3, 1, 4), color: Self.RGB(0x7B5C3F))
+            // Legs
+            fill(ctx, rect: r(3, 0, 2, 2), color: Self.woodDark)
+            fill(ctx, rect: r(15, 0, 2, 2), color: Self.woodDark)
+        }
+    }
+
+    /// Printer — 10x10 pixel art
+    func printer() -> SKTexture {
+        drawTexture(width: 10, height: 10) { [self] ctx in
+            // Body
+            fill(ctx, rect: r(0, 1, 10, 7), color: Self.RGB(0xD8D8D8))
+            fill(ctx, rect: r(1, 2, 8, 5), color: Self.RGB(0xE8E8E8))
+            // Paper tray slot
+            fill(ctx, rect: r(2, 7, 6, 2), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(3, 8, 4, 1), color: Self.RGB(0xF0F0F0)) // paper edge
+            // Control panel
+            fill(ctx, rect: r(6, 4, 3, 2), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(7, 5, 1, 1), color: Self.RGB(0x40D040)) // green LED
+            // Output tray
+            fill(ctx, rect: r(1, 0, 8, 1), color: Self.RGB(0xC0C0C0))
+        }
+    }
+
+    /// Coat rack — 6x16 pixel art
+    func coatRack() -> SKTexture {
+        drawTexture(width: 6, height: 16) { [self] ctx in
+            // Pole
+            fill(ctx, rect: r(2, 0, 2, 14), color: Self.woodDark)
+            // Base
+            fill(ctx, rect: r(0, 0, 6, 2), color: Self.woodDark)
+            fill(ctx, rect: r(1, 1, 4, 1), color: Self.woodMid)
+            // Top knob
+            fill(ctx, rect: r(2, 14, 2, 2), color: Self.woodMid)
+            // Hooks
+            fill(ctx, rect: r(0, 11, 2, 1), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(4, 11, 2, 1), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(0, 8, 2, 1), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(4, 8, 2, 1), color: Self.RGB(0x808080))
+            // Hanging jacket
+            fill(ctx, rect: r(4, 9, 2, 3), color: Self.RGB(0x3850A0))
+        }
+    }
+
+    // MARK: - Item Textures
+
+    /// Sticky note — 4x4 pixel art
+    func stickyNote(color: NSColor) -> SKTexture {
+        drawTexture(width: 4, height: 4) { [self] ctx in
+            fill(ctx, rect: r(0, 0, 4, 4), color: color)
+            // Fold corner
+            fill(ctx, rect: r(3, 3, 1, 1), color: Self.RGB(0xD0D0D0))
+            // Text line
+            fill(ctx, rect: r(0, 2, 3, 1), color: Self.RGB(0x909090))
+        }
+    }
+
+    /// Crumpled paper — 5x4 pixel art
+    func crumpledPaper() -> SKTexture {
+        drawTexture(width: 5, height: 4) { [self] ctx in
+            fill(ctx, rect: r(1, 0, 3, 3), color: Self.RGB(0xF0EDE0))
+            fill(ctx, rect: r(0, 1, 4, 2), color: Self.RGB(0xE8E4D8))
+            fill(ctx, rect: r(2, 3, 2, 1), color: Self.RGB(0xF0EDE0))
+            // Crumple lines
+            fill(ctx, rect: r(1, 1, 1, 1), color: Self.RGB(0xD0CCC0))
+            fill(ctx, rect: r(3, 2, 1, 1), color: Self.RGB(0xD0CCC0))
+        }
+    }
+
+    /// Rubber duck — 8x8 pixel art
+    func rubberDuck() -> SKTexture {
+        drawTexture(width: 8, height: 8) { [self] ctx in
+            // Body
+            fill(ctx, rect: r(2, 0, 4, 4), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(1, 1, 6, 3), color: Self.RGB(0xFFD700))
+            // Head
+            fill(ctx, rect: r(4, 4, 3, 3), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(3, 5, 4, 2), color: Self.RGB(0xFFD700))
+            // Beak
+            fill(ctx, rect: r(7, 5, 1, 2), color: Self.RGB(0xFF8C00))
+            // Eye
+            fill(ctx, rect: r(5, 6, 1, 1), color: Self.RGB(0x202020))
+            // Wing highlight
+            fill(ctx, rect: r(2, 2, 2, 1), color: Self.RGB(0xFFE44D))
+            // Belly shadow
+            fill(ctx, rect: r(2, 0, 4, 1), color: Self.RGB(0xE6C200))
+        }
+    }
+
+    /// Small coffee cup — 6x6 pixel art
+    func coffeeCupSmall() -> SKTexture {
+        drawTexture(width: 6, height: 6) { [self] ctx in
+            // Cup body
+            fill(ctx, rect: r(1, 0, 4, 4), color: Self.RGB(0xF0F0F0))
+            // Sleeve
+            fill(ctx, rect: r(1, 1, 4, 2), color: Self.RGB(0x8B5A2B))
+            // Lid
+            fill(ctx, rect: r(0, 4, 6, 2), color: Self.RGB(0xE0D8C8))
+            fill(ctx, rect: r(2, 5, 2, 1), color: Self.RGB(0x8B5A2B)) // sip hole
+            // Handle
+            fill(ctx, rect: r(5, 2, 1, 2), color: Self.RGB(0xF0F0F0))
+        }
+    }
+
+    /// Pizza box — 10x6 pixel art
+    func pizzaBox() -> SKTexture {
+        drawTexture(width: 10, height: 6) { [self] ctx in
+            // Box
+            fill(ctx, rect: r(0, 0, 10, 5), color: Self.RGB(0xC8A870))
+            fill(ctx, rect: r(1, 1, 8, 3), color: Self.RGB(0xD4B880))
+            // Top edge
+            fill(ctx, rect: r(0, 5, 10, 1), color: Self.RGB(0xB09060))
+            // Logo circle
+            fill(ctx, rect: r(4, 2, 3, 2), color: Self.RGB(0xD04040))
+            fill(ctx, rect: r(5, 3, 1, 1), color: Self.RGB(0xF0F0F0))
+            // Box crease
+            fill(ctx, rect: r(0, 3, 10, 1), color: Self.RGB(0xB89B6A))
+        }
+    }
+
+    // MARK: - NPC Textures
+
+    /// Janitor NPC — 16x24 pixel art (gray uniform, broom)
+    func janitorNPC() -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            // Head
+            fill(ctx, rect: r(5, 16, 6, 5), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(5, 21, 6, 2), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(4, 17, 1, 3), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(11, 17, 1, 3), color: Self.RGB(0xF5D0A8))
+            // Cap
+            fill(ctx, rect: r(4, 21, 8, 3), color: Self.RGB(0x606060))
+            fill(ctx, rect: r(3, 21, 10, 1), color: Self.RGB(0x505050))
+            // Eyes
+            fill(ctx, rect: r(6, 19, 2, 2), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(9, 19, 2, 2), color: Self.RGB(0x404040))
+            // Mouth
+            fill(ctx, rect: r(7, 17, 2, 1), color: Self.RGB(0xE0B090))
+            // Body (gray uniform)
+            fill(ctx, rect: r(4, 6, 8, 10), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(3, 8, 1, 6), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(12, 8, 1, 6), color: Self.RGB(0x808080))
+            // Uniform details
+            fill(ctx, rect: r(4, 6, 8, 1), color: Self.RGB(0x707070))
+            fill(ctx, rect: r(7, 10, 2, 3), color: Self.RGB(0x707070))
+            // Hands
+            fill(ctx, rect: r(3, 7, 1, 2), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(12, 7, 1, 2), color: Self.RGB(0xF5D0A8))
+            // Broom (held in right hand)
+            fill(ctx, rect: r(13, 4, 1, 12), color: Self.RGB(0x8B6B3D))
+            fill(ctx, rect: r(12, 2, 3, 3), color: Self.RGB(0xA0A060))
+            // Legs
+            fill(ctx, rect: r(5, 2, 3, 4), color: Self.RGB(0x505050))
+            fill(ctx, rect: r(8, 2, 3, 4), color: Self.RGB(0x505050))
+            // Shoes
+            fill(ctx, rect: r(4, 0, 4, 2), color: Self.RGB(0x303030))
+            fill(ctx, rect: r(8, 0, 4, 2), color: Self.RGB(0x303030))
+        }
+    }
+
+    /// Pizza delivery NPC — 16x24 pixel art (red cap, pizza box)
+    func pizzaDeliveryNPC() -> SKTexture {
+        drawTexture(width: 16, height: 24) { [self] ctx in
+            // Head
+            fill(ctx, rect: r(5, 16, 6, 5), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(5, 21, 6, 2), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(4, 17, 1, 3), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(11, 17, 1, 3), color: Self.RGB(0xF5D0A8))
+            // Red cap
+            fill(ctx, rect: r(4, 21, 8, 3), color: Self.RGB(0xD04040))
+            fill(ctx, rect: r(3, 21, 10, 1), color: Self.RGB(0xC03030))
+            // Eyes
+            fill(ctx, rect: r(6, 19, 2, 2), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(9, 19, 2, 2), color: Self.RGB(0x404040))
+            // Mouth
+            fill(ctx, rect: r(7, 17, 2, 1), color: Self.RGB(0xE0B090))
+            // Body (blue shirt)
+            fill(ctx, rect: r(4, 6, 8, 10), color: Self.RGB(0x4060A0))
+            fill(ctx, rect: r(3, 8, 1, 6), color: Self.RGB(0x4060A0))
+            fill(ctx, rect: r(12, 8, 1, 6), color: Self.RGB(0x4060A0))
+            // Shirt details
+            fill(ctx, rect: r(4, 6, 8, 1), color: Self.RGB(0x305090))
+            // Hands carrying pizza box
+            fill(ctx, rect: r(2, 9, 2, 2), color: Self.RGB(0xF5D0A8))
+            fill(ctx, rect: r(12, 9, 2, 2), color: Self.RGB(0xF5D0A8))
+            // Pizza box being carried
+            fill(ctx, rect: r(1, 8, 14, 2), color: Self.RGB(0xC8A870))
+            fill(ctx, rect: r(2, 9, 12, 1), color: Self.RGB(0xD4B880))
+            // Legs
+            fill(ctx, rect: r(5, 2, 3, 4), color: Self.RGB(0x404860))
+            fill(ctx, rect: r(8, 2, 3, 4), color: Self.RGB(0x404860))
+            // Shoes
+            fill(ctx, rect: r(4, 0, 4, 2), color: Self.RGB(0x483828))
+            fill(ctx, rect: r(8, 0, 4, 2), color: Self.RGB(0x483828))
+        }
+    }
+
+    // MARK: - Plant Growth Stage Textures
+
+    /// Plant seedling — 8x10 pixel art
+    func plantSeedling() -> SKTexture {
+        drawTexture(width: 8, height: 10) { [self] ctx in
+            // Pot
+            fill(ctx, rect: r(2, 0, 4, 3), color: Self.potBrown)
+            fill(ctx, rect: r(1, 2, 6, 1), color: Self.potBrown)
+            // Soil
+            fill(ctx, rect: r(2, 3, 4, 1), color: Self.RGB(0x604020))
+            // Small sprout
+            fill(ctx, rect: r(4, 4, 1, 3), color: Self.plantDark)
+            fill(ctx, rect: r(3, 6, 3, 2), color: Self.plantGreen)
+            fill(ctx, rect: r(4, 8, 1, 2), color: Self.plantGreen)
+        }
+    }
+
+    /// Small plant — 8x14 pixel art
+    func plantSmall() -> SKTexture {
+        drawTexture(width: 8, height: 14) { [self] ctx in
+            // Pot
+            fill(ctx, rect: r(2, 0, 4, 4), color: Self.potBrown)
+            fill(ctx, rect: r(1, 3, 6, 1), color: Self.potBrown)
+            fill(ctx, rect: r(2, 3, 4, 1), color: Self.RGB(0x604020))
+            // Stem
+            fill(ctx, rect: r(4, 4, 1, 4), color: Self.plantDark)
+            // Leaves
+            fill(ctx, rect: r(2, 7, 5, 3), color: Self.plantGreen)
+            fill(ctx, rect: r(3, 10, 3, 2), color: Self.plantGreen)
+            fill(ctx, rect: r(4, 12, 1, 2), color: Self.plantGreen)
+            // Highlights
+            fill(ctx, rect: r(3, 9, 1, 1), color: Self.RGB(0x60C860))
+        }
+    }
+
+    /// Medium plant — 10x18 pixel art
+    func plantMedium() -> SKTexture {
+        drawTexture(width: 10, height: 18) { [self] ctx in
+            // Pot
+            fill(ctx, rect: r(3, 0, 4, 5), color: Self.potBrown)
+            fill(ctx, rect: r(2, 4, 6, 1), color: Self.potBrown)
+            fill(ctx, rect: r(3, 4, 4, 1), color: Self.RGB(0x604020))
+            // Stem
+            fill(ctx, rect: r(5, 5, 1, 5), color: Self.plantDark)
+            // Leaves
+            fill(ctx, rect: r(2, 9, 7, 3), color: Self.plantGreen)
+            fill(ctx, rect: r(1, 11, 8, 3), color: Self.plantGreen)
+            fill(ctx, rect: r(3, 14, 5, 2), color: Self.plantGreen)
+            fill(ctx, rect: r(4, 16, 3, 2), color: Self.plantGreen)
+            // Highlights
+            fill(ctx, rect: r(3, 12, 2, 1), color: Self.RGB(0x60C860))
+            fill(ctx, rect: r(7, 11, 1, 1), color: Self.RGB(0x60C860))
+        }
+    }
+
+    /// Large plant — 12x22 pixel art
+    func plantLarge() -> SKTexture {
+        drawTexture(width: 12, height: 22) { [self] ctx in
+            // Same structure as the existing plant() method
+            // Pot
+            fill(ctx, rect: r(3, 0, 6, 6), color: Self.potBrown)
+            fill(ctx, rect: r(2, 5, 8, 1), color: Self.potBrown)
+            fill(ctx, rect: r(4, 1, 4, 1), color: Self.RGB(0xC08040))
+            fill(ctx, rect: r(3, 5, 6, 1), color: Self.RGB(0x604020))
+            // Leaves
+            fill(ctx, rect: r(4, 6, 4, 2), color: Self.plantDark)
+            fill(ctx, rect: r(2, 8, 8, 4), color: Self.plantGreen)
+            fill(ctx, rect: r(1, 10, 10, 4), color: Self.plantGreen)
+            fill(ctx, rect: r(3, 14, 6, 3), color: Self.plantGreen)
+            fill(ctx, rect: r(4, 17, 4, 3), color: Self.plantGreen)
+            fill(ctx, rect: r(5, 20, 2, 2), color: Self.plantGreen)
+            // Highlights
+            fill(ctx, rect: r(3, 12, 2, 1), color: Self.RGB(0x60C860))
+            fill(ctx, rect: r(7, 10, 2, 1), color: Self.RGB(0x60C860))
+            fill(ctx, rect: r(5, 15, 2, 1), color: Self.RGB(0x60C860))
+            // Shadows
+            fill(ctx, rect: r(2, 9, 2, 1), color: Self.plantDark)
+            fill(ctx, rect: r(8, 11, 2, 1), color: Self.plantDark)
+        }
+    }
+
+    // MARK: - Overlay Textures
+
+    /// Sleepy eye overlay — 16x6 pixel art (semi-transparent droopy eyelids)
+    func sleepyEyeOverlay() -> SKTexture {
+        drawTexture(width: 16, height: 6) { [self] ctx in
+            let eyelid = Self.RGB(0xF5D0A8).withAlphaComponent(0.7)
+            // Left eyelid (drooping down)
+            fill(ctx, rect: r(4, 3, 4, 3), color: eyelid)
+            // Right eyelid
+            fill(ctx, rect: r(9, 3, 4, 3), color: eyelid)
+        }
+    }
+
+    // MARK: - Radio Texture
+
+    /// Office radio — 10x8 pixel art
+    func officeRadio() -> SKTexture {
+        drawTexture(width: 10, height: 8) { [self] ctx in
+            // Body
+            fill(ctx, rect: r(0, 0, 10, 7), color: Self.RGB(0x484848))
+            fill(ctx, rect: r(1, 1, 8, 5), color: Self.RGB(0x585858))
+            // Speaker grille dots
+            fill(ctx, rect: r(2, 2, 1, 1), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(4, 2, 1, 1), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(6, 2, 1, 1), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(2, 4, 1, 1), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(4, 4, 1, 1), color: Self.RGB(0x404040))
+            fill(ctx, rect: r(6, 4, 1, 1), color: Self.RGB(0x404040))
+            // Yellow LED
+            fill(ctx, rect: r(8, 5, 1, 1), color: Self.RGB(0xFFE040))
+            // Antenna
+            fill(ctx, rect: r(8, 7, 1, 1), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(9, 6, 1, 2), color: Self.RGB(0x808080))
+        }
+    }
+
+    // MARK: - Planning Clipboard Texture
+
+    /// Planning clipboard — 6x8 pixel art
+    func planningClipboard() -> SKTexture {
+        drawTexture(width: 6, height: 8) { [self] ctx in
+            // Clipboard body
+            fill(ctx, rect: r(0, 0, 6, 7), color: Self.RGB(0xC8A870))
+            fill(ctx, rect: r(1, 1, 4, 5), color: Self.RGB(0xF0EDE0))
+            // Clip at top
+            fill(ctx, rect: r(2, 7, 2, 1), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(1, 6, 4, 1), color: Self.RGB(0x909090))
+            // Checkbox lines
+            fill(ctx, rect: r(1, 4, 1, 1), color: Self.RGB(0x40A040)) // check
+            fill(ctx, rect: r(2, 4, 3, 1), color: Self.RGB(0xA0A0A0))
+            fill(ctx, rect: r(1, 2, 1, 1), color: Self.RGB(0xC0C0C0)) // unchecked
+            fill(ctx, rect: r(2, 2, 3, 1), color: Self.RGB(0xA0A0A0))
+        }
+    }
+
+    // MARK: - Achievement Textures
+
+    /// Achievement shelf — 24x8 pixel art
+    func achievementShelf() -> SKTexture {
+        drawTexture(width: 24, height: 8) { [self] ctx in
+            // Back panel
+            fill(ctx, rect: r(0, 2, 24, 6), color: Self.woodMid)
+            fill(ctx, rect: r(0, 2, 24, 1), color: Self.woodDark)
+            // Shelf surface
+            fill(ctx, rect: r(0, 0, 24, 2), color: Self.woodDark)
+            fill(ctx, rect: r(1, 1, 22, 1), color: Self.woodLight)
+            // Brackets
+            fill(ctx, rect: r(3, 0, 1, 3), color: Self.RGB(0x808080))
+            fill(ctx, rect: r(20, 0, 1, 3), color: Self.RGB(0x808080))
+        }
+    }
+
+    /// Trophy cup — 6x8 pixel art (golden cup)
+    func trophyCup() -> SKTexture {
+        drawTexture(width: 6, height: 8) { [self] ctx in
+            // Base
+            fill(ctx, rect: r(1, 0, 4, 2), color: Self.RGB(0xB8860B))
+            // Stem
+            fill(ctx, rect: r(2, 2, 2, 2), color: Self.RGB(0xDAA520))
+            // Cup
+            fill(ctx, rect: r(0, 4, 6, 3), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(1, 5, 4, 1), color: Self.RGB(0xFFE44D))
+            // Rim
+            fill(ctx, rect: r(0, 7, 6, 1), color: Self.RGB(0xDAA520))
+        }
+    }
+
+    /// Trophy star — 6x8 pixel art (silver star)
+    func trophyStar() -> SKTexture {
+        drawTexture(width: 6, height: 8) { [self] ctx in
+            // Base
+            fill(ctx, rect: r(2, 0, 2, 2), color: Self.RGB(0x808080))
+            // Star shape (approximated)
+            fill(ctx, rect: r(2, 2, 2, 1), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(1, 3, 4, 2), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(0, 4, 6, 1), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(1, 5, 4, 1), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(1, 6, 1, 1), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(4, 6, 1, 1), color: Self.RGB(0xC0C0C0))
+            fill(ctx, rect: r(2, 7, 2, 1), color: Self.RGB(0xC0C0C0))
+            // Shine
+            fill(ctx, rect: r(2, 5, 1, 1), color: Self.RGB(0xE0E0E0))
+        }
+    }
+
+    /// Trophy moon — 6x8 pixel art (blue crescent)
+    func trophyMoon() -> SKTexture {
+        drawTexture(width: 6, height: 8) { [self] ctx in
+            // Base
+            fill(ctx, rect: r(2, 0, 2, 2), color: Self.RGB(0x808080))
+            // Moon circle
+            fill(ctx, rect: r(1, 3, 4, 4), color: Self.RGB(0x4060A0))
+            fill(ctx, rect: r(2, 2, 2, 1), color: Self.RGB(0x4060A0))
+            fill(ctx, rect: r(2, 7, 2, 1), color: Self.RGB(0x4060A0))
+            // Crescent cutout
+            fill(ctx, rect: r(3, 4, 2, 2), color: Self.RGB(0x203048))
+            fill(ctx, rect: r(4, 3, 1, 1), color: Self.RGB(0x203048))
+            // Glow
+            fill(ctx, rect: r(1, 5, 1, 1), color: Self.RGB(0x6080C0))
+        }
+    }
+
+    /// Trophy house — 6x8 pixel art (small house icon)
+    func trophyHouse() -> SKTexture {
+        drawTexture(width: 6, height: 8) { [self] ctx in
+            // Base
+            fill(ctx, rect: r(2, 0, 2, 1), color: Self.RGB(0x808080))
+            // Walls
+            fill(ctx, rect: r(1, 1, 4, 3), color: Self.RGB(0xE8D8B8))
+            // Door
+            fill(ctx, rect: r(2, 1, 2, 2), color: Self.RGB(0x8B6B3D))
+            // Roof
+            fill(ctx, rect: r(0, 4, 6, 1), color: Self.RGB(0xC04040))
+            fill(ctx, rect: r(1, 5, 4, 1), color: Self.RGB(0xC04040))
+            fill(ctx, rect: r(2, 6, 2, 1), color: Self.RGB(0xC04040))
+            fill(ctx, rect: r(2, 7, 2, 1), color: Self.RGB(0xA03030))
+        }
+    }
+
+    /// Trophy lightning — 6x8 pixel art (yellow bolt)
+    func trophyLightning() -> SKTexture {
+        drawTexture(width: 6, height: 8) { [self] ctx in
+            // Base
+            fill(ctx, rect: r(2, 0, 2, 1), color: Self.RGB(0x808080))
+            // Lightning bolt
+            fill(ctx, rect: r(3, 1, 2, 1), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(2, 2, 2, 1), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(1, 3, 3, 1), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(2, 4, 2, 1), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(3, 5, 2, 1), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(2, 6, 2, 1), color: Self.RGB(0xFFD700))
+            fill(ctx, rect: r(1, 7, 2, 1), color: Self.RGB(0xFFD700))
+            // Glow
+            fill(ctx, rect: r(2, 4, 1, 1), color: Self.RGB(0xFFE44D))
+        }
+    }
+
     // MARK: - Drawing Helpers
 
     private func drawTexture(width: Int, height: Int, draw: @escaping (CGContext) -> Void) -> SKTexture {
@@ -852,7 +1370,7 @@ public final class PixelArtGenerator: Sendable {
         ctx.fill([rect])
     }
 
-    private static func RGB(_ hex: Int) -> NSColor {
+    public static func RGB(_ hex: Int) -> NSColor {
         NSColor(
             red: CGFloat((hex >> 16) & 0xFF) / 255.0,
             green: CGFloat((hex >> 8) & 0xFF) / 255.0,

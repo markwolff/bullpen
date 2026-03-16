@@ -51,6 +51,15 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// this only changes when the state actually transitions.
     public var stateEnteredAt: Date
 
+    /// Whether this agent is a subagent spawned by another agent session
+    public var isSubagent: Bool = false
+
+    /// The project directory name this agent is working in (shown as subtitle)
+    public var projectName: String?
+
+    /// Whether this agent is currently in plan mode
+    public var isPlanMode: Bool = false
+
     public init(
         id: String,
         name: String,
@@ -61,7 +70,9 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         startedAt: Date = .now,
         lastUpdatedAt: Date = .now,
         workspacePath: String? = nil,
-        stateEnteredAt: Date? = nil
+        stateEnteredAt: Date? = nil,
+        isSubagent: Bool = false,
+        projectName: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -73,6 +84,8 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         self.lastUpdatedAt = lastUpdatedAt
         self.workspacePath = workspacePath
         self.stateEnteredAt = stateEnteredAt ?? startedAt
+        self.isSubagent = isSubagent
+        self.projectName = projectName
     }
 }
 

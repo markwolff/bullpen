@@ -35,6 +35,59 @@ public class OfficeScene: SKScene {
     /// Last time we updated window daylight
     private var lastDaylightUpdate: TimeInterval = 0
 
+    // MARK: - Feature Managers
+
+    /// Empty office mode manager (0C)
+    private let emptyOfficeManager = EmptyOfficeManager()
+
+    /// Night owl mode manager (1D)
+    private let nightOwlManager = NightOwlManager()
+
+    /// Rubber duck debugging manager (2A)
+    private let rubberDuckManager = RubberDuckManager()
+
+    /// Desk clutter accumulation manager (2B)
+    private let deskClutterManager = DeskClutterManager()
+
+    /// Office stats tracker for whiteboard (2C)
+    private let officeStatsTracker = OfficeStatsTracker()
+
+    /// Coffee run manager (3A)
+    private let coffeeRunManager = CoffeeRunManager()
+
+    /// Water cooler chat manager (3B)
+    private let waterCoolerChatManager = WaterCoolerChatManager()
+
+    /// Pair programming manager (3C)
+    private let pairProgrammingManager = PairProgrammingManager()
+
+    /// Pizza delivery manager (4A)
+    private let pizzaDeliveryManager = PizzaDeliveryManager()
+
+    /// Standup meeting manager (4B)
+    private let standupMeetingManager = StandupMeetingManager()
+
+    /// Weekend vibes manager (5A)
+    private let weekendVibesManager = WeekendVibesManager()
+
+    /// Achievement tracker (5B)
+    private let achievementTracker = AchievementTracker()
+
+    /// Radio sprite reference
+    private var radioSprite: RadioSprite?
+
+    /// Growing plant sprite reference
+    private var growingPlantSprite: GrowingPlantSprite?
+
+    /// Whiteboard stats overlay reference
+    private var whiteboardOverlay: WhiteboardStatsOverlay?
+
+    /// Achievement shelf reference
+    private var achievementShelf: AchievementShelfSprite?
+
+    /// Last time we updated stats overlay
+    private var lastStatsUpdate: TimeInterval = 0
+
     // MARK: - Initialization
 
     public init(layout: OfficeLayout = .defaultLayout()) {
@@ -68,6 +121,7 @@ public class OfficeScene: SKScene {
         setupTitleLabel()
         setupAmbientAnimations()
         setupCat()
+        setupFeatureDecorations()
     }
 
     // MARK: - 6.4: Tiled Background
@@ -157,7 +211,7 @@ public class OfficeScene: SKScene {
 
     /// Adds a warm-colored area rug in the center of the office.
     private func setupRug() {
-        let rugWidth: CGFloat = 700
+        let rugWidth: CGFloat = layout.sceneSize.width * 0.68
         let rugHeight: CGFloat = 280
         let rugCenter = CGPoint(x: layout.sceneSize.width / 2, y: 270)
 
@@ -179,7 +233,8 @@ public class OfficeScene: SKScene {
 
         // Rug pattern — simple diamond shapes
         let patternColor = SKColor(red: 0.72, green: 0.40, blue: 0.28, alpha: 0.35)
-        for dx in stride(from: -280.0, through: 280.0, by: 140.0) {
+        let halfRugWidth = Double(rugWidth / 2)
+        for dx in stride(from: -halfRugWidth, through: halfRugWidth, by: 140.0) {
             for dy in stride(from: -80.0, through: 80.0, by: 80.0) {
                 let diamond = SKShapeNode(rectOf: CGSize(width: 20, height: 20))
                 diamond.fillColor = patternColor
@@ -199,59 +254,44 @@ public class OfficeScene: SKScene {
         let tm = TextureManager.shared
 
         for desk in layout.desks {
-            // Desk — 24x16 pixel art scaled 4x = 96x64 display
-            let deskTexture = tm.texture(for: TextureManager.furnitureDesk)
-            let deskNode = SKSpriteNode(texture: deskTexture, size: CGSize(width: 96, height: 64))
+            // Laptop desk — 16x10 pixel art scaled 3x = 48x30 display
+            let deskTexture = tm.texture(for: TextureManager.furnitureLaptopDesk)
+            let deskNode = SKSpriteNode(texture: deskTexture, size: CGSize(width: 48, height: 30))
             deskNode.position = desk.position
             deskNode.name = "desk_\(desk.id)"
             deskNode.zPosition = 1
             addChild(deskNode)
 
-            // Chair — 12x16 pixel art scaled 3x = 36x48 display
+            // Chair — 12x16 pixel art scaled 2x = 24x32 display (smaller for laptop desks)
             let chairTexture = tm.texture(for: TextureManager.furnitureChair)
-            let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 36, height: 48))
-            chairNode.position = CGPoint(x: 0, y: -60)
+            let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 24, height: 32))
+            chairNode.position = CGPoint(x: 0, y: -30)
             chairNode.name = "chair_\(desk.id)"
             deskNode.addChild(chairNode)
 
-            // Monitor — 12x10 pixel art scaled 3x = 36x30 display
-            let monitorTexture = tm.texture(for: TextureManager.furnitureMonitorOff)
-            let monitorNode = SKSpriteNode(texture: monitorTexture, size: CGSize(width: 36, height: 30))
-            monitorNode.position = CGPoint(x: 0, y: 20)
-            monitorNode.name = "monitor_\(desk.id)"
-            monitorNode.zPosition = 2
-            deskNode.addChild(monitorNode)
+            // Single laptop on the desk (replaces 3 monitors)
+            let laptopTexture = tm.texture(for: TextureManager.furnitureLaptopOff)
+            let laptopNode = SKSpriteNode(texture: laptopTexture, size: CGSize(width: 24, height: 18))
+            laptopNode.position = CGPoint(x: 0, y: 10)
+            laptopNode.name = "monitor_\(desk.id)"
+            laptopNode.zPosition = 2
+            deskNode.addChild(laptopNode)
 
-            // Monitor glow node (initially invisible)
-            let glowNode = SKShapeNode(rectOf: CGSize(width: 44, height: 36), cornerRadius: 4)
+            // Monitor glow node
+            let glowNode = SKShapeNode(rectOf: CGSize(width: 30, height: 24), cornerRadius: 3)
             glowNode.fillColor = .clear
             glowNode.strokeColor = .clear
-            glowNode.position = CGPoint(x: 0, y: 20)
+            glowNode.position = CGPoint(x: 0, y: 10)
             glowNode.name = "monitorGlow_\(desk.id)"
             glowNode.zPosition = 3
             glowNode.alpha = 0
             deskNode.addChild(glowNode)
 
-            // Coffee mug — 8x8 pixel art scaled 3x = 24x24 display
-            let mugTexture = tm.texture(for: TextureManager.furnitureCoffeeMug)
-            let mugNode = SKSpriteNode(texture: mugTexture, size: CGSize(width: 24, height: 24))
-            mugNode.position = CGPoint(x: 34, y: 10)
-            mugNode.name = "coffeeMug_\(desk.id)"
-            mugNode.zPosition = 2
-            deskNode.addChild(mugNode)
-
-            // Steam emitter
-            let steam = createSteamEmitter()
-            steam.position = CGPoint(x: 34, y: 24)
-            steam.name = "steamEmitter_\(desk.id)"
-            steam.zPosition = 4
-            deskNode.addChild(steam)
-
-            // Lamp on alternating desks — 8x16 pixel art scaled 3x = 24x48
-            if desk.id % 2 == 0 {
+            // Lamp only on end-of-row desks (first and last column)
+            if desk.id % 4 == 0 || desk.id % 4 == 3 {
                 let lampTexture = tm.texture(for: TextureManager.furnitureLamp)
-                let lampNode = SKSpriteNode(texture: lampTexture, size: CGSize(width: 24, height: 48))
-                lampNode.position = CGPoint(x: -34, y: 16)
+                let lampNode = SKSpriteNode(texture: lampTexture, size: CGSize(width: 16, height: 32))
+                lampNode.position = CGPoint(x: desk.id % 4 == 0 ? -30 : 30, y: 8)
                 lampNode.name = "lamp_\(desk.id)"
                 lampNode.zPosition = 2
                 deskNode.addChild(lampNode)
@@ -351,7 +391,7 @@ public class OfficeScene: SKScene {
         // Poster — 14x18 pixel art scaled 4x = 56x72, between whiteboard and bookshelf
         let posterTexture = tm.texture(for: TextureManager.decorationPoster)
         let posterNode = SKSpriteNode(texture: posterTexture, size: CGSize(width: 56, height: 72))
-        posterNode.position = CGPoint(x: 327, y: layout.sceneSize.height - 80)
+        posterNode.position = CGPoint(x: layout.sceneSize.width * 0.31, y: layout.sceneSize.height - 80)
         posterNode.name = "decoration_poster"
         posterNode.zPosition = 2
         addChild(posterNode)
@@ -387,6 +427,30 @@ public class OfficeScene: SKScene {
         doorNode.name = "decoration_door"
         doorNode.zPosition = 2
         addChild(doorNode)
+
+        // Lounge couch in bottom-left — 20x12 pixel art scaled 3x = 60x36
+        let couchTexture = tm.texture(for: TextureManager.decorationCouch)
+        let couchNode = SKSpriteNode(texture: couchTexture, size: CGSize(width: 60, height: 36))
+        couchNode.position = layout.loungePosition
+        couchNode.name = "decoration_couch"
+        couchNode.zPosition = 2
+        addChild(couchNode)
+
+        // Printer against right wall — 10x10 pixel art scaled 3x = 30x30
+        let printerTexture = tm.texture(for: TextureManager.decorationPrinter)
+        let printerNode = SKSpriteNode(texture: printerTexture, size: CGSize(width: 30, height: 30))
+        printerNode.position = layout.printerStandPosition
+        printerNode.name = "decoration_printer"
+        printerNode.zPosition = 2
+        addChild(printerNode)
+
+        // Coat rack near door — 6x16 pixel art scaled 3x = 18x48
+        let coatRackTexture = tm.texture(for: TextureManager.decorationCoatRack)
+        let coatRackNode = SKSpriteNode(texture: coatRackTexture, size: CGSize(width: 18, height: 48))
+        coatRackNode.position = CGPoint(x: layout.doorPosition.x - 70, y: layout.doorPosition.y + 30)
+        coatRackNode.name = "decoration_coat_rack"
+        coatRackNode.zPosition = 2
+        addChild(coatRackNode)
     }
 
     /// Sets up the title label with a cozy pixel-font feel.
@@ -579,6 +643,44 @@ public class OfficeScene: SKScene {
         catSprite = cat
     }
 
+    // MARK: - Feature Decorations Setup
+
+    /// Sets up decorations for new features: radio, growing plant, whiteboard overlay, achievement shelf.
+    private func setupFeatureDecorations() {
+        // Radio near top-left wall
+        let radio = RadioSprite()
+        radio.position = layout.radioPosition
+        radio.zPosition = 2
+        addChild(radio)
+        radioSprite = radio
+
+        // Growing plant near the door
+        let plant = GrowingPlantSprite()
+        plant.position = CGPoint(x: layout.doorPosition.x - 140, y: 80)
+        plant.zPosition = 2
+        addChild(plant)
+        growingPlantSprite = plant
+
+        // Whiteboard stats overlay
+        if let whiteboard = childNode(withName: "decoration_whiteboard") {
+            let overlay = WhiteboardStatsOverlay()
+            overlay.zPosition = 3
+            whiteboard.addChild(overlay)
+            whiteboardOverlay = overlay
+        }
+
+        // Achievement shelf on wall
+        let shelf = AchievementShelfSprite()
+        shelf.position = layout.achievementShelfPosition
+        shelf.zPosition = 2
+        addChild(shelf)
+        shelf.displayUnlocked(achievementTracker.unlockedAchievements)
+        achievementShelf = shelf
+
+        // Weekend vibes check
+        weekendVibesManager.update(scene: self, catSprite: catSprite)
+    }
+
     // MARK: - Agent Management
 
     /// Synchronizes the scene with the current list of agents.
@@ -603,6 +705,15 @@ public class OfficeScene: SKScene {
 
         // Update monitor states based on desk assignments
         updateMonitorStates(agents: agents)
+
+        // Detect finished transitions for growing plant (1C)
+        for agent in agents {
+            if let sprite = agentSprites[agent.id] {
+                if agent.state == .finished && sprite.agentInfo.state != .finished {
+                    growingPlantSprite?.recordCompletion()
+                }
+            }
+        }
     }
 
     /// Creates and adds a new agent sprite to the scene.
@@ -615,8 +726,8 @@ public class OfficeScene: SKScene {
             sprite.assignedDeskID = desk.id
             deskAssignments[desk.id] = agent.id
 
-            // Start at the entrance, then walk to desk
-            let entrancePoint = CGPoint(x: layout.sceneSize.width / 2, y: 50)
+            // Start at the door, then walk to desk
+            let entrancePoint = layout.doorPosition
             sprite.position = entrancePoint
             sprite.zPosition = 5
 
@@ -633,10 +744,10 @@ public class OfficeScene: SKScene {
             // Turn on monitor
             turnOnMonitor(deskID: desk.id, state: agent.state)
         } else {
-            // No desk available — just stand near the entrance
+            // No desk available — stand near the door
             sprite.position = CGPoint(
-                x: CGFloat.random(in: 100...layout.sceneSize.width - 100),
-                y: 80
+                x: layout.doorExitPosition.x - CGFloat.random(in: 0...40),
+                y: layout.doorExitPosition.y
             )
             sprite.zPosition = 5
             addChild(sprite)
@@ -648,10 +759,12 @@ public class OfficeScene: SKScene {
     private func removeAgentSprite(id: String) {
         guard let sprite = agentSprites.removeValue(forKey: id) else { return }
 
-        // Free up the desk and turn off monitor
+        // Free up the desk, turn off monitor, and clean up desk items
         if let deskID = sprite.assignedDeskID {
             deskAssignments.removeValue(forKey: deskID)
             turnOffMonitor(deskID: deskID)
+            deskClutterManager.clearClutter(forDeskID: deskID, scene: self)
+            coffeeRunManager.removeCup(deskID: deskID, scene: self)
         }
 
         // Track this ID as fading out so updateAgents won't re-add it
@@ -682,21 +795,21 @@ public class OfficeScene: SKScene {
 
     // MARK: - Monitor Management — task 4.4, 4.11, 6.3
 
-    /// Turns on a desk monitor with the "on" texture
+    /// Turns on the laptop on a desk with the "on" texture
     private func turnOnMonitor(deskID: Int, state: AgentState) {
         guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        let onTexture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOn)
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
-            let onTexture = TextureManager.shared.texture(for: TextureManager.furnitureMonitorOn)
             monitor.texture = onTexture
         }
         updateMonitorGlow(deskID: deskID, state: state)
     }
 
-    /// Turns off a desk monitor
+    /// Turns off the laptop on a desk
     private func turnOffMonitor(deskID: Int) {
         guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        let offTexture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOff)
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
-            let offTexture = TextureManager.shared.texture(for: TextureManager.furnitureMonitorOff)
             monitor.texture = offTexture
         }
         if let glow = deskNode.childNode(withName: "monitorGlow_\(deskID)") as? SKShapeNode {
@@ -833,7 +946,7 @@ public class OfficeScene: SKScene {
             deskChairPosition = sprite.position
         }
 
-        // Gather positions of other idle agents at their desks (for visitColleague)
+        // Gather positions of other idle agents at their desks
         var otherIdleDeskPositions: [CGPoint] = []
         for (_, otherSprite) in agentSprites where otherSprite !== sprite {
             if otherSprite.agentInfo.state == .idle,
@@ -843,6 +956,14 @@ public class OfficeScene: SKScene {
                 otherIdleDeskPositions.append(
                     CGPoint(x: desk.chairPosition.x + 40, y: desk.chairPosition.y)
                 )
+            }
+        }
+
+        // Gather positions of other roaming agents (for social distancing)
+        var otherRoamingPositions: [CGPoint] = []
+        for (_, otherSprite) in agentSprites where otherSprite !== sprite {
+            if otherSprite.isRoaming {
+                otherRoamingPositions.append(otherSprite.position)
             }
         }
 
@@ -863,7 +984,11 @@ public class OfficeScene: SKScene {
             whiteboardStandPosition: layout.whiteboardStandPosition,
             plantPositions: layout.plantStandPositions,
             catPosition: catPos,
-            otherIdleAgentDeskPositions: otherIdleDeskPositions
+            otherIdleAgentDeskPositions: otherIdleDeskPositions,
+            loungePosition: layout.loungePosition,
+            radioStandPosition: layout.radioStandPosition,
+            printerStandPosition: layout.printerStandPosition,
+            otherRoamingAgentPositions: otherRoamingPositions
         )
     }
 
@@ -876,25 +1001,138 @@ public class OfficeScene: SKScene {
         let deltaTime = lastUpdateTime > 0 ? currentTime - lastUpdateTime : 0
         lastUpdateTime = currentTime
 
-        // Update idle ZZZ and idle roaming behaviors for all agent sprites
+        let agents = agentSprites.values.map(\.agentInfo)
+        let activeAgentCount = agents.filter { $0.state != .idle && $0.state != .finished }.count
+
+        // Update idle ZZZ, idle roaming, and thought bubble cycling for all agent sprites
         for sprite in agentSprites.values {
             sprite.updateIdleZZZ(currentTime: currentTime)
             updateIdleBehavior(for: sprite, deltaTime: deltaTime)
+            sprite.thoughtBubble.updateCycle(deltaTime: deltaTime)
         }
 
         // Update office cat (8.10-8.13)
         if let cat = catSprite {
-            let agents = agentSprites.values.map(\.agentInfo)
             let deskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
             let activeDeskIDs = Set(deskAssignments.keys)
             cat.update(deltaTime: deltaTime, agents: agents, deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
         }
 
-        // Periodically update window daylight (every 60 seconds)
+        // Empty office manager (0C)
+        emptyOfficeManager.update(deltaTime: deltaTime, agentCount: agentSprites.count, scene: self)
+
+        // Rubber duck debugging (2A)
+        rubberDuckManager.update(agents: agents, deskAssignments: deskAssignments, scene: self)
+
+        // Desk clutter accumulation (2B)
+        deskClutterManager.update(deltaTime: deltaTime, agents: agents, deskAssignments: deskAssignments, scene: self)
+
+        // Office stats tracker (2C)
+        officeStatsTracker.update(deltaTime: deltaTime, agents: agents)
+
+        // Radio waves (1B)
+        radioSprite?.updateWaves(hasActiveAgents: activeAgentCount > 0)
+
+        // Coffee runs (3A)
+        let coffeeTriggered = coffeeRunManager.update(deltaTime: deltaTime, agents: agents, deskAssignments: deskAssignments)
+        for agentID in coffeeTriggered {
+            if let sprite = agentSprites[agentID], let deskID = sprite.assignedDeskID {
+                let coffeeDest = layout.coffeeMachinePosition
+                let path = layout.findPath(from: sprite.position, to: coffeeDest)
+                sprite.walk(to: coffeeDest, via: path) { [weak self, weak sprite] in
+                    guard let self, let sprite else { return }
+                    // Pause at coffee machine, then walk back
+                    sprite.run(SKAction.wait(forDuration: 5.0)) {
+                        let desk = self.layout.desks.first { $0.id == deskID }
+                        if let chairPos = desk?.chairPosition {
+                            let returnPath = self.layout.findPath(from: sprite.position, to: chairPos)
+                            sprite.walk(to: chairPos, via: returnPath) { [weak self] in
+                                self?.coffeeRunManager.coffeeRunCompleted(agentID: agentID)
+                                self?.coffeeRunManager.placeCup(deskID: deskID, scene: self!)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Water cooler chats (3B)
+        if let chatRequest = waterCoolerChatManager.update(
+            deltaTime: deltaTime,
+            agents: agents,
+            chatPositions: layout.waterCoolerChatPositions
+        ) {
+            if let spriteA = agentSprites[chatRequest.agentA],
+               let spriteB = agentSprites[chatRequest.agentB] {
+                let pathA = layout.findPath(from: spriteA.position, to: chatRequest.posA)
+                spriteA.walk(to: chatRequest.posA, via: pathA)
+                let pathB = layout.findPath(from: spriteB.position, to: chatRequest.posB)
+                spriteB.walk(to: chatRequest.posB, via: pathB)
+            }
+        }
+
+        // Pair programming (3C)
+        if let pairRequest = pairProgrammingManager.update(
+            deltaTime: deltaTime,
+            agents: agents,
+            deskAssignments: deskAssignments
+        ) {
+            if let visitor = agentSprites[pairRequest.visitorID] {
+                let path = layout.findPath(from: visitor.position, to: pairRequest.observePosition)
+                visitor.walk(to: pairRequest.observePosition, via: path)
+            }
+        }
+
+        // Pizza delivery (4A)
+        pizzaDeliveryManager.update(
+            deltaTime: deltaTime,
+            activeAgentCount: activeAgentCount,
+            scene: self,
+            doorPosition: layout.doorPosition,
+            dropPosition: layout.pizzaDropPosition
+        )
+
+        // Standup meeting (4B)
+        let hour = currentHour()
+        let minute = Calendar.current.component(.minute, from: Date())
+        if let standupAssignments = standupMeetingManager.update(
+            deltaTime: deltaTime,
+            currentHour: hour,
+            currentMinute: minute,
+            agents: agents,
+            huddlePositions: layout.standupHuddlePositions
+        ) {
+            for assignment in standupAssignments {
+                if let sprite = agentSprites[assignment.agentID] {
+                    let path = layout.findPath(from: sprite.position, to: assignment.position)
+                    sprite.walk(to: assignment.position, via: path)
+                }
+            }
+        }
+
+        // Achievement tracking (5B)
+        let newAchievements = achievementTracker.update(agents: agents)
+        for achievement in newAchievements {
+            achievementShelf?.unlockTrophy(for: achievement)
+        }
+
+        // Periodically update window daylight, stats overlay, night mode (every 60 seconds)
         if currentTime - lastDaylightUpdate > 60.0 {
             lastDaylightUpdate = currentTime
-            applyWindowDaylight(hour: currentHour())
+            applyWindowDaylight(hour: hour)
             updateRainState()
+            nightOwlManager.update(hour: hour, scene: self, agentSprites: Array(agentSprites.values))
+            weekendVibesManager.update(scene: self, catSprite: catSprite)
+        }
+
+        // Update stats overlay every 30 seconds
+        if currentTime - lastStatsUpdate > 30.0 {
+            lastStatsUpdate = currentTime
+            whiteboardOverlay?.updateStats(
+                totalAgentsToday: officeStatsTracker.totalAgentsToday,
+                activeCount: officeStatsTracker.activeCount,
+                activityHistory: officeStatsTracker.activityHistory
+            )
         }
     }
 }

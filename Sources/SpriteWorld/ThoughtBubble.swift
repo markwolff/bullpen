@@ -11,24 +11,31 @@ public class ThoughtBubble: SKNode {
     /// The text label inside the bubble
     private let label: SKLabelNode
 
+    /// Crop node that clips scrolling text to the bubble bounds
+    private let cropNode: SKCropNode
+
     /// Maximum width of the bubble before text wraps
     private let maxWidth: CGFloat = 200
 
     /// Padding inside the bubble
     private let padding: CGFloat = 12
 
-    /// The last time the text was changed (for fade timer) — task 4.9
-    private var lastChangeTime: TimeInterval = 0
+    /// Cycle of recent tool summaries to display
+    private var displayCycle: [String] = []
 
-    /// Whether the bubble has faded due to inactivity — task 4.9
-    private var hasFaded: Bool = false
+    /// Current index in the display cycle
+    private var cycleIndex: Int = 0
 
-    /// Duration before fading to 50% opacity — task 4.9
-    private let fadeTimeout: TimeInterval = 10.0
+    /// Timer for cycling
+    private var cycleTimer: TimeInterval = 0
+
+    /// Cycle interval with jitter (1.5-2.5s)
+    private var cycleInterval: TimeInterval = TimeInterval.random(in: 1.5...2.5)
 
     public override init() {
         bubbleBackground = SKShapeNode()
         label = SKLabelNode()
+        cropNode = SKCropNode()
         super.init()
         setupNodes()
     }
@@ -54,8 +61,12 @@ public class ThoughtBubble: SKNode {
         bubbleBackground.lineWidth = 1.5
         bubbleBackground.alpha = 1.0
 
+        // Add the bubble background as a direct child (not clipped)
         addChild(bubbleBackground)
-        addChild(label)
+
+        // Add the label inside a crop node so scrolling text is clipped
+        cropNode.addChild(label)
+        addChild(cropNode)
 
         // Start hidden
         isHidden = true
@@ -69,7 +80,6 @@ public class ThoughtBubble: SKNode {
             return
         }
 
-        // Reset fade timer on text change — task 4.9
         let textChanged = label.text != text
         label.text = text
         updateBubblePath()
@@ -83,9 +93,26 @@ public class ThoughtBubble: SKNode {
 
     /// Rebuilds the bubble shape to fit the current label text.
     private func updateBubblePath() {
-        let textFrame = label.frame
-        let bubbleWidth = max(textFrame.width + padding * 2, 60)
-        let bubbleHeight = max(textFrame.height + padding * 2, 30)
+        // Compute text size manually for accurate multi-line dimensions
+        let textWidth: CGFloat
+        let textHeight: CGFloat
+        if let text = label.text, let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) {
+            let constrainedSize = CGSize(width: maxWidth - padding * 2, height: .greatestFiniteMagnitude)
+            let boundingRect = (text as NSString).boundingRect(
+                with: constrainedSize,
+                options: [.usesLineFragmentOrigin],
+                attributes: [.font: font]
+            )
+            textWidth = boundingRect.width
+            textHeight = boundingRect.height
+        } else {
+            let textFrame = label.frame
+            textWidth = textFrame.width
+            textHeight = textFrame.height
+        }
+
+        let bubbleWidth = max(textWidth + padding * 2, 60)
+        let bubbleHeight = max(textHeight + padding * 2, 30)
 
         let rect = CGRect(
             x: -bubbleWidth / 2,
@@ -95,6 +122,12 @@ public class ThoughtBubble: SKNode {
         )
 
         bubbleBackground.path = CGPath(roundedRect: rect, cornerWidth: 8, cornerHeight: 8, transform: nil)
+
+        // Update the crop mask to match the bubble rect
+        let maskNode = SKShapeNode()
+        maskNode.path = CGPath(roundedRect: rect, cornerWidth: 8, cornerHeight: 8, transform: nil)
+        maskNode.fillColor = .white
+        cropNode.maskNode = maskNode
     }
 
     /// Shows the bubble with a fade-in animation.
@@ -103,65 +136,89 @@ public class ThoughtBubble: SKNode {
         isHidden = false
         alpha = 0
         run(SKAction.fadeIn(withDuration: 0.2))
-        hasFaded = false
     }
 
     /// Hides the bubble with a fade-out animation.
     public func hide() {
         guard !isHidden else { return }
-        removeAction(forKey: "fadeTimeout")
         run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
             self?.isHidden = true
         }
     }
 
-    // MARK: - 8.14: Text Scroll for Long Text
+    // MARK: - 8.14: Text Truncation for Long Text
 
-    /// Sets up a scrolling animation for text that exceeds the bubble width.
+    /// Truncates text that exceeds the bubble width instead of scrolling.
     private func setupScrollIfNeeded() {
         label.removeAction(forKey: "scroll")
+        // Reset label position in case a previous scroll moved it
+        label.position = .zero
+
+        guard let text = label.text, !text.isEmpty else { return }
 
         let availableWidth = maxWidth - padding * 2
 
-        // Measure the text as single-line to detect overflow, since numberOfLines=2 causes wrapping
-        let textWidth: CGFloat
-        if let text = label.text, let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) {
-            let size = (text as NSString).size(withAttributes: [.font: font])
-            textWidth = size.width
-        } else {
-            textWidth = label.frame.width
-        }
+        // Measure single-line width to detect overflow
+        guard let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) else { return }
+        let fullWidth = (text as NSString).size(withAttributes: [.font: font]).width
 
-        if textWidth > availableWidth {
-            let scrollDistance = textWidth - availableWidth + 20
-            let scrollLeft = SKAction.moveBy(x: -scrollDistance, y: 0, duration: TimeInterval(scrollDistance / 30))
-            let pause = SKAction.wait(forDuration: 2.0)
-            let scrollBack = SKAction.moveBy(x: scrollDistance, y: 0, duration: 0)
-            let sequence = SKAction.sequence([pause, scrollLeft, pause, scrollBack])
-            label.run(SKAction.repeatForever(sequence), withKey: "scroll")
+        if fullWidth > availableWidth * 2 {
+            // Text is too long even for 2 lines — truncate with ellipsis
+            var truncated = text
+            while truncated.count > 3 {
+                truncated = String(truncated.dropLast())
+                let w = (truncated as NSString).size(withAttributes: [.font: font]).width
+                if w <= availableWidth * 2 {
+                    break
+                }
+            }
+            label.text = truncated + "…"
+            updateBubblePath()
         }
     }
 
     /// Whether the label currently has a scroll action (for testing).
+    /// Always false now that scrolling is replaced with truncation.
     public var hasScrollAction: Bool {
-        label.action(forKey: "scroll") != nil
+        false
     }
 
-    // MARK: - Fade Timer — task 4.9
+    // MARK: - Cycle Display
 
-    /// Resets the inactivity fade timer. After fadeTimeout seconds with no text change,
-    /// the bubble fades to 50% opacity.
+    /// Updates the cycle array with recent tool summaries.
+    public func refreshCycle(recentTools: [String]) {
+        guard !recentTools.isEmpty else { return }
+        displayCycle = recentTools
+        cycleIndex = 0
+    }
+
+    /// Called each frame to advance the thought bubble cycle.
+    public func updateCycle(deltaTime: TimeInterval) {
+        guard displayCycle.count > 1, !isHidden else { return }
+
+        cycleTimer += deltaTime
+        if cycleTimer >= cycleInterval {
+            cycleTimer = 0
+            cycleInterval = TimeInterval.random(in: 1.5...2.5) // Re-jitter
+            cycleIndex = (cycleIndex + 1) % displayCycle.count
+
+            // Cross-fade to new text
+            let newText = displayCycle[cycleIndex]
+            let fadeOut = SKAction.fadeAlpha(to: 0.3, duration: 0.15)
+            let swap = SKAction.run { [weak self] in
+                self?.label.text = newText
+                self?.updateBubblePath()
+            }
+            let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.15)
+            run(SKAction.sequence([fadeOut, swap, fadeIn]), withKey: "cycleFade")
+        }
+    }
+
+    // MARK: - Opacity
+
+    /// Restores full opacity and removes any pending fade action.
     private func resetFadeTimer() {
-        hasFaded = false
         removeAction(forKey: "fadeTimeout")
-
-        // Restore full opacity if we had faded
         run(SKAction.fadeAlpha(to: 1.0, duration: 0.1))
-
-        // Schedule fade after timeout
-        let wait = SKAction.wait(forDuration: fadeTimeout)
-        let fade = SKAction.fadeAlpha(to: 0.5, duration: 0.5)
-        let sequence = SKAction.sequence([wait, fade])
-        run(sequence, withKey: "fadeTimeout")
     }
 }

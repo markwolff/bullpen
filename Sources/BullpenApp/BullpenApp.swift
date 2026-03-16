@@ -97,10 +97,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Updates the badge count on the status item.
     /// Call this whenever the agent list changes.
     func updateBadge(agents: [Models.AgentInfo]) {
-        let activeCount = agents.filter {
-            $0.state != .idle && $0.state != .finished
+        let activeAgents = agents.filter {
+            $0.state != .idle && $0.state != .finished && !$0.isSubagent
         }.count
-        statusItem?.button?.title = activeCount > 0 ? " \(activeCount)" : ""
+        let activeSubagents = agents.filter {
+            $0.state != .idle && $0.state != .finished && $0.isSubagent
+        }.count
+        let total = agents.count
+
+        if activeAgents == 0 && activeSubagents == 0 {
+            statusItem?.button?.title = total > 0 ? " \(total)" : ""
+        } else if activeSubagents > 0 {
+            statusItem?.button?.title = " \(activeAgents)+\(activeSubagents)/\(total)"
+        } else {
+            statusItem?.button?.title = " \(activeAgents)/\(total)"
+        }
     }
 
     // MARK: - 7.3: Click to toggle window
