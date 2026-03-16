@@ -51,11 +51,12 @@ public struct OfficeLayout: Sendable {
     public static func defaultLayout() -> OfficeLayout {
         let sceneSize = CGSize(width: 1280, height: 768)
 
-        // Two long communal tables, 8 seats each, tight co-working spacing
-        let seatXPositions: [CGFloat] = [200, 300, 400, 500, 600, 700, 800, 900]
+        // Three long communal tables, 10 seats each, tight co-working spacing
+        let seatXPositions: [CGFloat] = [175, 250, 325, 400, 475, 550, 625, 700, 775, 850]
         let tableDefinitions = [
-            TableDefinition(id: 0, centerY: 430, seatXPositions: seatXPositions),
-            TableDefinition(id: 1, centerY: 260, seatXPositions: seatXPositions),
+            TableDefinition(id: 0, centerY: 460, seatXPositions: seatXPositions),
+            TableDefinition(id: 1, centerY: 330, seatXPositions: seatXPositions),
+            TableDefinition(id: 2, centerY: 200, seatXPositions: seatXPositions),
         ]
 
         var desks: [DeskPosition] = []
@@ -104,7 +105,7 @@ public struct OfficeLayout: Sendable {
 
     /// Y coordinates of horizontal aisles between/around communal tables
     public var aisleYPositions: [CGFloat] {
-        [550, 345, 170, 100]
+        [530, 395, 265, 130, 80]
     }
 
     /// X coordinates of vertical corridors (left wall, center aisle, right wall)

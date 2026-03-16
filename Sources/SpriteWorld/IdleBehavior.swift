@@ -15,6 +15,7 @@ public enum IdleBehavior: CaseIterable, Sendable {
     case loungeCouch
     case radioArea
     case printerArea
+    case fetchWithDog
 }
 
 /// Manages idle behavior state machine for a single agent sprite.
@@ -31,14 +32,35 @@ public class IdleBehaviorManager {
         case walkingBack         // Returning to desk
     }
 
+    /// Whether this agent is a subagent (shorter timeouts, leaves after max idle).
+    public let isSubagent: Bool
+
+    /// Maximum total idle time before the agent should leave the office.
+    /// Subagents leave after 30s; regular agents after 5 minutes.
+    public var maxIdleDuration: TimeInterval {
+        isSubagent ? 30 : 300
+    }
+
+    /// Accumulated total time spent idle (across all phases).
+    public private(set) var totalIdleTime: TimeInterval = 0
+
     public private(set) var phase: Phase = .atDesk
     public private(set) var currentBehavior: IdleBehavior?
 
     /// How long the agent has been sitting idle at desk before roaming
     private var deskIdleTimer: TimeInterval = 0
 
-    /// Delay before first roam (5-15 seconds)
-    private var deskIdleThreshold: TimeInterval = TimeInterval.random(in: 5...15)
+    /// Delay before first roam — shorter for subagents
+    private var deskIdleThreshold: TimeInterval
+
+    // MARK: - Initialization
+
+    public init(isSubagent: Bool = false) {
+        self.isSubagent = isSubagent
+        self.deskIdleThreshold = isSubagent
+            ? TimeInterval.random(in: 3...8)
+            : TimeInterval.random(in: 5...15)
+    }
 
     /// How long the agent has been performing the current activity
     private var performTimer: TimeInterval = 0
@@ -59,9 +81,12 @@ public class IdleBehaviorManager {
         phase = .atDesk
         currentBehavior = nil
         deskIdleTimer = 0
-        deskIdleThreshold = TimeInterval.random(in: 5...15)
+        deskIdleThreshold = isSubagent
+            ? TimeInterval.random(in: 3...8)
+            : TimeInterval.random(in: 5...15)
         performTimer = 0
         performDuration = 0
+        totalIdleTime = 0
         effectShown = false
         actionBubble?.removeFromParent()
         actionBubble = nil
@@ -73,6 +98,10 @@ public class IdleBehaviorManager {
         switch phase {
         case .atDesk:
             deskIdleTimer += deltaTime
+            totalIdleTime += deltaTime
+            if totalIdleTime >= maxIdleDuration {
+                return .leaveOffice
+            }
             if deskIdleTimer >= deskIdleThreshold {
                 return startActivity(context: context)
             }
@@ -114,7 +143,9 @@ public class IdleBehaviorManager {
         case .walkingBack:
             phase = .atDesk
             deskIdleTimer = 0
-            deskIdleThreshold = TimeInterval.random(in: 8...20)
+            deskIdleThreshold = isSubagent
+                ? TimeInterval.random(in: 3...8)
+                : TimeInterval.random(in: 8...20)
             currentBehavior = nil
             actionBubble?.removeFromParent()
             actionBubble = nil
@@ -162,9 +193,9 @@ public class IdleBehaviorManager {
             candidates.removeAll { $0 == .petTheCat }
         }
 
-        // Remove petTheDog if no dog position available
+        // Remove petTheDog and fetchWithDog if no dog position available
         if context.dogPosition == nil {
-            candidates.removeAll { $0 == .petTheDog }
+            candidates.removeAll { $0 == .petTheDog || $0 == .fetchWithDog }
         }
 
         // Remove loungeCouch if no lounge position available
@@ -202,33 +233,54 @@ public class IdleBehaviorManager {
     }
 
     private func destinationForBehavior(_ behavior: IdleBehavior, context: IdleContext) -> CGPoint? {
+        let base: CGPoint?
         switch behavior {
         case .waterCooler:
-            return context.waterCoolerStandPosition
+            base = context.waterCoolerStandPosition
         case .browseBookshelf:
-            return context.bookshelfStandPosition
+            base = context.bookshelfStandPosition
         case .checkBulletinBoard:
-            return context.bulletinBoardStandPosition
+            base = context.bulletinBoardStandPosition
         case .lookOutWindow:
-            return context.windowStandPosition
+            base = context.windowStandPosition
         case .petTheCat:
-            return context.catPosition
+            base = context.catPosition
         case .petTheDog:
-            return context.dogPosition
+            base = context.dogPosition
         case .whiteboard:
-            return context.whiteboardStandPosition
+            base = context.whiteboardStandPosition
         case .waterPlant:
-            return context.plantPositions.randomElement()
+            base = context.plantPositions.randomElement()
         case .getCoffee:
-            // Walk to water cooler then back (simplified: just water cooler)
-            return context.waterCoolerStandPosition
+            base = context.waterCoolerStandPosition
         case .loungeCouch:
-            return context.loungePosition
+            base = context.loungePosition
         case .radioArea:
-            return context.radioStandPosition
+            base = context.radioStandPosition
         case .printerArea:
-            return context.printerStandPosition
+            base = context.printerStandPosition
+        case .fetchWithDog:
+            base = context.dogPosition
         }
+
+        guard let point = base else { return nil }
+
+        // Offset destination if another agent is already near this spot
+        // so agents stand side by side instead of on top of each other
+        let tooClose: CGFloat = 40
+        var nearbyCount = 0
+        for otherPos in context.otherRoamingAgentPositions {
+            if hypot(point.x - otherPos.x, point.y - otherPos.y) < tooClose {
+                nearbyCount += 1
+            }
+        }
+
+        if nearbyCount > 0 {
+            // Spread agents horizontally with alternating sides
+            let offset = CGFloat(nearbyCount) * 35.0 * (nearbyCount.isMultiple(of: 2) ? 1 : -1)
+            return CGPoint(x: point.x + offset, y: point.y)
+        }
+        return point
     }
 }
 
@@ -256,4 +308,6 @@ public enum IdleAction {
     case walkTo(CGPoint, behavior: IdleBehavior?)
     /// Show a visual effect for the current behavior.
     case showEffect(IdleBehavior)
+    /// The agent should leave the office (subagent idle timeout).
+    case leaveOffice
 }

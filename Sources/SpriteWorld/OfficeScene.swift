@@ -1028,6 +1028,10 @@ public class OfficeScene: SKScene {
 
         let context = buildIdleContext(for: sprite)
         if let action = sprite.idleBehaviorManager.update(deltaTime: deltaTime, context: context) {
+            if case .leaveOffice = action {
+                removeAgentSprite(id: sprite.agentInfo.id)
+                return
+            }
             sprite.handleIdleAction(action, layout: layout)
 
             // Trigger cat heart when agent pets the cat
@@ -1038,6 +1042,11 @@ public class OfficeScene: SKScene {
             // Trigger dog tail wag when agent pets the dog
             if case .showEffect(.petTheDog) = action {
                 dogSprite?.showHeartParticle()
+            }
+
+            // Trigger fetch when agent throws ball for the dog
+            if case .showEffect(.fetchWithDog) = action {
+                dogSprite?.startFetch(throwerPosition: sprite.position)
             }
         }
     }
@@ -1081,7 +1090,7 @@ public class OfficeScene: SKScene {
             catPos = nil
         }
 
-        // Dog position (only if dog is idle or wagging, not walking/sleeping)
+        // Dog position (only if dog is idle or wagging, not fetching/walking/sleeping)
         let dogPos: CGPoint?
         if let dog = dogSprite, (dog.dogState == .idle || dog.dogState == .wagging) {
             dogPos = dog.position
@@ -1124,6 +1133,11 @@ public class OfficeScene: SKScene {
             sprite.updateIdleZZZ(currentTime: currentTime)
             updateIdleBehavior(for: sprite, deltaTime: deltaTime)
             sprite.thoughtBubble.updateCycle(deltaTime: deltaTime)
+
+            // Y-based depth sorting: agents closer to bottom (lower Y) render in front
+            // Map Y range to zPosition 5.0–5.9 so agents always stay in the agent layer
+            let normalizedDepth = 1.0 - min(max(sprite.position.y, 0), 700) / 700.0
+            sprite.zPosition = 5.0 + CGFloat(normalizedDepth) * 0.9
         }
 
         // Update office cat (8.10-8.13)

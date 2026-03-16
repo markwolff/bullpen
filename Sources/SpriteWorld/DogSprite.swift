@@ -7,7 +7,7 @@ public class DogSprite: SKSpriteNode {
 
     /// The possible states of the office dog.
     public enum DogState {
-        case idle, walking, sleeping, eating, wagging, playing, zoomies, barking
+        case idle, walking, sleeping, eating, wagging, playing, zoomies, barking, fetch
     }
 
     /// The dog's current behavioral state.
@@ -66,6 +66,9 @@ public class DogSprite: SKSpriteNode {
 
     /// Timer for bark state duration.
     private var barkTimer: TimeInterval = 0
+
+    /// Position to return to after fetching the ball (where the throwing agent stands).
+    private var fetchReturnPosition: CGPoint = .zero
 
     /// Energy level affects behavior probability (0.0 = sleepy, 1.0 = hyper).
     private var energyLevel: Double = 0.5
@@ -190,6 +193,10 @@ public class DogSprite: SKSpriteNode {
                 stopBarking()
                 scheduleNextWander()
             }
+
+        case .fetch:
+            // Walk completion callbacks drive the fetch state machine
+            break
         }
     }
 
@@ -571,6 +578,87 @@ public class DogSprite: SKSpriteNode {
             label.removeAllActions()
             label.removeFromParent()
         }
+    }
+
+    // MARK: - Fetch
+
+    /// Starts a fetch sequence: dog runs to a random "ball landing" spot, then runs back to the thrower.
+    public func startFetch(throwerPosition: CGPoint) {
+        guard dogState == .idle || dogState == .wagging else { return }
+
+        dogState = .fetch
+        fetchReturnPosition = throwerPosition
+        removeAction(forKey: "wagAnimation")
+
+        // Pick a random spot for the "ball" to land — offset from the thrower
+        let ballLanding = CGPoint(
+            x: throwerPosition.x + CGFloat.random(in: 80...180) * (Bool.random() ? 1 : -1),
+            y: CGFloat.random(in: 65...115)
+        )
+
+        // Run to the ball at excited speed
+        startWalking(to: ballLanding, deskID: -1, isActiveDeskID: false, isZooming: false, speed: walkSpeed * 2)
+
+        // Override the arrival callback: when the walk action completes, run back
+        removeAction(forKey: "walk")
+        let distance = hypot(ballLanding.x - position.x, ballLanding.y - position.y)
+        let duration = TimeInterval(distance / (walkSpeed * 2))
+        let move = SKAction.move(to: ballLanding, duration: duration)
+        move.timingMode = .easeOut
+
+        let pauseAndReturn = SKAction.run { [weak self] in
+            self?.fetchPickUpBall()
+        }
+        run(SKAction.sequence([move, pauseAndReturn]), withKey: "walk")
+    }
+
+    /// Dog pauses briefly at the ball, then runs back to the thrower.
+    private func fetchPickUpBall() {
+        removeAction(forKey: "walkAnimation")
+        let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
+        self.texture = idleTexture
+
+        // Brief sniff/grab pause
+        let pause = SKAction.wait(forDuration: 0.6)
+        let returnRun = SKAction.run { [weak self] in
+            self?.fetchReturnToThrower()
+        }
+        run(SKAction.sequence([pause, returnRun]), withKey: "walk")
+    }
+
+    /// Dog runs back to the agent who threw the ball, then wags.
+    private func fetchReturnToThrower() {
+        // Flip toward thrower
+        if fetchReturnPosition.x < position.x {
+            xScale = -abs(xScale)
+        } else {
+            xScale = abs(xScale)
+        }
+
+        // Walk animation
+        let tm = TextureManager.shared
+        let frame0 = tm.texture(for: "dog_walk_frame0")
+        let frame1 = tm.texture(for: "dog_walk_frame1")
+        let walkAnim = SKAction.animate(with: [frame0, frame1], timePerFrame: 0.15)
+        run(SKAction.repeatForever(walkAnim), withKey: "walkAnimation")
+
+        let distance = hypot(fetchReturnPosition.x - position.x, fetchReturnPosition.y - position.y)
+        let duration = TimeInterval(distance / (walkSpeed * 2))
+        let move = SKAction.move(to: fetchReturnPosition, duration: duration)
+        move.timingMode = .easeIn
+
+        let arrive = SKAction.run { [weak self] in
+            self?.fetchComplete()
+        }
+        run(SKAction.sequence([move, arrive]), withKey: "walk")
+    }
+
+    /// Fetch is done — wag tail and show heart.
+    private func fetchComplete() {
+        removeAction(forKey: "walkAnimation")
+        wagShown = false
+        startWagging()
+        scheduleNextWander()
     }
 
     // MARK: - Destination Picking

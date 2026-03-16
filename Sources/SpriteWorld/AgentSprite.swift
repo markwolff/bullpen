@@ -42,7 +42,7 @@ public class AgentSprite: SKSpriteNode {
     private var stateEmitter: SKEmitterNode?
 
     /// Manages idle roaming behavior when the agent is not working
-    public let idleBehaviorManager = IdleBehaviorManager()
+    public lazy var idleBehaviorManager = IdleBehaviorManager(isSubagent: agentInfo.isSubagent)
 
     /// Whether this agent is a subagent (renders smaller)
     private var isSubagent: Bool { agentInfo.isSubagent }
@@ -162,10 +162,10 @@ public class AgentSprite: SKSpriteNode {
         }
         thoughtBubble.update(text: bubbleText, for: newInfo.state)
 
-        // Refresh thought bubble cycle from recent tools
-        if !newInfo.recentTools.isEmpty {
-            let summaries = newInfo.recentTools.prefix(5).map(\.summary)
-            thoughtBubble.refreshCycle(recentTools: Array(summaries))
+        // Show only the latest tool summary (not a queue) — skip for finished/idle agents
+        if !newInfo.recentTools.isEmpty && newInfo.state != .finished && newInfo.state != .idle {
+            let latest = newInfo.recentTools.first!.summary
+            thoughtBubble.refreshCycle(recentTools: [latest])
         }
 
         // Trigger animation change if state changed
@@ -617,6 +617,9 @@ public class AgentSprite: SKSpriteNode {
 
         case .showEffect(let behavior):
             showActionBubble(for: behavior)
+
+        case .leaveOffice:
+            break
         }
     }
 
@@ -638,6 +641,7 @@ public class AgentSprite: SKSpriteNode {
         case .loungeCouch: emoji = "🛋"
         case .radioArea: emoji = "🎵"
         case .printerArea: emoji = "🖨"
+        case .fetchWithDog: emoji = "🎾"
         }
 
         let bubble = SKLabelNode(text: emoji)

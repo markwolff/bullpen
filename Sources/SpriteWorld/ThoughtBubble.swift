@@ -20,26 +20,14 @@ public class ThoughtBubble: SKNode {
     /// Padding inside the bubble
     private let padding: CGFloat = 12
 
-    /// Cycle of recent tool summaries to display
-    private var displayCycle: [String] = []
-
-    /// Current index in the display cycle
-    private var cycleIndex: Int = 0
-
-    /// Timer for cycling — randomized initial offset so agents don't cycle in sync
-    private var cycleTimer: TimeInterval = 0
-
-    /// Cycle interval with jitter (5s ± 500ms)
-    private var cycleInterval: TimeInterval = 0
+    /// The last text that was displayed (to avoid re-showing identical content)
+    private var lastDisplayedText: String?
 
     public override init() {
         bubbleBackground = SKShapeNode()
         label = SKLabelNode()
         cropNode = SKCropNode()
         super.init()
-        // Randomize cycle timing so agents spawned together don't talk in lockstep
-        cycleInterval = TimeInterval.random(in: 4.5...5.5)
-        cycleTimer = TimeInterval.random(in: 0.0..<cycleInterval)
         setupNodes()
     }
 
@@ -85,8 +73,9 @@ public class ThoughtBubble: SKNode {
         }
 
         // Don't re-show the bubble if the message hasn't changed
-        guard label.text != text else { return }
+        guard text != lastDisplayedText else { return }
 
+        lastDisplayedText = text
         label.text = text
         updateBubblePath()
         show()
@@ -192,45 +181,27 @@ public class ThoughtBubble: SKNode {
         false
     }
 
-    // MARK: - Cycle Display
+    // MARK: - Latest Tool Display
 
-    /// Updates the cycle array with recent tool summaries.
+    /// Shows only the latest tool summary. No queueing — only the most recent matters.
     public func refreshCycle(recentTools: [String]) {
-        guard !recentTools.isEmpty else { return }
-        displayCycle = recentTools
-        cycleIndex = 0
+        // Only care about the very latest tool
+        guard let latest = recentTools.first else { return }
+        // Don't re-show if the content is the same as what was last displayed
+        guard latest != lastDisplayedText else { return }
+
+        lastDisplayedText = latest
+        label.text = latest
+        updateBubblePath()
+        show()
+        resetFadeTimer()
+        setupScrollIfNeeded()
+        scheduleAutoHide()
     }
 
-    /// Called each frame to advance the thought bubble cycle.
+    /// No-op — cycling is removed. Kept for API compatibility.
     public func updateCycle(deltaTime: TimeInterval) {
-        guard displayCycle.count > 1 else { return }
-
-        cycleTimer += deltaTime
-        if cycleTimer >= cycleInterval {
-            cycleTimer = 0
-            cycleInterval = TimeInterval.random(in: 4.5...5.5) // ~5s with jitter
-
-            // Find the next message that differs from the current one
-            let startIndex = cycleIndex
-            repeat {
-                cycleIndex = (cycleIndex + 1) % displayCycle.count
-            } while displayCycle[cycleIndex] == label.text && cycleIndex != startIndex
-
-            let newText = displayCycle[cycleIndex]
-            // Skip if we looped all the way around and every message is the same
-            guard newText != label.text else { return }
-
-            // Cross-fade to new text, then auto-hide after 2s
-            isHidden = false
-            let fadeOut = SKAction.fadeAlpha(to: 0.3, duration: 0.15)
-            let swap = SKAction.run { [weak self] in
-                self?.label.text = newText
-                self?.updateBubblePath()
-            }
-            let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.15)
-            run(SKAction.sequence([fadeOut, swap, fadeIn]), withKey: "cycleFade")
-            scheduleAutoHide()
-        }
+        // Intentionally empty — we only show the latest update, no cycling
     }
 
     // MARK: - Auto-Hide
