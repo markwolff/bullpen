@@ -11,24 +11,22 @@ public class ThoughtBubble: SKNode {
     /// The text label inside the bubble
     private let label: SKLabelNode
 
+    /// Crop node that clips scrolling text to the bubble bounds
+    private let cropNode: SKCropNode
+
     /// Maximum width of the bubble before text wraps
     private let maxWidth: CGFloat = 200
 
     /// Padding inside the bubble
     private let padding: CGFloat = 12
 
-    /// The last time the text was changed (for fade timer) — task 4.9
-    private var lastChangeTime: TimeInterval = 0
-
-    /// Whether the bubble has faded due to inactivity — task 4.9
-    private var hasFaded: Bool = false
-
-    /// Duration before fading to 50% opacity — task 4.9
-    private let fadeTimeout: TimeInterval = 10.0
+    /// The last text that was displayed (to avoid re-showing identical content)
+    private var lastDisplayedText: String?
 
     public override init() {
         bubbleBackground = SKShapeNode()
         label = SKLabelNode()
+        cropNode = SKCropNode()
         super.init()
         setupNodes()
     }
@@ -49,13 +47,17 @@ public class ThoughtBubble: SKNode {
         label.horizontalAlignmentMode = .center
 
         // Configure the bubble background
-        bubbleBackground.fillColor = .white
+        bubbleBackground.fillColor = SKColor(white: 1.0, alpha: 1.0)
         bubbleBackground.strokeColor = SKColor(white: 0.7, alpha: 1.0)
         bubbleBackground.lineWidth = 1.5
-        bubbleBackground.alpha = 0.92
+        bubbleBackground.alpha = 1.0
 
+        // Add the bubble background as a direct child (not clipped)
         addChild(bubbleBackground)
-        addChild(label)
+
+        // Add the label inside a crop node so scrolling text is clipped
+        cropNode.addChild(label)
+        addChild(cropNode)
 
         // Start hidden
         isHidden = true
@@ -63,29 +65,47 @@ public class ThoughtBubble: SKNode {
 
     /// Updates the bubble to show the given text.
     /// Pass nil or empty string to hide the bubble.
+    /// Only shows the bubble if the text has changed from the current message.
     public func update(text: String?, for state: AgentState) {
         guard let text, !text.isEmpty, state != .idle && state != .finished else {
             hide()
             return
         }
 
-        // Reset fade timer on text change — task 4.9
-        let textChanged = label.text != text
+        // Don't re-show the bubble if the message hasn't changed
+        guard text != lastDisplayedText else { return }
+
+        lastDisplayedText = text
         label.text = text
         updateBubblePath()
         show()
-
-        if textChanged {
-            resetFadeTimer()
-            setupScrollIfNeeded()
-        }
+        resetFadeTimer()
+        setupScrollIfNeeded()
+        scheduleAutoHide()
     }
 
     /// Rebuilds the bubble shape to fit the current label text.
     private func updateBubblePath() {
-        let textFrame = label.frame
-        let bubbleWidth = max(textFrame.width + padding * 2, 60)
-        let bubbleHeight = max(textFrame.height + padding * 2, 30)
+        // Compute text size manually for accurate multi-line dimensions
+        let textWidth: CGFloat
+        let textHeight: CGFloat
+        if let text = label.text, let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) {
+            let constrainedSize = CGSize(width: maxWidth - padding * 2, height: .greatestFiniteMagnitude)
+            let boundingRect = (text as NSString).boundingRect(
+                with: constrainedSize,
+                options: [.usesLineFragmentOrigin],
+                attributes: [.font: font]
+            )
+            textWidth = boundingRect.width
+            textHeight = boundingRect.height
+        } else {
+            let textFrame = label.frame
+            textWidth = textFrame.width
+            textHeight = textFrame.height
+        }
+
+        let bubbleWidth = max(textWidth + padding * 2, 60)
+        let bubbleHeight = max(textHeight + padding * 2, 30)
 
         let rect = CGRect(
             x: -bubbleWidth / 2,
@@ -95,73 +115,113 @@ public class ThoughtBubble: SKNode {
         )
 
         bubbleBackground.path = CGPath(roundedRect: rect, cornerWidth: 8, cornerHeight: 8, transform: nil)
+
+        // Update the crop mask to match the bubble rect
+        let maskNode = SKShapeNode()
+        maskNode.path = CGPath(roundedRect: rect, cornerWidth: 8, cornerHeight: 8, transform: nil)
+        maskNode.fillColor = .white
+        cropNode.maskNode = maskNode
     }
 
-    /// Shows the bubble with a fade-in animation.
+    /// Shows the bubble with a fade-in animation, staggered by a small random delay
+    /// so multiple agents spawning together don't all pop bubbles at once.
     public func show() {
         guard isHidden else { return }
         isHidden = false
         alpha = 0
-        run(SKAction.fadeIn(withDuration: 0.2))
-        hasFaded = false
+        let delay = SKAction.wait(forDuration: TimeInterval.random(in: 0.0...0.6))
+        let fadeIn = SKAction.fadeIn(withDuration: 0.2)
+        run(SKAction.sequence([delay, fadeIn]), withKey: "showDelay")
     }
 
     /// Hides the bubble with a fade-out animation.
     public func hide() {
+        removeAction(forKey: "autoHide")
+        removeAction(forKey: "showDelay")
         guard !isHidden else { return }
-        removeAction(forKey: "fadeTimeout")
         run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
             self?.isHidden = true
         }
     }
 
-    // MARK: - 8.14: Text Scroll for Long Text
+    // MARK: - 8.14: Text Truncation for Long Text
 
-    /// Sets up a scrolling animation for text that exceeds the bubble width.
+    /// Truncates text that exceeds the bubble width instead of scrolling.
     private func setupScrollIfNeeded() {
         label.removeAction(forKey: "scroll")
+        // Reset label position in case a previous scroll moved it
+        label.position = .zero
+
+        guard let text = label.text, !text.isEmpty else { return }
 
         let availableWidth = maxWidth - padding * 2
 
-        // Measure the text as single-line to detect overflow, since numberOfLines=2 causes wrapping
-        let textWidth: CGFloat
-        if let text = label.text, let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) {
-            let size = (text as NSString).size(withAttributes: [.font: font])
-            textWidth = size.width
-        } else {
-            textWidth = label.frame.width
-        }
+        // Measure single-line width to detect overflow
+        guard let font = NSFont(name: label.fontName ?? "Menlo", size: label.fontSize) else { return }
+        let fullWidth = (text as NSString).size(withAttributes: [.font: font]).width
 
-        if textWidth > availableWidth {
-            let scrollDistance = textWidth - availableWidth + 20
-            let scrollLeft = SKAction.moveBy(x: -scrollDistance, y: 0, duration: TimeInterval(scrollDistance / 30))
-            let pause = SKAction.wait(forDuration: 2.0)
-            let scrollBack = SKAction.moveBy(x: scrollDistance, y: 0, duration: 0)
-            let sequence = SKAction.sequence([pause, scrollLeft, pause, scrollBack])
-            label.run(SKAction.repeatForever(sequence), withKey: "scroll")
+        if fullWidth > availableWidth * 2 {
+            // Text is too long even for 2 lines — truncate with ellipsis
+            var truncated = text
+            while truncated.count > 3 {
+                truncated = String(truncated.dropLast())
+                let w = (truncated as NSString).size(withAttributes: [.font: font]).width
+                if w <= availableWidth * 2 {
+                    break
+                }
+            }
+            label.text = truncated + "…"
+            updateBubblePath()
         }
     }
 
     /// Whether the label currently has a scroll action (for testing).
+    /// Always false now that scrolling is replaced with truncation.
     public var hasScrollAction: Bool {
-        label.action(forKey: "scroll") != nil
+        false
     }
 
-    // MARK: - Fade Timer — task 4.9
+    // MARK: - Latest Tool Display
 
-    /// Resets the inactivity fade timer. After fadeTimeout seconds with no text change,
-    /// the bubble fades to 50% opacity.
+    /// Shows only the latest tool summary. No queueing — only the most recent matters.
+    public func refreshCycle(recentTools: [String]) {
+        // Only care about the very latest tool
+        guard let latest = recentTools.first else { return }
+        // Don't re-show if the content is the same as what was last displayed
+        guard latest != lastDisplayedText else { return }
+
+        lastDisplayedText = latest
+        label.text = latest
+        updateBubblePath()
+        show()
+        resetFadeTimer()
+        setupScrollIfNeeded()
+        scheduleAutoHide()
+    }
+
+    /// No-op — cycling is removed. Kept for API compatibility.
+    public func updateCycle(deltaTime: TimeInterval) {
+        // Intentionally empty — we only show the latest update, no cycling
+    }
+
+    // MARK: - Auto-Hide
+
+    /// Schedules the bubble to fade out after 2 seconds.
+    private func scheduleAutoHide() {
+        removeAction(forKey: "autoHide")
+        let wait = SKAction.wait(forDuration: TimeInterval.random(in: 1.8...2.5))
+        let fadeOut = SKAction.fadeOut(withDuration: 0.2)
+        let markHidden = SKAction.run { [weak self] in
+            self?.isHidden = true
+        }
+        run(SKAction.sequence([wait, fadeOut, markHidden]), withKey: "autoHide")
+    }
+
+    // MARK: - Opacity
+
+    /// Restores full opacity and removes any pending fade action.
     private func resetFadeTimer() {
-        hasFaded = false
         removeAction(forKey: "fadeTimeout")
-
-        // Restore full opacity if we had faded
         run(SKAction.fadeAlpha(to: 1.0, duration: 0.1))
-
-        // Schedule fade after timeout
-        let wait = SKAction.wait(forDuration: fadeTimeout)
-        let fade = SKAction.fadeAlpha(to: 0.5, duration: 0.5)
-        let sequence = SKAction.sequence([wait, fade])
-        run(sequence, withKey: "fadeTimeout")
     }
 }

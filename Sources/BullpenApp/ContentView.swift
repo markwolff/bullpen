@@ -67,12 +67,19 @@ struct ContentView: View {
             Spacer()
 
             // Agent count
-            let activeCount = monitorService.agents.filter { $0.state != .finished && $0.state != .idle }.count
+            let activeAgents = monitorService.agents.filter { $0.state != .finished && $0.state != .idle && !$0.isSubagent }.count
+            let activeSubagents = monitorService.agents.filter { $0.state != .finished && $0.state != .idle && $0.isSubagent }.count
             let totalCount = monitorService.agents.count
 
-            Text("\(activeCount) active / \(totalCount) total agents")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Group {
+                if activeSubagents > 0 {
+                    Text("\(activeAgents) agents, \(activeSubagents) subagents / \(totalCount) total")
+                } else {
+                    Text("\(activeAgents) active / \(totalCount) total")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
 
             // Status dots for each agent
             HStack(spacing: 4) {
@@ -100,6 +107,7 @@ struct ContentView: View {
         case .waitingForInput: .blue
         case .error: .red
         case .finished: Color(white: 0.4)
+        case .supervisingAgents: .teal
         }
     }
 }

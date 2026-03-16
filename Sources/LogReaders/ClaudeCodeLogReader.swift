@@ -42,15 +42,36 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         }
 
         for projectDir in projectContents {
-            // Claude Code stores session logs in two possible locations:
+            // Claude Code stores session logs in several locations:
             // 1. Directly in project dir: projects/<hash>/<uuid>.jsonl
             // 2. In sessions subdir: projects/<hash>/sessions/<uuid>.jsonl
-            let searchDirs: [URL]
+            // 3. Subagent logs: projects/<hash>/<uuid>/subagents/agent-<id>.jsonl
+            var searchDirs: [URL] = [projectDir]
             let sessionsDir = projectDir.appendingPathComponent("sessions")
             if fm.fileExists(atPath: sessionsDir.path) {
-                searchDirs = [projectDir, sessionsDir]
-            } else {
-                searchDirs = [projectDir]
+                searchDirs.append(sessionsDir)
+            }
+
+            // Look for subagent directories inside session directories
+            // Structure: projects/<hash>/<session-uuid>/subagents/*.jsonl
+            let projectEntries: [URL]
+            do {
+                projectEntries = try fm.contentsOfDirectory(
+                    at: projectDir,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+            } catch {
+                projectEntries = []
+            }
+            for entry in projectEntries {
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: entry.path, isDirectory: &isDir), isDir.boolValue {
+                    let subagentsDir = entry.appendingPathComponent("subagents")
+                    if fm.fileExists(atPath: subagentsDir.path) {
+                        searchDirs.append(subagentsDir)
+                    }
+                }
             }
 
             for searchDir in searchDirs {
@@ -156,10 +177,24 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         let message = json["message"] as? [String: Any]
         let contentArray = message?["content"] as? [[String: Any]]
         let stopReason = message?["stop_reason"] as? String
-        let usage = message?["usage"] as? [String: Any]
+
+        // Check for plan mode indicators in content
+        let isPlanMode = detectPlanMode(in: contentArray, rawEntry: rawEntry)
 
         // Parse timestamp
         let timestamp = parseTimestamp(from: json["timestamp"] as? String)
+
+        // Extract parent session ID from JSON metadata
+        let jsonSessionID = json["sessionId"] as? String
+        let agentID = json["agentId"] as? String
+        // When agentId exists and differs from the file-derived session ID,
+        // the sessionId field is the parent session
+        let parentSessionID: String?
+        if let agentID, let jsonSessionID, agentID != jsonSessionID {
+            parentSessionID = jsonSessionID
+        } else {
+            parentSessionID = nil
+        }
 
         // Check for error in tool results
         if type == "result" {
@@ -173,7 +208,9 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .error,
                             summary: summary,
-                            rawPayload: rawEntry
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
                         )
                     }
                 }
@@ -184,34 +221,72 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .toolResult,
                 summary: "Tool result received",
-                rawPayload: rawEntry
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
             )
         }
 
-        // Handle user messages
+        // Handle user messages (including tool results, which arrive as type "user")
         if type == "user" {
+            // Check if this is a tool_result (tool results come as user messages)
+            if let content = contentArray {
+                for item in content {
+                    if (item["type"] as? String) == "tool_result" {
+                        // Check for error in tool result
+                        if item["is_error"] as? Bool == true {
+                            let errorContent = item["content"] as? String ?? "Unknown error"
+                            let summary = "Error: \(truncate(errorContent, to: 120))"
+                            return AgentActivity(
+                                sessionID: sessionID,
+                                timestamp: timestamp,
+                                activityType: .error,
+                                summary: summary,
+                                rawPayload: rawEntry,
+                                isPlanMode: isPlanMode,
+                                parentSessionID: parentSessionID
+                            )
+                        }
+                        // Non-error tool result
+                        return AgentActivity(
+                            sessionID: sessionID,
+                            timestamp: timestamp,
+                            activityType: .toolResult,
+                            summary: "Tool result received",
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
+                        )
+                    }
+                }
+            }
             return AgentActivity(
                 sessionID: sessionID,
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: "User message",
-                rawPayload: rawEntry
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
             )
         }
 
         // Handle assistant messages
         if type == "assistant" {
-            // Check for end_turn → sessionEnd
+            // Check for end_turn — text-only responses without tool_use
             if stopReason == "end_turn" {
-                // But only if there are no tool_use blocks (pure text end_turn)
                 let hasToolUse = contentArray?.contains(where: { ($0["type"] as? String) == "tool_use" }) ?? false
                 if !hasToolUse {
+                    // Don't classify as sessionEnd — instead treat as a completed response.
+                    // The natural idle timeout will handle the transition to idle/finished.
                     return AgentActivity(
                         sessionID: sessionID,
                         timestamp: timestamp,
-                        activityType: .sessionEnd,
-                        summary: "Finished",
-                        rawPayload: rawEntry
+                        activityType: .assistantMessage,
+                        summary: "Response complete",
+                        rawPayload: rawEntry,
+                        isPlanMode: isPlanMode,
+                        parentSessionID: parentSessionID
                     )
                 }
             }
@@ -228,7 +303,9 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolUse,
                             summary: summary,
-                            rawPayload: rawEntry
+                            rawPayload: rawEntry,
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
                         )
                     }
                 }
@@ -240,40 +317,27 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: rawEntry
+                rawPayload: rawEntry,
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
             )
         }
 
-        // Fallback for unknown types
-        return AgentActivity(
-            sessionID: sessionID,
-            timestamp: timestamp,
-            activityType: .assistantMessage,
-            summary: "Claude Code: \(type)",
-            rawPayload: rawEntry
-        )
+        // Skip unknown/internal types (e.g. "system") — not meaningful activity
+        return nil
     }
 
     // MARK: - Private helpers
 
-    nonisolated(unsafe) private static let iso8601Formatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    nonisolated(unsafe) private static let iso8601FormatterNoFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     private func parseTimestamp(from string: String?) -> Date {
         guard let string else { return Date() }
-        if let date = Self.iso8601Formatter.date(from: string) {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) {
             return date
         }
-        if let date = Self.iso8601FormatterNoFractional.date(from: string) {
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: string) {
             return date
         }
         return Date()
@@ -315,5 +379,22 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             return string
         }
         return String(string.prefix(maxLength)) + "..."
+    }
+
+    private func detectPlanMode(in contentArray: [[String: Any]]?, rawEntry: String) -> Bool {
+        // Check raw entry for plan mode system reminders
+        if rawEntry.contains("Plan mode is active") || rawEntry.contains("Plan mode still active") {
+            return true
+        }
+        // Check content blocks for plan mode text
+        if let content = contentArray {
+            for item in content {
+                if let text = item["text"] as? String,
+                   (text.contains("Plan mode is active") || text.contains("Plan mode still active")) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

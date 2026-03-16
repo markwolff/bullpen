@@ -32,6 +32,7 @@ public final class TextureManager: @unchecked Sendable {
     public static let charClaudeWaitingForInput = "char_claude_waitingForInput"
     public static let charClaudeError = "char_claude_error"
     public static let charClaudeFinished = "char_claude_finished"
+    public static let charClaudeSupervisingAgents = "char_claude_supervisingAgents"
 
     public static let charCodexIdle = "char_codex_idle"
     public static let charCodexThinking = "char_codex_thinking"
@@ -42,6 +43,7 @@ public final class TextureManager: @unchecked Sendable {
     public static let charCodexWaitingForInput = "char_codex_waitingForInput"
     public static let charCodexError = "char_codex_error"
     public static let charCodexFinished = "char_codex_finished"
+    public static let charCodexSupervisingAgents = "char_codex_supervisingAgents"
 
     // Furniture textures
     public static let furnitureDesk = "furniture_desk"
@@ -50,6 +52,11 @@ public final class TextureManager: @unchecked Sendable {
     public static let furnitureMonitorOn = "furniture_monitor_on"
     public static let furnitureLamp = "furniture_lamp"
     public static let furnitureCoffeeMug = "furniture_coffee_mug"
+    public static let furnitureLaptopDesk = "furniture_laptop_desk"
+    public static let furnitureLaptopOn = "furniture_laptop_on"
+    public static let furnitureLaptopOff = "furniture_laptop_off"
+    public static let furnitureLaptopScreensaver = "furniture_laptop_screensaver"
+    public static let furnitureLongTable = "furniture_long_table"
 
     // Decoration textures
     public static let decorationPlant = "decoration_plant"
@@ -60,6 +67,62 @@ public final class TextureManager: @unchecked Sendable {
     public static let decorationBulletinBoard = "decoration_bulletin_board"
     public static let decorationWaterCooler = "decoration_water_cooler"
     public static let decorationPoster = "decoration_poster"
+    public static let decorationDoor = "decoration_door"
+    public static let decorationCouch = "decoration_couch"
+    public static let decorationPrinter = "decoration_printer"
+    public static let decorationCoatRack = "decoration_coat_rack"
+    public static let decorationAchievementShelf = "decoration_achievement_shelf"
+    public static let decorationRadio = "decoration_radio"
+    public static let decorationBirdCage = "decoration_bird_cage"
+    public static let decorationCoffeeStation = "decoration_coffee_station"
+
+    // Bird textures
+    public static let birdIdleFrame0 = "bird_idle_frame0"
+    public static let birdIdleFrame1 = "bird_idle_frame1"
+    public static let birdIdleFrame2 = "bird_idle_frame2"
+
+    // Barista textures
+    public static let baristaIdleFrame0 = "barista_idle_frame0"
+    public static let baristaIdleFrame1 = "barista_idle_frame1"
+    public static let baristaServe = "barista_serve"
+
+    // Extra decoration textures
+    public static let decorationCoatHooks = "decoration_coat_hooks"
+    public static let decorationSmallRug = "decoration_small_rug"
+    public static let decorationPoster2 = "decoration_poster2"
+    public static let decorationWallClock = "decoration_wall_clock"
+
+    // Item textures
+    public static let itemStickyNoteYellow = "item_sticky_note_yellow"
+    public static let itemStickyNotePink = "item_sticky_note_pink"
+    public static let itemStickyNoteBlue = "item_sticky_note_blue"
+    public static let itemCrumpledPaper = "item_crumpled_paper"
+    public static let itemRubberDuck = "item_rubber_duck"
+    public static let itemCoffeeCup = "item_coffee_cup"
+    public static let itemPizzaBox = "item_pizza_box"
+
+    // NPC textures
+    public static let npcJanitor = "npc_janitor"
+    public static let npcPizzaDelivery = "npc_pizza_delivery"
+
+    // Plant growth textures
+    public static let plantSeedling = "plant_seedling"
+    public static let plantSmall = "plant_small"
+    public static let plantMedium = "plant_medium"
+    public static let plantLarge = "plant_large"
+
+    // Overlay textures
+    public static let overlaySleepyEyes = "overlay_sleepy_eyes"
+
+    // Trophy textures
+    public static let trophyCup = "trophy_cup"
+    public static let trophyStar = "trophy_star"
+    public static let trophyMoon = "trophy_moon"
+    public static let trophyHouse = "trophy_house"
+    public static let trophyLightning = "trophy_lightning"
+
+    // Planning texture
+    public static let itemPlanningClipboard = "item_planning_clipboard"
 
     // Tile textures
     public static let tileFloor = "tile_floor"
@@ -70,20 +133,45 @@ public final class TextureManager: @unchecked Sendable {
     public static let catSleep = "cat_sleep"
     public static let catWalk = "cat_walk"
 
+    // Dog textures - Pancake the Maltipoo
+    public static let dogIdle = "dog_idle"
+    public static let dogSleep = "dog_sleep"
+    public static let dogWalk = "dog_walk"
+    public static let dogEat = "dog_eat"
+    public static let dogBowl = "dog_bowl"
+    public static let dogToyBall = "dog_toy_ball"
+    public static let dogToyBone = "dog_toy_bone"
+    public static let dogToyRope = "dog_toy_rope"
+
     /// All known texture names for validation
     public static let allTextureNames: [String] = [
         charClaudeIdle, charClaudeThinking, charClaudeWritingCode, charClaudeReadingFiles,
         charClaudeRunningCommand, charClaudeSearching, charClaudeWaitingForInput,
-        charClaudeError, charClaudeFinished,
+        charClaudeError, charClaudeFinished, charClaudeSupervisingAgents,
         charCodexIdle, charCodexThinking, charCodexWritingCode, charCodexReadingFiles,
         charCodexRunningCommand, charCodexSearching, charCodexWaitingForInput,
-        charCodexError, charCodexFinished,
+        charCodexError, charCodexFinished, charCodexSupervisingAgents,
         furnitureDesk, furnitureChair, furnitureMonitorOff, furnitureMonitorOn,
         furnitureLamp, furnitureCoffeeMug,
+        furnitureLaptopDesk, furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver, furnitureLongTable,
         decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
-        decorationBookshelf, decorationBulletinBoard, decorationWaterCooler, decorationPoster,
+        decorationBookshelf, decorationBulletinBoard, decorationWaterCooler, decorationPoster, decorationDoor,
+        decorationCouch, decorationPrinter, decorationCoatRack,
+        decorationAchievementShelf, decorationRadio, decorationBirdCage,
+        decorationCoffeeStation, decorationCoatHooks, decorationSmallRug,
+        decorationPoster2, decorationWallClock,
+        birdIdleFrame0, birdIdleFrame1, birdIdleFrame2,
+        baristaIdleFrame0, baristaIdleFrame1, baristaServe,
+        itemStickyNoteYellow, itemStickyNotePink, itemStickyNoteBlue,
+        itemCrumpledPaper, itemRubberDuck, itemCoffeeCup, itemPizzaBox, itemPlanningClipboard,
+        npcJanitor, npcPizzaDelivery,
+        plantSeedling, plantSmall, plantMedium, plantLarge,
+        overlaySleepyEyes,
+        trophyCup, trophyStar, trophyMoon, trophyHouse, trophyLightning,
         tileFloor, tileWall,
         catIdle, catSleep, catWalk,
+        dogIdle, dogSleep, dogWalk, dogEat, dogBowl,
+        dogToyBall, dogToyBone, dogToyRope,
     ]
 
     // MARK: - Public API
@@ -200,6 +288,7 @@ public final class TextureManager: @unchecked Sendable {
         case .waitingForInput: 4
         case .error: 2
         case .finished: 4
+        case .supervisingAgents: 4
         }
     }
 
@@ -241,6 +330,11 @@ public final class TextureManager: @unchecked Sendable {
         if name == Self.furnitureMonitorOn { return gen.monitorOn() }
         if name == Self.furnitureLamp { return gen.lamp() }
         if name == Self.furnitureCoffeeMug { return gen.coffeeMug() }
+        if name == Self.furnitureLaptopDesk { return gen.laptopDesk() }
+        if name == Self.furnitureLaptopOn { return gen.laptopOn() }
+        if name == Self.furnitureLaptopOff { return gen.laptopOff() }
+        if name == Self.furnitureLaptopScreensaver { return gen.laptopScreensaver() }
+        if name == Self.furnitureLongTable { return gen.longTable() }
 
         // Decorations
         if name == Self.decorationPlant { return gen.plant() }
@@ -251,6 +345,67 @@ public final class TextureManager: @unchecked Sendable {
         if name == Self.decorationBulletinBoard { return gen.bulletinBoard() }
         if name == Self.decorationWaterCooler { return gen.waterCooler() }
         if name == Self.decorationPoster { return gen.poster() }
+        if name == Self.decorationDoor { return gen.door() }
+        if name == Self.decorationCouch { return gen.couch() }
+        if name == Self.decorationPrinter { return gen.printer() }
+        if name == Self.decorationCoatRack { return gen.coatRack() }
+        if name == Self.decorationAchievementShelf { return gen.achievementShelf() }
+        if name == Self.decorationRadio { return gen.officeRadio() }
+        if name == Self.decorationBirdCage { return gen.birdCage() }
+        if name == Self.decorationCoffeeStation { return gen.coffeeStation() }
+        if name == Self.decorationCoatHooks { return gen.coatHooks() }
+        if name == Self.decorationSmallRug { return gen.smallRug() }
+        if name == Self.decorationPoster2 { return gen.motivationalPoster2() }
+        if name == Self.decorationWallClock { return gen.wallClock() }
+
+        // Bird frame variants (bird_idle_frame0, bird_idle_frame1, etc.)
+        if name.hasPrefix("bird_idle_frame") {
+            let frameStr = String(name.dropFirst("bird_idle_frame".count))
+            return gen.birdIdle(frame: Int(frameStr) ?? 0)
+        }
+
+        // Barista frame variants
+        if name == Self.baristaServe { return gen.baristaServe() }
+        if name.hasPrefix("barista_idle_frame") {
+            let frameStr = String(name.dropFirst("barista_idle_frame".count))
+            return gen.baristaIdle(frame: Int(frameStr) ?? 0)
+        }
+
+        // Wall clock frame variants
+        if name.hasPrefix("wall_clock_frame") {
+            let frameStr = String(name.dropFirst("wall_clock_frame".count))
+            return gen.wallClock(frame: Int(frameStr) ?? 0)
+        }
+
+        // Items
+        if name == Self.itemStickyNoteYellow { return gen.stickyNote(color: PixelArtGenerator.RGB(0xFFF8A0)) }
+        if name == Self.itemStickyNotePink { return gen.stickyNote(color: PixelArtGenerator.RGB(0xFFB0C0)) }
+        if name == Self.itemStickyNoteBlue { return gen.stickyNote(color: PixelArtGenerator.RGB(0xA0D0FF)) }
+        if name == Self.itemCrumpledPaper { return gen.crumpledPaper() }
+        if name == Self.itemRubberDuck { return gen.rubberDuck() }
+        if name == Self.itemCoffeeCup { return gen.coffeeCupSmall() }
+        if name == Self.itemPizzaBox { return gen.pizzaBox() }
+        if name == Self.itemPlanningClipboard { return gen.planningClipboard() }
+
+        // NPCs
+        if name == Self.npcJanitor { return gen.janitorNPC() }
+        if name == Self.npcPizzaDelivery { return gen.pizzaDeliveryNPC() }
+
+        // Plant growth stages
+        if name == Self.plantSeedling { return gen.plantSeedling() }
+        if name == Self.plantSmall { return gen.plantSmall() }
+        if name == Self.plantMedium { return gen.plantMedium() }
+        if name == Self.plantLarge { return gen.plantLarge() }
+
+        // Overlays
+        if name == Self.overlaySleepyEyes { return gen.sleepyEyeOverlay() }
+
+        // Trophies
+        if name == Self.trophyCup { return gen.trophyCup() }
+        if name == Self.trophyStar { return gen.trophyStar() }
+        if name == Self.trophyMoon { return gen.trophyMoon() }
+        if name == Self.trophyHouse { return gen.trophyHouse() }
+        if name == Self.trophyLightning { return gen.trophyLightning() }
 
         // Cat (frame variants use the parameterized methods directly)
         if name == Self.catIdle { return gen.catIdle() }
@@ -269,6 +424,34 @@ public final class TextureManager: @unchecked Sendable {
         if name.hasPrefix("cat_walk_frame") {
             let frameStr = String(name.dropFirst("cat_walk_frame".count))
             return gen.catWalk(frame: Int(frameStr) ?? 0)
+        }
+
+        // Dog
+        if name == Self.dogIdle { return gen.dogIdle() }
+        if name == Self.dogSleep { return gen.dogSleep() }
+        if name == Self.dogWalk { return gen.dogWalk() }
+        if name == Self.dogEat { return gen.dogEat() }
+        if name == Self.dogBowl { return gen.dogBowl() }
+        if name == Self.dogToyBall { return gen.dogToyBall() }
+        if name == Self.dogToyBone { return gen.dogToyBone() }
+        if name == Self.dogToyRope { return gen.dogToyRope() }
+
+        // Dog frame variants (dog_idle_frame0, dog_walk_frame1, etc.)
+        if name.hasPrefix("dog_idle_frame") {
+            let frameStr = String(name.dropFirst("dog_idle_frame".count))
+            return gen.dogIdle(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("dog_sleep_frame") {
+            let frameStr = String(name.dropFirst("dog_sleep_frame".count))
+            return gen.dogSleep(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("dog_walk_frame") {
+            let frameStr = String(name.dropFirst("dog_walk_frame".count))
+            return gen.dogWalk(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("dog_wag_frame") {
+            let frameStr = String(name.dropFirst("dog_wag_frame".count))
+            return gen.dogTailWag(frame: Int(frameStr) ?? 0)
         }
 
         // Characters - Claude
@@ -330,11 +513,14 @@ public final class TextureManager: @unchecked Sendable {
     /// Returns the appropriate size for furniture textures.
     private static func furnitureSize(for name: String) -> CGSize {
         switch name {
-        case furnitureDesk: CGSize(width: 60, height: 40)
+        case furnitureDesk: CGSize(width: 150, height: 40)
         case furnitureChair: CGSize(width: 20, height: 20)
         case furnitureMonitorOff, furnitureMonitorOn: CGSize(width: 20, height: 14)
         case furnitureLamp: CGSize(width: 16, height: 32)
         case furnitureCoffeeMug: CGSize(width: 10, height: 12)
+        case furnitureLaptopDesk: CGSize(width: 48, height: 30)
+        case furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver: CGSize(width: 24, height: 18)
+        case furnitureLongTable: CGSize(width: 240, height: 30)
         default: CGSize(width: 32, height: 32)
         }
     }
@@ -346,6 +532,9 @@ public final class TextureManager: @unchecked Sendable {
         case decorationWindow: CGSize(width: 80, height: 50)
         case decorationWhiteboard: CGSize(width: 100, height: 60)
         case decorationClock: CGSize(width: 20, height: 20)
+        case decorationCouch: CGSize(width: 60, height: 36)
+        case decorationPrinter: CGSize(width: 30, height: 30)
+        case decorationCoatRack: CGSize(width: 18, height: 48)
         default: CGSize(width: 32, height: 32)
         }
     }

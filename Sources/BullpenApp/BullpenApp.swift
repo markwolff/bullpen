@@ -43,10 +43,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
 
     /// Reference to the main window for toggle/persistence
-    private var window: NSWindow?
+    private weak var window: NSWindow?
 
     /// Reference to the monitor service for badge updates (set from BullpenApp)
-    var monitorService: AgentMonitorService?
+    weak var monitorService: AgentMonitorService?
 
     /// Tracks window position for parallax delta calculation
     private var lastWindowOrigin: CGPoint?
@@ -54,9 +54,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Debounce timer for resetting parallax after dragging stops
     private var parallaxResetWorkItem: DispatchWorkItem?
 
+    func applicationWillTerminate(_ notification: Notification) {
+        monitorService?.stopMonitoring()
+        if let statusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        parallaxResetWorkItem?.cancel()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Set activation policy to accessory (no dock icon) — task 4.12
-        NSApplication.shared.setActivationPolicy(.accessory)
+        // Set activation policy to regular (visible in Dock and Cmd+Tab)
+        NSApplication.shared.setActivationPolicy(.regular)
 
         // Set up menu bar status item (7.1)
         setupStatusItem()
@@ -89,10 +97,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Updates the badge count on the status item.
     /// Call this whenever the agent list changes.
     func updateBadge(agents: [Models.AgentInfo]) {
-        let activeCount = agents.filter {
-            $0.state != .idle && $0.state != .finished
+        let activeAgents = agents.filter {
+            $0.state != .idle && $0.state != .finished && !$0.isSubagent
         }.count
-        statusItem?.button?.title = activeCount > 0 ? " \(activeCount)" : ""
+        let activeSubagents = agents.filter {
+            $0.state != .idle && $0.state != .finished && $0.isSubagent
+        }.count
+        let total = agents.count
+
+        if activeAgents == 0 && activeSubagents == 0 {
+            statusItem?.button?.title = total > 0 ? " \(total)" : ""
+        } else if activeSubagents > 0 {
+            statusItem?.button?.title = " \(activeAgents)+\(activeSubagents)/\(total)"
+        } else {
+            statusItem?.button?.title = " \(activeAgents)/\(total)"
+        }
     }
 
     // MARK: - 7.3: Click to toggle window

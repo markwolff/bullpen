@@ -9,7 +9,7 @@ import LogReaders
 public final class AgentMonitorService: ObservableObject {
     /// The current set of known agents and their states.
     /// The sprite world observes this to update character animations.
-    @Published public private(set) var agents: [AgentInfo] = []
+    @Published public internal(set) var agents: [AgentInfo] = []
 
     /// All registered log readers
     private let logReaders: [any AgentLogReader]
@@ -22,6 +22,15 @@ public final class AgentMonitorService: ObservableObject {
 
     /// Known session log file paths (sessionID -> URL)
     private var sessionFiles: [String: URL] = [:]
+
+    /// Sessions that have been removed — skip during re-discovery unless log file modified after dismissal
+    private var dismissedSessionTimestamps: [String: Date] = [:]
+
+    /// Child session → parent session lookup
+    private var childToParentMap: [String: String] = [:]
+
+    /// Parent session → child sessions lookup
+    private var parentToChildrenMap: [String: Set<String>] = [:]
 
     /// How often to scan for new sessions (seconds)
     private let discoveryInterval: TimeInterval
@@ -36,7 +45,7 @@ public final class AgentMonitorService: ObservableObject {
     private let idleRemovalTimeout: TimeInterval
 
     /// Maximum number of simultaneous agents
-    private let maxAgents: Int = 8
+    private let maxAgents: Int = 1000
 
     /// Counter for sequential agent naming
     private var agentCounter: Int = 0
@@ -62,12 +71,21 @@ public final class AgentMonitorService: ObservableObject {
     /// Remembers that another discovery pass was requested while one was in flight.
     private var pendingDiscoveryPass: Bool = false
 
+    /// When true, the next discovery pass defers agent creation for existing sessions.
+    /// Set by startMonitoring() so that app launch doesn't spawn hundreds of agents
+    /// from stale log files — only sessions with post-startup activity become agents.
+    private var deferNextDiscovery: Bool = false
+
+    /// Sessions discovered at startup awaiting post-startup activity before agent creation.
+    /// Maps session ID → file size at discovery time (read offset starts here).
+    private var pendingSessions: [String: UInt64] = [:]
+
     public init(
         logReaders: [any AgentLogReader]? = nil,
         discoveryInterval: TimeInterval = 10.0,
         idleTimeout: TimeInterval = 30.0,
         finishedRemovalTimeout: TimeInterval = 120.0,
-        idleRemovalTimeout: TimeInterval = 300.0
+        idleRemovalTimeout: TimeInterval = 120.0
     ) {
         self.logReaders = logReaders ?? [
             ClaudeCodeLogReader(),
@@ -84,9 +102,13 @@ public final class AgentMonitorService: ObservableObject {
         guard !isMonitoring else { return }
         isMonitoring = true
 
+        // Defer agent creation on the first discovery pass so that only
+        // sessions with genuine post-startup activity spawn characters.
+        deferNextDiscovery = true
+
         // Perform initial discovery immediately
-        Task {
-            await performDiscovery()
+        Task { [weak self] in
+            await self?.performDiscovery()
         }
 
         // Set up periodic discovery timer
@@ -130,6 +152,11 @@ public final class AgentMonitorService: ObservableObject {
         agents.removeAll()
         readOffsets.removeAll()
         sessionFiles.removeAll()
+        dismissedSessionTimestamps.removeAll()
+        childToParentMap.removeAll()
+        parentToChildrenMap.removeAll()
+        pendingSessions.removeAll()
+        deferNextDiscovery = false
     }
 
     // MARK: - Public methods for testing
@@ -143,6 +170,10 @@ public final class AgentMonitorService: ObservableObject {
         }
 
         isPerformingDiscovery = true
+        let shouldDefer = deferNextDiscovery
+        if shouldDefer {
+            deferNextDiscovery = false
+        }
         defer {
             isPerformingDiscovery = false
 
@@ -158,37 +189,47 @@ public final class AgentMonitorService: ObservableObject {
         for reader in logReaders {
             do {
                 let sessions = try await reader.discoverSessions()
+                // Collect new sessions first, then process them
+                // (avoids reentrancy issues from Tasks spawned in setupWatcher)
+                var newSessions: [(id: String, url: URL)] = []
                 for (sessionID, fileURL) in sessions {
                     guard sessionFiles[sessionID] == nil else { continue }
-
-                    // Enforce max agents limit
-                    guard agents.count < maxAgents else {
-                        print("Bullpen: Max agents (\(maxAgents)) reached, skipping session \(sessionID)")
-                        return
+                    // Allow re-discovery if log file was modified after dismissal
+                    if let dismissedAt = dismissedSessionTimestamps[sessionID] {
+                        let fm = FileManager.default
+                        if let attrs = try? fm.attributesOfItem(atPath: fileURL.path),
+                           let modDate = attrs[.modificationDate] as? Date,
+                           modDate > dismissedAt {
+                            dismissedSessionTimestamps.removeValue(forKey: sessionID)
+                        } else {
+                            continue
+                        }
                     }
+                    guard agents.count + newSessions.count < maxAgents else {
+                        print("Bullpen: Max agents (\(maxAgents)) reached, skipping session \(sessionID)")
+                        break
+                    }
+                    newSessions.append((id: sessionID, url: fileURL))
+                }
 
-                    sessionFiles[sessionID] = fileURL
-                    readOffsets[sessionID] = 0
+                for session in newSessions {
+                    sessionFiles[session.id] = session.url
 
-                    // Generate traits deterministically from session ID
-                    let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
-
-                    // Derive initial name from file path
-                    let name = Self.extractProjectName(from: fileURL)
-
-                    // Create an AgentInfo for this new session
-                    let agent = AgentInfo(
-                        id: sessionID,
-                        name: name,
-                        agentType: reader.agentType,
-                        traits: traits,
-                        state: .idle,
-                        currentTaskDescription: "Starting up..."
-                    )
-                    agents.append(agent)
-
-                    // Set up a file watcher for this session's log
-                    setupWatcher(for: sessionID, fileURL: fileURL, reader: reader)
+                    if shouldDefer {
+                        // First discovery pass via startMonitoring(): defer agent creation
+                        // until post-startup activity. Record current file size so we only
+                        // react to new writes.
+                        let attrs = try? FileManager.default.attributesOfItem(atPath: session.url.path)
+                        let fileSize = (attrs?[.size] as? UInt64) ?? 0
+                        pendingSessions[session.id] = fileSize
+                        readOffsets[session.id] = fileSize
+                        setupWatcher(for: session.id, fileURL: session.url, reader: reader, skipInitialRead: true)
+                    } else {
+                        // Normal discovery: create agent immediately
+                        readOffsets[session.id] = 0
+                        createAgentForSession(sessionID: session.id, fileURL: session.url, reader: reader)
+                        setupWatcher(for: session.id, fileURL: session.url, reader: reader)
+                    }
                 }
             } catch {
                 print("Bullpen: Error discovering sessions for \(reader.agentType): \(error)")
@@ -204,6 +245,8 @@ public final class AgentMonitorService: ObservableObject {
             let agent = agents[i]
             // Don't transition finished agents to idle (finished is terminal until new activity)
             guard agent.state != .finished && agent.state != .idle else { continue }
+            // Never idle-timeout a parent with active children
+            guard !agent.hasActiveChildren else { continue }
             if now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
                 agents[i].state = .idle
                 agents[i].lastUpdatedAt = now
@@ -218,24 +261,28 @@ public final class AgentMonitorService: ObservableObject {
     /// Call directly in tests instead of waiting for timers.
     public func checkAgentRemoval() {
         let now = Date()
-        agents.removeAll { agent in
-            // Never remove error agents
-            if agent.state == .error { return false }
+
+        // Collect IDs to remove first (avoid mutating agents during iteration)
+        var idsToRemove: [String] = []
+        for agent in agents {
+            if agent.state == .error { continue }
+            if agent.hasActiveChildren { continue }
+            if now.timeIntervalSince(agent.startedAt) < 10.0 { continue }
 
             if agent.state == .finished,
                now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout {
-                cleanupAgent(sessionID: agent.id)
-                return true
-            }
-
-            if agent.state == .idle,
+                idsToRemove.append(agent.id)
+            } else if agent.state == .idle,
                now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout {
-                cleanupAgent(sessionID: agent.id)
-                return true
+                idsToRemove.append(agent.id)
             }
-
-            return false
         }
+
+        // Cleanup and remove
+        for id in idsToRemove {
+            cleanupAgent(sessionID: id)
+        }
+        agents.removeAll { idsToRemove.contains($0.id) }
     }
 
     /// Updates an agent's state based on a new activity.
@@ -266,14 +313,42 @@ public final class AgentMonitorService: ObservableObject {
             // 8.6-8.7: Send notifications on state transitions
             let agent = agents[index]
             if newState == .finished {
+                let service = notificationService
+                let visible = windowVisible
                 Task {
-                    await notificationService.notifyAgentFinished(agent: agent, windowVisible: windowVisible)
+                    await service.notifyAgentFinished(agent: agent, windowVisible: visible)
                 }
             } else if newState == .error {
+                let service = notificationService
+                let visible = windowVisible
                 Task {
-                    await notificationService.notifyAgentError(agent: agent, windowVisible: windowVisible)
+                    await service.notifyAgentError(agent: agent, windowVisible: visible)
                 }
             }
+        }
+
+        // Register parent-child relationship from activity metadata
+        if let parentID = activity.parentSessionID {
+            registerParentChild(parentID: parentID, childID: sessionID)
+        }
+
+        // After updating a subagent's state, check if its parent should be supervising
+        if let parentID = childToParentMap[sessionID],
+           let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+            if agents[parentIndex].hasActiveChildren && agents[parentIndex].state != .supervisingAgents {
+                agents[parentIndex].state = .supervisingAgents
+                agents[parentIndex].currentTaskDescription = "Supervising..."
+                agents[parentIndex].stateEnteredAt = Date()
+            }
+            // Keep parent alive while children are active
+            agents[parentIndex].lastUpdatedAt = Date()
+        }
+
+        // Propagate plan mode (sticky: stays true until explicitly false)
+        if activity.isPlanMode {
+            agents[index].isPlanMode = true
+        } else if activity.activityType == .sessionEnd {
+            agents[index].isPlanMode = false
         }
 
         // 7.7: Accumulate token usage
@@ -332,8 +407,48 @@ public final class AgentMonitorService: ObservableObject {
         return type.correspondingAgentState
     }
 
+    /// Creates an AgentInfo for a session and appends it to the agents array.
+    /// Used for both immediate creation (normal discovery) and deferred
+    /// creation (pending sessions promoted by new activity).
+    private func createAgentForSession(
+        sessionID: String,
+        fileURL: URL,
+        reader: any AgentLogReader
+    ) {
+        let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
+        let projectName = Self.extractProjectName(from: fileURL)
+        let name = Self.generateAgentName(from: sessionID)
+        let isSubagent = fileURL.path.contains("/subagents/")
+
+        var parentSessionID: String?
+        if isSubagent {
+            let subagentsDir = fileURL.deletingLastPathComponent()
+            if subagentsDir.lastPathComponent == "subagents" {
+                let parentDir = subagentsDir.deletingLastPathComponent()
+                parentSessionID = parentDir.lastPathComponent
+            }
+        }
+
+        let agent = AgentInfo(
+            id: sessionID,
+            name: name,
+            agentType: reader.agentType,
+            traits: traits,
+            state: .idle,
+            currentTaskDescription: "Starting up...",
+            isSubagent: isSubagent,
+            projectName: projectName,
+            parentSessionID: parentSessionID
+        )
+        agents.append(agent)
+
+        if let parentID = parentSessionID {
+            registerParentChild(parentID: parentID, childID: sessionID)
+        }
+    }
+
     /// Sets up a file watcher for a specific session log file.
-    private func setupWatcher(for sessionID: String, fileURL: URL, reader: any AgentLogReader) {
+    private func setupWatcher(for sessionID: String, fileURL: URL, reader: any AgentLogReader, skipInitialRead: Bool = false) {
         let watcher = LogWatcher(path: fileURL.path) { [weak self] in
             Task { @MainActor [weak self] in
                 await self?.processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
@@ -342,9 +457,11 @@ public final class AgentMonitorService: ObservableObject {
         watchers[sessionID] = watcher
         watcher.startWatching()
 
-        // Do an initial read
-        Task {
-            await processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
+        if !skipInitialRead {
+            // Do an initial read
+            Task { [weak self] in
+                await self?.processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
+            }
         }
     }
 
@@ -355,6 +472,7 @@ public final class AgentMonitorService: ObservableObject {
         reader: any AgentLogReader
     ) async {
         let currentOffset = readOffsets[sessionID] ?? 0
+        let isInitialRead = currentOffset == 0
 
         do {
             let (activities, newOffset) = try await reader.readActivities(
@@ -363,9 +481,46 @@ public final class AgentMonitorService: ObservableObject {
             )
             readOffsets[sessionID] = newOffset
 
+            // If this is a pending session (deferred at startup), only create
+            // the agent when new post-startup activity actually arrives.
+            if pendingSessions[sessionID] != nil {
+                guard !activities.isEmpty else { return }
+                pendingSessions.removeValue(forKey: sessionID)
+                createAgentForSession(sessionID: sessionID, fileURL: fileURL, reader: reader)
+            }
+
+            // On first read, find first user message for name refinement
+            if isInitialRead {
+                if let firstUserMsg = activities.first(where: { $0.activityType == .userMessage }) {
+                    if let index = agents.firstIndex(where: { $0.id == sessionID }),
+                       !agents[index].nameRefined,
+                       let rawPayload = firstUserMsg.rawPayload,
+                       let taskName = Self.extractTaskName(from: rawPayload) {
+                        agents[index].name = taskName
+                        agents[index].nameRefined = true
+                    }
+                }
+
+                // Register parent-child from any activity's metadata
+                for activity in activities {
+                    if let parentID = activity.parentSessionID {
+                        registerParentChild(parentID: parentID, childID: sessionID)
+                        break
+                    }
+                }
+            }
+
             // Update the agent's state based on the latest activity
             if let latestActivity = activities.last {
                 updateAgentState(sessionID: sessionID, activity: latestActivity)
+
+                // Fix stale timestamps on initial read: use current time instead of
+                // potentially minutes-old log timestamps to prevent immediate removal
+                if isInitialRead {
+                    if let index = agents.firstIndex(where: { $0.id == sessionID }) {
+                        agents[index].lastUpdatedAt = Date()
+                    }
+                }
             }
         } catch {
             print("Bullpen: Error reading log for session \(sessionID): \(error)")
@@ -377,12 +532,76 @@ public final class AgentMonitorService: ObservableObject {
     /// performDiscovery() won't re-discover this session and cause
     /// the agent sprite to disappear and reappear.
     private func cleanupAgent(sessionID: String) {
+        dismissedSessionTimestamps[sessionID] = Date()
         watchers[sessionID]?.stopWatching()
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
+
+        // Remove child from parent's tracking
+        if let parentID = childToParentMap[sessionID] {
+            parentToChildrenMap[parentID]?.remove(sessionID)
+            if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+                agents[parentIndex].activeChildSessionIDs.remove(sessionID)
+                // If parent has no more children and is supervising, transition back
+                if agents[parentIndex].activeChildSessionIDs.isEmpty
+                    && agents[parentIndex].state == .supervisingAgents {
+                    agents[parentIndex].state = .waitingForInput
+                    agents[parentIndex].currentTaskDescription = "Waiting for input"
+                    agents[parentIndex].stateEnteredAt = Date()
+                    agents[parentIndex].lastUpdatedAt = Date()
+                }
+            }
+            childToParentMap.removeValue(forKey: sessionID)
+        }
+
+        // If this agent was a parent, clean up its children map entry
+        parentToChildrenMap.removeValue(forKey: sessionID)
+    }
+
+    /// Registers a parent-child relationship between sessions.
+    private func registerParentChild(parentID: String, childID: String) {
+        childToParentMap[childID] = parentID
+        parentToChildrenMap[parentID, default: []].insert(childID)
+
+        // Update parent's AgentInfo if it exists
+        if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+            agents[parentIndex].activeChildSessionIDs.insert(childID)
+        }
+        // Update child's AgentInfo if it exists
+        if let childIndex = agents.firstIndex(where: { $0.id == childID }) {
+            agents[childIndex].parentSessionID = parentID
+        }
     }
 
     // MARK: - Smart Naming
+
+    /// Generates a deterministic unique display name from a session ID.
+    /// Uses adjective+animal pairs (like Docker container names) for memorable identification.
+    static func generateAgentName(from sessionID: String) -> String {
+        let adjectives = [
+            "Swift", "Bold", "Calm", "Keen", "Sage",
+            "Warm", "Cool", "Deft", "Fair", "Glad",
+            "Hale", "Just", "Kind", "Live", "Neat",
+            "Pure", "Rare", "Safe", "True", "Wise",
+        ]
+        let animals = [
+            "Fox", "Owl", "Elk", "Jay", "Ram",
+            "Bee", "Ant", "Cat", "Dog", "Bat",
+            "Hen", "Cow", "Emu", "Yak", "Asp",
+            "Cod", "Eel", "Gnu", "Koi", "Pug",
+        ]
+
+        // Use a simple hash of the session ID for deterministic selection
+        var hash: UInt64 = 5381
+        for byte in sessionID.utf8 {
+            hash = hash &* 33 &+ UInt64(byte)
+        }
+
+        let adjIndex = Int(hash % UInt64(adjectives.count))
+        let animalIndex = Int((hash / UInt64(adjectives.count)) % UInt64(animals.count))
+
+        return "\(adjectives[adjIndex]) \(animals[animalIndex])"
+    }
 
     /// Extracts a project name from the log file path.
     /// Claude Code logs: ~/.claude/projects/<hash>/<session>.jsonl
@@ -401,7 +620,18 @@ public final class AgentMonitorService: ObservableObject {
             effectiveDir = projectDir
         }
 
-        let encodedName = effectiveDir.lastPathComponent
+        // If we landed on a "subagents" directory, walk up past the
+        // session UUID directory to the actual project hash directory.
+        let effectiveName = effectiveDir.lastPathComponent
+        let resolvedDir: URL
+        if effectiveName == "subagents" {
+            // subagents → session-uuid → project-hash
+            resolvedDir = effectiveDir.deletingLastPathComponent().deletingLastPathComponent()
+        } else {
+            resolvedDir = effectiveDir
+        }
+
+        let encodedName = resolvedDir.lastPathComponent
 
         // Claude Code encodes the project path as the directory name
         // e.g., "-Users-mark-projects-bullpen-london" → "london"
@@ -451,7 +681,7 @@ public final class AgentMonitorService: ObservableObject {
         return shortenPrompt(text)
     }
 
-    /// Distills a user prompt into a short display name (max 15 chars).
+    /// Distills a user prompt into a short display name (max 25 chars).
     private static func shortenPrompt(_ text: String) -> String {
         var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -459,6 +689,7 @@ public final class AgentMonitorService: ObservableObject {
         let prefixes = [
             "please ", "can you ", "could you ", "i want you to ",
             "i need you to ", "help me ", "let's ", "let's ",
+            "i'd like you to ", "go ahead and ", "we need to ", "you should ",
         ]
         let lower = cleaned.lowercased()
         for prefix in prefixes {
@@ -472,17 +703,17 @@ public final class AgentMonitorService: ObservableObject {
         let words = cleaned.split(separator: " ", maxSplits: 5, omittingEmptySubsequences: true)
         guard !words.isEmpty else { return "Task" }
 
-        // Build name from first 3 words, capitalize each
-        let nameWords = words.prefix(3).map { word -> String in
+        // Build name from first 4 words, capitalize each
+        let nameWords = words.prefix(4).map { word -> String in
             let w = String(word)
             return w.prefix(1).uppercased() + w.dropFirst().lowercased()
         }
 
         var result = nameWords.joined(separator: " ")
 
-        // Cap at 15 characters
-        if result.count > 15 {
-            result = String(result.prefix(15)).trimmingCharacters(in: .whitespaces)
+        // Cap at 25 characters
+        if result.count > 25 {
+            result = String(result.prefix(25)).trimmingCharacters(in: .whitespaces)
         }
 
         return result.isEmpty ? "Task" : result
