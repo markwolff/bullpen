@@ -2,7 +2,7 @@ import SpriteKit
 import Models
 
 /// Manages pair programming sessions — when 2 agents share the same roleTitle
-/// and both are working, there's a chance the "visitor" walks behind the "host" to observe.
+/// and both are working, there's a chance the "visitor" walks to stand diagonally beside the "host".
 @MainActor
 public class PairProgrammingManager {
 
@@ -64,8 +64,10 @@ public class PairProgrammingManager {
             let layout = OfficeLayout.defaultLayout()
             guard let hostDesk = layout.desks.first(where: { $0.id == hostDeskID }) else { continue }
 
-            // Observer stands diagonally behind host's chair so both sprites are visible
-            let observePos = CGPoint(x: hostDesk.chairPosition.x + 35, y: hostDesk.chairPosition.y - 25)
+            // Observer stands diagonally beside host's chair so both sprites are clearly visible
+            // x-offset must exceed sprite width (48pt) to avoid horizontal overlap;
+            // small y-offset creates diagonal without one sprite occluding the other
+            let observePos = CGPoint(x: hostDesk.chairPosition.x + 50, y: hostDesk.chairPosition.y - 12)
 
             isPairing = true
             currentSession = (visitorID: visitor.id, hostID: host.id)
