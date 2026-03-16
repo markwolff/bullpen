@@ -94,7 +94,7 @@ public class AgentSprite: SKSpriteNode {
         roleLabel.text = agentInfo.roleTitle ?? ""
         roleLabel.fontName = "Menlo"
         roleLabel.fontSize = isSubagent ? 7 : 9
-        roleLabel.fontColor = SKColor(white: 0.7, alpha: 1.0)
+        roleLabel.fontColor = .white
         roleLabel.position = CGPoint(x: 0, y: nameLabel.position.y - (isSubagent ? 10 : 13))
         roleLabel.horizontalAlignmentMode = .center
         if agentInfo.roleTitle != nil {
