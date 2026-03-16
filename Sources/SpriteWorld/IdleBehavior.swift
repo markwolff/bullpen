@@ -36,9 +36,9 @@ public class IdleBehaviorManager {
     public let isSubagent: Bool
 
     /// Maximum total idle time before the agent should leave the office.
-    /// Subagents leave after 30s; regular agents after 5 minutes.
+    /// Subagents leave after 5s; regular agents after 5 minutes.
     public var maxIdleDuration: TimeInterval {
-        isSubagent ? 30 : 300
+        isSubagent ? 5 : 300
     }
 
     /// Accumulated total time spent idle (across all phases).
@@ -58,7 +58,7 @@ public class IdleBehaviorManager {
     public init(isSubagent: Bool = false) {
         self.isSubagent = isSubagent
         self.deskIdleThreshold = isSubagent
-            ? TimeInterval.random(in: 3...8)
+            ? TimeInterval.random(in: 2...4)
             : TimeInterval.random(in: 5...15)
     }
 
@@ -71,6 +71,10 @@ public class IdleBehaviorManager {
     /// Whether a visual effect has been shown for the current activity
     private var effectShown: Bool = false
 
+    /// The destination this agent is currently walking to or performing at.
+    /// Used by other agents to avoid picking the same spot.
+    public private(set) var targetDestination: CGPoint?
+
     /// Reference to the speech/action bubble node (if any)
     weak var actionBubble: SKNode?
 
@@ -82,12 +86,13 @@ public class IdleBehaviorManager {
         currentBehavior = nil
         deskIdleTimer = 0
         deskIdleThreshold = isSubagent
-            ? TimeInterval.random(in: 3...8)
+            ? TimeInterval.random(in: 2...4)
             : TimeInterval.random(in: 5...15)
         performTimer = 0
         performDuration = 0
         totalIdleTime = 0
         effectShown = false
+        targetDestination = nil
         actionBubble?.removeFromParent()
         actionBubble = nil
     }
@@ -139,14 +144,16 @@ public class IdleBehaviorManager {
             performTimer = 0
             performDuration = TimeInterval.random(in: 10...25)
             effectShown = false
+            // Keep targetDestination set — agent is performing at this spot
 
         case .walkingBack:
             phase = .atDesk
             deskIdleTimer = 0
             deskIdleThreshold = isSubagent
-                ? TimeInterval.random(in: 3...8)
+                ? TimeInterval.random(in: 2...4)
                 : TimeInterval.random(in: 8...20)
             currentBehavior = nil
+            targetDestination = nil
             actionBubble?.removeFromParent()
             actionBubble = nil
 
@@ -164,11 +171,12 @@ public class IdleBehaviorManager {
         guard let destination = destinationForBehavior(behavior, context: context) else {
             // Can't find a valid destination, try again later
             deskIdleTimer = 0
-            deskIdleThreshold = TimeInterval.random(in: 3...8)
+            deskIdleThreshold = TimeInterval.random(in: 2...4)
             return nil
         }
 
         phase = .walkingToActivity
+        targetDestination = destination
         return .walkTo(destination, behavior: behavior)
     }
 
@@ -218,10 +226,12 @@ public class IdleBehaviorManager {
             candidates.removeAll { $0 == current }
         }
 
-        // Social distancing: remove destinations where another agent is within 60px
+        // Social distancing: remove destinations where another agent is nearby,
+        // heading toward, or already performing at (within 60px)
+        let allOccupied = context.otherRoamingAgentPositions + context.occupiedActivityPositions
         candidates = candidates.filter { behavior in
             guard let dest = destinationForBehavior(behavior, context: context) else { return true }
-            for otherPos in context.otherRoamingAgentPositions {
+            for otherPos in allOccupied {
                 if hypot(dest.x - otherPos.x, dest.y - otherPos.y) < 60 {
                     return false
                 }
@@ -265,11 +275,12 @@ public class IdleBehaviorManager {
 
         guard let point = base else { return nil }
 
-        // Offset destination if another agent is already near this spot
-        // so agents stand side by side instead of on top of each other
+        // Offset destination if another agent is already near this spot,
+        // walking toward it, or performing there
         let tooClose: CGFloat = 40
         var nearbyCount = 0
-        for otherPos in context.otherRoamingAgentPositions {
+        let allOccupied = context.otherRoamingAgentPositions + context.occupiedActivityPositions
+        for otherPos in allOccupied {
             if hypot(point.x - otherPos.x, point.y - otherPos.y) < tooClose {
                 nearbyCount += 1
             }
@@ -300,6 +311,8 @@ public struct IdleContext {
     public let radioStandPosition: CGPoint?
     public let printerStandPosition: CGPoint?
     public let otherRoamingAgentPositions: [CGPoint]
+    /// Destinations that other agents are walking toward or performing at.
+    public let occupiedActivityPositions: [CGPoint]
 }
 
 /// An action the idle behavior manager requests the agent/scene to perform.

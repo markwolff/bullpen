@@ -1076,9 +1076,15 @@ public class OfficeScene: SKScene {
 
         // Gather positions of other roaming agents (for social distancing)
         var otherRoamingPositions: [CGPoint] = []
+        // Gather destinations that other agents are walking toward or performing at
+        var occupiedActivityPositions: [CGPoint] = []
         for (_, otherSprite) in agentSprites where otherSprite !== sprite {
             if otherSprite.isRoaming {
                 otherRoamingPositions.append(otherSprite.position)
+            }
+            // Track reserved destinations — where agents are headed or performing
+            if let dest = otherSprite.idleBehaviorManager.targetDestination {
+                occupiedActivityPositions.append(dest)
             }
         }
 
@@ -1112,7 +1118,8 @@ public class OfficeScene: SKScene {
             loungePosition: layout.loungePosition,
             radioStandPosition: layout.radioStandPosition,
             printerStandPosition: layout.printerStandPosition,
-            otherRoamingAgentPositions: otherRoamingPositions
+            otherRoamingAgentPositions: otherRoamingPositions,
+            occupiedActivityPositions: occupiedActivityPositions
         )
     }
 
