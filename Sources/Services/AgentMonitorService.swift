@@ -373,11 +373,13 @@ public final class AgentMonitorService: ObservableObject {
     }
 
     /// Cleans up watcher and tracking state for a removed agent.
+    /// Note: sessionFiles entry is intentionally retained so that
+    /// performDiscovery() won't re-discover this session and cause
+    /// the agent sprite to disappear and reappear.
     private func cleanupAgent(sessionID: String) {
         watchers[sessionID]?.stopWatching()
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
-        sessionFiles.removeValue(forKey: sessionID)
     }
 
     // MARK: - Smart Naming

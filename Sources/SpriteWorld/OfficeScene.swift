@@ -12,6 +12,10 @@ public class OfficeScene: SKScene {
     /// Active agent sprites, keyed by agent ID
     private var agentSprites: [String: AgentSprite] = [:]
 
+    /// Agent IDs that are currently fading out (removed but still animating).
+    /// Prevents duplicate sprite creation during the fade-out period.
+    private var fadingOutAgentIDs: Set<String> = []
+
     /// Callback fired when an agent sprite is clicked. The parameter is the agent ID,
     /// or nil if the click landed on empty space. (7.5)
     public var onAgentClicked: ((String?) -> Void)?
@@ -584,7 +588,7 @@ public class OfficeScene: SKScene {
         for agent in agents {
             if let existingSprite = agentSprites[agent.id] {
                 existingSprite.update(with: agent)
-            } else {
+            } else if !fadingOutAgentIDs.contains(agent.id) {
                 addAgentSprite(for: agent)
             }
         }
@@ -641,9 +645,15 @@ public class OfficeScene: SKScene {
             turnOffMonitor(deskID: deskID)
         }
 
-        // Fade out and remove
+        // Track this ID as fading out so updateAgents won't re-add it
+        fadingOutAgentIDs.insert(id)
+
+        // Fade out, then clean up and remove from scene
         sprite.run(SKAction.sequence([
             SKAction.fadeOut(withDuration: 0.5),
+            SKAction.run { [weak self] in
+                self?.fadingOutAgentIDs.remove(id)
+            },
             SKAction.removeFromParent()
         ]))
     }
