@@ -71,6 +71,15 @@ public final class AgentMonitorService: ObservableObject {
     /// Remembers that another discovery pass was requested while one was in flight.
     private var pendingDiscoveryPass: Bool = false
 
+    /// When true, the next discovery pass defers agent creation for existing sessions.
+    /// Set by startMonitoring() so that app launch doesn't spawn hundreds of agents
+    /// from stale log files — only sessions with post-startup activity become agents.
+    private var deferNextDiscovery: Bool = false
+
+    /// Sessions discovered at startup awaiting post-startup activity before agent creation.
+    /// Maps session ID → file size at discovery time (read offset starts here).
+    private var pendingSessions: [String: UInt64] = [:]
+
     public init(
         logReaders: [any AgentLogReader]? = nil,
         discoveryInterval: TimeInterval = 10.0,
@@ -92,6 +101,10 @@ public final class AgentMonitorService: ObservableObject {
     public func startMonitoring() {
         guard !isMonitoring else { return }
         isMonitoring = true
+
+        // Defer agent creation on the first discovery pass so that only
+        // sessions with genuine post-startup activity spawn characters.
+        deferNextDiscovery = true
 
         // Perform initial discovery immediately
         Task { [weak self] in
@@ -142,6 +155,8 @@ public final class AgentMonitorService: ObservableObject {
         dismissedSessionTimestamps.removeAll()
         childToParentMap.removeAll()
         parentToChildrenMap.removeAll()
+        pendingSessions.removeAll()
+        deferNextDiscovery = false
     }
 
     // MARK: - Public methods for testing
@@ -155,6 +170,10 @@ public final class AgentMonitorService: ObservableObject {
         }
 
         isPerformingDiscovery = true
+        let shouldDefer = deferNextDiscovery
+        if shouldDefer {
+            deferNextDiscovery = false
+        }
         defer {
             isPerformingDiscovery = false
 
@@ -195,50 +214,22 @@ public final class AgentMonitorService: ObservableObject {
 
                 for session in newSessions {
                     sessionFiles[session.id] = session.url
-                    readOffsets[session.id] = 0
 
-                    // Generate traits deterministically from session ID
-                    let traits = CharacterTraits.from(sessionID: session.id, agentType: reader.agentType)
-
-                    // Derive project name from file path and generate unique agent name
-                    let projectName = Self.extractProjectName(from: session.url)
-                    let name = Self.generateAgentName(from: session.id)
-
-                    // Detect subagents by checking if the path contains "/subagents/"
-                    let isSubagent = session.url.path.contains("/subagents/")
-
-                    // Extract parent session ID from subagent file path:
-                    // <hash>/<parent-uuid>/subagents/agent-<id>.jsonl
-                    var parentSessionID: String?
-                    if isSubagent {
-                        let subagentsDir = session.url.deletingLastPathComponent()
-                        if subagentsDir.lastPathComponent == "subagents" {
-                            let parentDir = subagentsDir.deletingLastPathComponent()
-                            parentSessionID = parentDir.lastPathComponent
-                        }
+                    if shouldDefer {
+                        // First discovery pass via startMonitoring(): defer agent creation
+                        // until post-startup activity. Record current file size so we only
+                        // react to new writes.
+                        let attrs = try? FileManager.default.attributesOfItem(atPath: session.url.path)
+                        let fileSize = (attrs?[.size] as? UInt64) ?? 0
+                        pendingSessions[session.id] = fileSize
+                        readOffsets[session.id] = fileSize
+                        setupWatcher(for: session.id, fileURL: session.url, reader: reader, skipInitialRead: true)
+                    } else {
+                        // Normal discovery: create agent immediately
+                        readOffsets[session.id] = 0
+                        createAgentForSession(sessionID: session.id, fileURL: session.url, reader: reader)
+                        setupWatcher(for: session.id, fileURL: session.url, reader: reader)
                     }
-
-                    // Create an AgentInfo for this new session
-                    let agent = AgentInfo(
-                        id: session.id,
-                        name: name,
-                        agentType: reader.agentType,
-                        traits: traits,
-                        state: .idle,
-                        currentTaskDescription: "Starting up...",
-                        isSubagent: isSubagent,
-                        projectName: projectName,
-                        parentSessionID: parentSessionID
-                    )
-                    agents.append(agent)
-
-                    // Register parent-child relationship
-                    if let parentID = parentSessionID {
-                        registerParentChild(parentID: parentID, childID: session.id)
-                    }
-
-                    // Set up a file watcher for this session's log
-                    setupWatcher(for: session.id, fileURL: session.url, reader: reader)
                 }
             } catch {
                 print("Bullpen: Error discovering sessions for \(reader.agentType): \(error)")
@@ -416,8 +407,48 @@ public final class AgentMonitorService: ObservableObject {
         return type.correspondingAgentState
     }
 
+    /// Creates an AgentInfo for a session and appends it to the agents array.
+    /// Used for both immediate creation (normal discovery) and deferred
+    /// creation (pending sessions promoted by new activity).
+    private func createAgentForSession(
+        sessionID: String,
+        fileURL: URL,
+        reader: any AgentLogReader
+    ) {
+        let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
+        let projectName = Self.extractProjectName(from: fileURL)
+        let name = Self.generateAgentName(from: sessionID)
+        let isSubagent = fileURL.path.contains("/subagents/")
+
+        var parentSessionID: String?
+        if isSubagent {
+            let subagentsDir = fileURL.deletingLastPathComponent()
+            if subagentsDir.lastPathComponent == "subagents" {
+                let parentDir = subagentsDir.deletingLastPathComponent()
+                parentSessionID = parentDir.lastPathComponent
+            }
+        }
+
+        let agent = AgentInfo(
+            id: sessionID,
+            name: name,
+            agentType: reader.agentType,
+            traits: traits,
+            state: .idle,
+            currentTaskDescription: "Starting up...",
+            isSubagent: isSubagent,
+            projectName: projectName,
+            parentSessionID: parentSessionID
+        )
+        agents.append(agent)
+
+        if let parentID = parentSessionID {
+            registerParentChild(parentID: parentID, childID: sessionID)
+        }
+    }
+
     /// Sets up a file watcher for a specific session log file.
-    private func setupWatcher(for sessionID: String, fileURL: URL, reader: any AgentLogReader) {
+    private func setupWatcher(for sessionID: String, fileURL: URL, reader: any AgentLogReader, skipInitialRead: Bool = false) {
         let watcher = LogWatcher(path: fileURL.path) { [weak self] in
             Task { @MainActor [weak self] in
                 await self?.processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
@@ -426,9 +457,11 @@ public final class AgentMonitorService: ObservableObject {
         watchers[sessionID] = watcher
         watcher.startWatching()
 
-        // Do an initial read
-        Task { [weak self] in
-            await self?.processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
+        if !skipInitialRead {
+            // Do an initial read
+            Task { [weak self] in
+                await self?.processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
+            }
         }
     }
 
@@ -447,6 +480,14 @@ public final class AgentMonitorService: ObservableObject {
                 afterOffset: currentOffset
             )
             readOffsets[sessionID] = newOffset
+
+            // If this is a pending session (deferred at startup), only create
+            // the agent when new post-startup activity actually arrives.
+            if pendingSessions[sessionID] != nil {
+                guard !activities.isEmpty else { return }
+                pendingSessions.removeValue(forKey: sessionID)
+                createAgentForSession(sessionID: sessionID, fileURL: fileURL, reader: reader)
+            }
 
             // On first read, find first user message for name refinement
             if isInitialRead {
