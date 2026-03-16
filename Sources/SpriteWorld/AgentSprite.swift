@@ -168,19 +168,29 @@ public class AgentSprite: SKSpriteNode {
         if oldState != newInfo.state {
             transitionToState(newInfo.state, from: oldState)
 
-            // Scoot closer to desk when working, back to chair when not
+            // Move back to desk when state changes — use proper walk for long distances
             if let deskID = assignedDeskID {
                 let layout = OfficeLayout.defaultLayout()
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let isWorking = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents].contains(newInfo.state)
                     let targetY = isWorking ? desk.chairPosition.y + 15 : desk.chairPosition.y
                     let targetPos = CGPoint(x: desk.chairPosition.x, y: targetY)
+                    let distance = hypot(targetPos.x - position.x, targetPos.y - position.y)
 
-                    // Only move if not currently walking (idle roaming)
-                    if !isWalking {
-                        let moveAction = SKAction.move(to: targetPos, duration: 0.3)
-                        moveAction.timingMode = .easeInEaseOut
-                        run(moveAction, withKey: "deskScoot")
+                    if !isWalking && distance > 2 {
+                        if distance > 30 {
+                            // Far away (diagonal coworking, supervising, etc.) — proper walk with pathfinding
+                            stopWalking()
+                            removeAction(forKey: "deskScoot")
+                            let path = layout.findPath(from: position, to: targetPos)
+                            walk(to: targetPos, via: path, speedMultiplier: 1.5)
+                        } else {
+                            // Small scoot (forward/back at own desk) — quick slide proportional to distance
+                            let duration = TimeInterval(distance / 100.0)
+                            let moveAction = SKAction.move(to: targetPos, duration: max(duration, 0.15))
+                            moveAction.timingMode = .easeInEaseOut
+                            run(moveAction, withKey: "deskScoot")
+                        }
                     }
                 }
             }

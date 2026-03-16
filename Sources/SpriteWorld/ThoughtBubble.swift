@@ -23,6 +23,25 @@ public class ThoughtBubble: SKNode {
     /// The last text that was displayed (to avoid re-showing identical content)
     private var lastDisplayedText: String?
 
+    /// The latest pending text waiting to be shown after cooldown expires
+    private var pendingText: String?
+
+    /// The state associated with the pending text
+    private var pendingState: AgentState?
+
+    /// Timestamp when the bubble was last shown (for cooldown enforcement)
+    private var lastShownTime: TimeInterval = 0
+
+    /// Cooldown duration between bubble displays (5s ± 500ms jitter)
+    private var cooldownDuration: TimeInterval = 5.0
+
+    /// Whether we're currently in cooldown
+    private var inCooldown: Bool {
+        guard lastShownTime > 0 else { return false }
+        let elapsed = CACurrentMediaTime() - lastShownTime
+        return elapsed < cooldownDuration
+    }
+
     public override init() {
         bubbleBackground = SKShapeNode()
         label = SKLabelNode()
@@ -65,22 +84,74 @@ public class ThoughtBubble: SKNode {
 
     /// Updates the bubble to show the given text.
     /// Pass nil or empty string to hide the bubble.
-    /// Only shows the bubble if the text has changed from the current message.
+    /// Enforces a 5s ± 500ms cooldown between displays. Only the latest message is kept;
+    /// no queuing occurs. If the latest message matches the last displayed text, it is skipped.
     public func update(text: String?, for state: AgentState) {
         guard let text, !text.isEmpty, state != .idle && state != .finished && state != .deepThinking else {
             hide()
+            pendingText = nil
+            pendingState = nil
             return
         }
 
-        // Don't re-show the bubble if the message hasn't changed
-        guard text != lastDisplayedText else { return }
+        // Don't show if the message is the same as what was last displayed
+        guard text != lastDisplayedText else {
+            pendingText = nil
+            pendingState = nil
+            return
+        }
 
+        if inCooldown {
+            // Replace any previous pending text with the latest (no queue)
+            pendingText = text
+            pendingState = state
+            schedulePendingCheck()
+        } else {
+            displayBubble(text: text)
+        }
+    }
+
+    /// Actually shows the bubble with the given text, records cooldown, and schedules auto-hide.
+    private func displayBubble(text: String) {
         lastDisplayedText = text
         label.text = text
         updateBubblePath()
         show()
         setupScrollIfNeeded()
+
+        // Record show time and pick a new jittered cooldown for next time
+        lastShownTime = CACurrentMediaTime()
+        cooldownDuration = 5.0 + Double.random(in: -0.5...0.5)
+
         scheduleAutoHide()
+    }
+
+    /// Schedules a single check to display the pending text once cooldown expires.
+    private func schedulePendingCheck() {
+        removeAction(forKey: "pendingCheck")
+        let remaining = cooldownDuration - (CACurrentMediaTime() - lastShownTime)
+        guard remaining > 0 else {
+            showPendingIfNeeded()
+            return
+        }
+        let wait = SKAction.wait(forDuration: remaining)
+        let check = SKAction.run { [weak self] in
+            self?.showPendingIfNeeded()
+        }
+        run(SKAction.sequence([wait, check]), withKey: "pendingCheck")
+    }
+
+    /// Shows the pending text if it differs from the last displayed text.
+    private func showPendingIfNeeded() {
+        guard let text = pendingText, let state = pendingState else { return }
+        pendingText = nil
+        pendingState = nil
+
+        // Re-validate: state may have changed while waiting
+        guard state != .idle && state != .finished && state != .deepThinking else { return }
+        guard text != lastDisplayedText else { return }
+
+        displayBubble(text: text)
     }
 
     /// Rebuilds the bubble shape to fit the current label text.
