@@ -53,6 +53,15 @@ public final class AgentMonitorService: ObservableObject {
     /// Timer for periodic idle/removal checks
     private var idleCheckTimer: Timer?
 
+    /// Prevents duplicate timers and overlapping startup work.
+    private var isMonitoring: Bool = false
+
+    /// Serializes discovery so overlapping async passes cannot append duplicate agents.
+    private var isPerformingDiscovery: Bool = false
+
+    /// Remembers that another discovery pass was requested while one was in flight.
+    private var pendingDiscoveryPass: Bool = false
+
     public init(
         logReaders: [any AgentLogReader]? = nil,
         discoveryInterval: TimeInterval = 10.0,
@@ -72,6 +81,9 @@ public final class AgentMonitorService: ObservableObject {
 
     /// Starts monitoring all agent log sources.
     public func startMonitoring() {
+        guard !isMonitoring else { return }
+        isMonitoring = true
+
         // Perform initial discovery immediately
         Task {
             await performDiscovery()
@@ -101,6 +113,10 @@ public final class AgentMonitorService: ObservableObject {
 
     /// Stops monitoring and tears down all watchers.
     public func stopMonitoring() {
+        isMonitoring = false
+        pendingDiscoveryPass = false
+        isPerformingDiscovery = false
+
         discoveryTimer?.invalidate()
         discoveryTimer = nil
 
@@ -121,6 +137,24 @@ public final class AgentMonitorService: ObservableObject {
     /// Scans for new agent sessions across all log readers.
     /// Call directly in tests instead of waiting for timers.
     public func performDiscovery() async {
+        guard !isPerformingDiscovery else {
+            pendingDiscoveryPass = true
+            return
+        }
+
+        isPerformingDiscovery = true
+        defer {
+            isPerformingDiscovery = false
+
+            if pendingDiscoveryPass {
+                pendingDiscoveryPass = false
+
+                Task { @MainActor [weak self] in
+                    await self?.performDiscovery()
+                }
+            }
+        }
+
         for reader in logReaders {
             do {
                 let sessions = try await reader.discoverSessions()
