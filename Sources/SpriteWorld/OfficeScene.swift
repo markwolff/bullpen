@@ -29,6 +29,9 @@ public class OfficeScene: SKScene {
     /// The office cat sprite (8.9-8.13)
     public private(set) var catSprite: CatSprite?
 
+    /// The office dog sprite - Pancake the Maltipoo
+    public private(set) var dogSprite: DogSprite?
+
     /// Last update time for delta calculation
     private var lastUpdateTime: TimeInterval = 0
 
@@ -121,6 +124,7 @@ public class OfficeScene: SKScene {
         setupTitleLabel()
         setupAmbientAnimations()
         setupCat()
+        setupDog()
         setupFeatureDecorations()
     }
 
@@ -211,9 +215,9 @@ public class OfficeScene: SKScene {
 
     /// Adds a warm-colored area rug in the center of the office.
     private func setupRug() {
-        let rugWidth: CGFloat = layout.sceneSize.width * 0.68
-        let rugHeight: CGFloat = 280
-        let rugCenter = CGPoint(x: layout.sceneSize.width / 2, y: 270)
+        let rugWidth: CGFloat = layout.sceneSize.width * 0.50
+        let rugHeight: CGFloat = 120
+        let rugCenter = CGPoint(x: layout.sceneSize.width / 2, y: 120)
 
         // Rug border (darker)
         let rugBorder = SKShapeNode(rectOf: CGSize(width: rugWidth + 12, height: rugHeight + 12), cornerRadius: 8)
@@ -249,33 +253,59 @@ public class OfficeScene: SKScene {
 
     // MARK: - 6.3: Furniture Textures
 
-    /// Sets up desks with pixel art textures scaled up for Stardew Valley feel.
+    /// Sets up long communal tables with per-seat laptops and chairs.
     private func setupDesks() {
         let tm = TextureManager.shared
 
-        for desk in layout.desks {
-            // Laptop desk — 16x10 pixel art scaled 3x = 48x30 display
-            let deskTexture = tm.texture(for: TextureManager.furnitureLaptopDesk)
-            let deskNode = SKSpriteNode(texture: deskTexture, size: CGSize(width: 48, height: 30))
-            deskNode.position = desk.position
-            deskNode.name = "desk_\(desk.id)"
-            deskNode.zPosition = 1
-            addChild(deskNode)
+        // Render each communal table surface
+        for table in layout.tables {
+            let tableTexture = tm.texture(for: TextureManager.furnitureLongTable)
+            // 80x10 pixel art scaled to fit the full table width
+            let tableWidth = table.width
+            let tableNode = SKSpriteNode(texture: tableTexture, size: CGSize(width: tableWidth, height: 30))
+            tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
+            tableNode.name = "table_\(table.id)"
+            tableNode.zPosition = 1
+            addChild(tableNode)
 
-            // Chair — 12x16 pixel art scaled 2x = 24x32 display (smaller for laptop desks)
+            // Lamps at each end of the table
+            let lampTexture = tm.texture(for: TextureManager.furnitureLamp)
+            let leftLamp = SKSpriteNode(texture: lampTexture, size: CGSize(width: 16, height: 32))
+            leftLamp.position = CGPoint(x: -tableWidth / 2 + 10, y: 8)
+            leftLamp.name = "lamp_table_\(table.id)_left"
+            leftLamp.zPosition = 2
+            tableNode.addChild(leftLamp)
+
+            let rightLamp = SKSpriteNode(texture: lampTexture, size: CGSize(width: 16, height: 32))
+            rightLamp.position = CGPoint(x: tableWidth / 2 - 10, y: 8)
+            rightLamp.name = "lamp_table_\(table.id)_right"
+            rightLamp.zPosition = 2
+            tableNode.addChild(rightLamp)
+        }
+
+        // Render per-seat elements (laptop, chair, glow) — these are children of the scene
+        // so they can be looked up by name as before (desk_N, monitor_N, etc.)
+        for desk in layout.desks {
+            // Invisible anchor node at the seat position for child lookups
+            let seatNode = SKNode()
+            seatNode.position = desk.position
+            seatNode.name = "desk_\(desk.id)"
+            addChild(seatNode)
+
+            // Chair — 12x16 pixel art scaled 2x = 24x32 display
             let chairTexture = tm.texture(for: TextureManager.furnitureChair)
             let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 24, height: 32))
             chairNode.position = CGPoint(x: 0, y: -30)
             chairNode.name = "chair_\(desk.id)"
-            deskNode.addChild(chairNode)
+            seatNode.addChild(chairNode)
 
-            // Single laptop on the desk (replaces 3 monitors)
+            // Laptop on the table surface
             let laptopTexture = tm.texture(for: TextureManager.furnitureLaptopOff)
             let laptopNode = SKSpriteNode(texture: laptopTexture, size: CGSize(width: 24, height: 18))
             laptopNode.position = CGPoint(x: 0, y: 10)
             laptopNode.name = "monitor_\(desk.id)"
             laptopNode.zPosition = 2
-            deskNode.addChild(laptopNode)
+            seatNode.addChild(laptopNode)
 
             // Monitor glow node
             let glowNode = SKShapeNode(rectOf: CGSize(width: 30, height: 24), cornerRadius: 3)
@@ -285,17 +315,7 @@ public class OfficeScene: SKScene {
             glowNode.name = "monitorGlow_\(desk.id)"
             glowNode.zPosition = 3
             glowNode.alpha = 0
-            deskNode.addChild(glowNode)
-
-            // Lamp only on end-of-row desks (first and last column)
-            if desk.id % 4 == 0 || desk.id % 4 == 3 {
-                let lampTexture = tm.texture(for: TextureManager.furnitureLamp)
-                let lampNode = SKSpriteNode(texture: lampTexture, size: CGSize(width: 16, height: 32))
-                lampNode.position = CGPoint(x: desk.id % 4 == 0 ? -30 : 30, y: 8)
-                lampNode.name = "lamp_\(desk.id)"
-                lampNode.zPosition = 2
-                deskNode.addChild(lampNode)
-            }
+            seatNode.addChild(glowNode)
         }
     }
 
@@ -543,8 +563,7 @@ public class OfficeScene: SKScene {
 
     /// Adds rain particle emitters to window nodes during nighttime hours.
     private func setupRainOnWindows() {
-        let hour = currentHour()
-        guard hour >= 21 || hour < 6 else { return }
+        guard false else { return }  // Disabled: was hour >= 21 || hour < 6
 
         for windowName in ["decoration_window", "decoration_window_2"] {
             guard let windowNode = childNode(withName: windowName) else { continue }
@@ -587,8 +606,7 @@ public class OfficeScene: SKScene {
 
     /// Updates rain state based on current hour. Called from ambient update cycle.
     private func updateRainState() {
-        let hour = currentHour()
-        if hour >= 21 || hour < 6 {
+        if false {  // Disabled: was hour >= 21 || hour < 6
             setupRainOnWindows()
         } else {
             removeRainFromWindows()
@@ -609,8 +627,8 @@ public class OfficeScene: SKScene {
             // Evening: warm orange #E8C090
             return SKColor(red: 0.910, green: 0.753, blue: 0.565, alpha: 1.0)
         default:
-            // Night (9pm-6am): dark blue #4060A0
-            return SKColor(red: 0.251, green: 0.376, blue: 0.627, alpha: 1.0)
+            // Night disabled — use afternoon brightness instead
+            return SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
         }
     }
 
@@ -641,6 +659,42 @@ public class OfficeScene: SKScene {
         cat.position = CGPoint(x: 80, y: 100)
         addChild(cat)
         catSprite = cat
+    }
+
+    // MARK: - Office Dog - Pancake the Maltipoo
+
+    /// Sets up the office dog sprite and her bowl.
+    private func setupDog() {
+        // Dog bowl
+        let bowlTexture = TextureManager.shared.texture(for: TextureManager.dogBowl)
+        let bowl = SKSpriteNode(texture: bowlTexture, size: CGSize(width: 40, height: 24))
+        bowl.position = layout.dogBowlPosition
+        bowl.zPosition = 2
+        bowl.name = "dog_bowl"
+        addChild(bowl)
+
+        // Pancake the dog
+        let dog = DogSprite()
+        dog.position = layout.dogSleepPosition
+        dog.bowlPosition = layout.dogBowlPosition
+        addChild(dog)
+        dogSprite = dog
+
+        // Scatter some toys around the office for Pancake
+        let toyTextureNames = [TextureManager.dogToyBall, TextureManager.dogToyBone, TextureManager.dogToyRope]
+        let toyPositions = layout.dogToyPositions
+        for (index, toyPos) in toyPositions.enumerated() {
+            let textureName = toyTextureNames[index % toyTextureNames.count]
+            let toyTexture = TextureManager.shared.texture(for: textureName)
+            let toy = SKSpriteNode(texture: toyTexture, size: CGSize(width: 32, height: 24))
+            toy.position = toyPos
+            toy.zPosition = 2
+            toy.name = "dog_toy_\(index)"
+            addChild(toy)
+        }
+
+        // Tell Pancake where her toys are
+        dog.toyPositions = toyPositions
     }
 
     // MARK: - Feature Decorations Setup
@@ -842,6 +896,9 @@ public class OfficeScene: SKScene {
             let flickerDown = SKAction.fadeAlpha(to: 0.05, duration: 0.3)
             let flicker = SKAction.sequence([flickerUp, flickerDown])
             glow.run(SKAction.repeatForever(flicker))
+        case .supervisingAgents:
+            glow.fillColor = SKColor(red: 0.251, green: 0.690, blue: 0.690, alpha: 1.0)
+            glow.alpha = 0.12
         default:
             glow.fillColor = SKColor(red: 0.376, green: 0.565, blue: 0.816, alpha: 1.0)
             glow.alpha = 0.05
@@ -933,6 +990,11 @@ public class OfficeScene: SKScene {
             if case .showEffect(.petTheCat) = action {
                 catSprite?.showHeartParticle()
             }
+
+            // Trigger dog tail wag when agent pets the dog
+            if case .showEffect(.petTheDog) = action {
+                dogSprite?.showHeartParticle()
+            }
         }
     }
 
@@ -975,6 +1037,14 @@ public class OfficeScene: SKScene {
             catPos = nil
         }
 
+        // Dog position (only if dog is idle or wagging, not walking/sleeping)
+        let dogPos: CGPoint?
+        if let dog = dogSprite, (dog.dogState == .idle || dog.dogState == .wagging) {
+            dogPos = dog.position
+        } else {
+            dogPos = nil
+        }
+
         return IdleContext(
             deskChairPosition: deskChairPosition,
             waterCoolerStandPosition: layout.waterCoolerStandPosition,
@@ -984,6 +1054,7 @@ public class OfficeScene: SKScene {
             whiteboardStandPosition: layout.whiteboardStandPosition,
             plantPositions: layout.plantStandPositions,
             catPosition: catPos,
+            dogPosition: dogPos,
             otherIdleAgentDeskPositions: otherIdleDeskPositions,
             loungePosition: layout.loungePosition,
             radioStandPosition: layout.radioStandPosition,
@@ -1016,6 +1087,13 @@ public class OfficeScene: SKScene {
             let deskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
             let activeDeskIDs = Set(deskAssignments.keys)
             cat.update(deltaTime: deltaTime, agents: agents, deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+        }
+
+        // Update office dog - Pancake (same pattern as cat)
+        if let dog = dogSprite {
+            let deskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
+            let activeDeskIDs = Set(deskAssignments.keys)
+            dog.update(deltaTime: deltaTime, agents: agents, deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
         }
 
         // Empty office manager (0C)

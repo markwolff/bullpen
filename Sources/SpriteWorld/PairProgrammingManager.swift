@@ -42,7 +42,7 @@ public class PairProgrammingManager {
 
         // Find pairs of working agents with same projectName
         let workingAgents = agents.filter { agent in
-            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching]
+            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
                 .contains(agent.state)
             return isWorking && agent.projectName != nil
         }

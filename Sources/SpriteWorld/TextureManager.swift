@@ -32,6 +32,7 @@ public final class TextureManager: @unchecked Sendable {
     public static let charClaudeWaitingForInput = "char_claude_waitingForInput"
     public static let charClaudeError = "char_claude_error"
     public static let charClaudeFinished = "char_claude_finished"
+    public static let charClaudeSupervisingAgents = "char_claude_supervisingAgents"
 
     public static let charCodexIdle = "char_codex_idle"
     public static let charCodexThinking = "char_codex_thinking"
@@ -42,6 +43,7 @@ public final class TextureManager: @unchecked Sendable {
     public static let charCodexWaitingForInput = "char_codex_waitingForInput"
     public static let charCodexError = "char_codex_error"
     public static let charCodexFinished = "char_codex_finished"
+    public static let charCodexSupervisingAgents = "char_codex_supervisingAgents"
 
     // Furniture textures
     public static let furnitureDesk = "furniture_desk"
@@ -54,6 +56,7 @@ public final class TextureManager: @unchecked Sendable {
     public static let furnitureLaptopOn = "furniture_laptop_on"
     public static let furnitureLaptopOff = "furniture_laptop_off"
     public static let furnitureLaptopScreensaver = "furniture_laptop_screensaver"
+    public static let furnitureLongTable = "furniture_long_table"
 
     // Decoration textures
     public static let decorationPlant = "decoration_plant"
@@ -112,17 +115,27 @@ public final class TextureManager: @unchecked Sendable {
     public static let catSleep = "cat_sleep"
     public static let catWalk = "cat_walk"
 
+    // Dog textures - Pancake the Maltipoo
+    public static let dogIdle = "dog_idle"
+    public static let dogSleep = "dog_sleep"
+    public static let dogWalk = "dog_walk"
+    public static let dogEat = "dog_eat"
+    public static let dogBowl = "dog_bowl"
+    public static let dogToyBall = "dog_toy_ball"
+    public static let dogToyBone = "dog_toy_bone"
+    public static let dogToyRope = "dog_toy_rope"
+
     /// All known texture names for validation
     public static let allTextureNames: [String] = [
         charClaudeIdle, charClaudeThinking, charClaudeWritingCode, charClaudeReadingFiles,
         charClaudeRunningCommand, charClaudeSearching, charClaudeWaitingForInput,
-        charClaudeError, charClaudeFinished,
+        charClaudeError, charClaudeFinished, charClaudeSupervisingAgents,
         charCodexIdle, charCodexThinking, charCodexWritingCode, charCodexReadingFiles,
         charCodexRunningCommand, charCodexSearching, charCodexWaitingForInput,
-        charCodexError, charCodexFinished,
+        charCodexError, charCodexFinished, charCodexSupervisingAgents,
         furnitureDesk, furnitureChair, furnitureMonitorOff, furnitureMonitorOn,
         furnitureLamp, furnitureCoffeeMug,
-        furnitureLaptopDesk, furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver,
+        furnitureLaptopDesk, furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver, furnitureLongTable,
         decorationPlant, decorationWindow, decorationWhiteboard, decorationClock,
         decorationBookshelf, decorationBulletinBoard, decorationWaterCooler, decorationPoster, decorationDoor,
         decorationCouch, decorationPrinter, decorationCoatRack,
@@ -135,6 +148,8 @@ public final class TextureManager: @unchecked Sendable {
         trophyCup, trophyStar, trophyMoon, trophyHouse, trophyLightning,
         tileFloor, tileWall,
         catIdle, catSleep, catWalk,
+        dogIdle, dogSleep, dogWalk, dogEat, dogBowl,
+        dogToyBall, dogToyBone, dogToyRope,
     ]
 
     // MARK: - Public API
@@ -251,6 +266,7 @@ public final class TextureManager: @unchecked Sendable {
         case .waitingForInput: 4
         case .error: 2
         case .finished: 4
+        case .supervisingAgents: 4
         }
     }
 
@@ -296,6 +312,7 @@ public final class TextureManager: @unchecked Sendable {
         if name == Self.furnitureLaptopOn { return gen.laptopOn() }
         if name == Self.furnitureLaptopOff { return gen.laptopOff() }
         if name == Self.furnitureLaptopScreensaver { return gen.laptopScreensaver() }
+        if name == Self.furnitureLongTable { return gen.longTable() }
 
         // Decorations
         if name == Self.decorationPlant { return gen.plant() }
@@ -360,6 +377,34 @@ public final class TextureManager: @unchecked Sendable {
         if name.hasPrefix("cat_walk_frame") {
             let frameStr = String(name.dropFirst("cat_walk_frame".count))
             return gen.catWalk(frame: Int(frameStr) ?? 0)
+        }
+
+        // Dog
+        if name == Self.dogIdle { return gen.dogIdle() }
+        if name == Self.dogSleep { return gen.dogSleep() }
+        if name == Self.dogWalk { return gen.dogWalk() }
+        if name == Self.dogEat { return gen.dogEat() }
+        if name == Self.dogBowl { return gen.dogBowl() }
+        if name == Self.dogToyBall { return gen.dogToyBall() }
+        if name == Self.dogToyBone { return gen.dogToyBone() }
+        if name == Self.dogToyRope { return gen.dogToyRope() }
+
+        // Dog frame variants (dog_idle_frame0, dog_walk_frame1, etc.)
+        if name.hasPrefix("dog_idle_frame") {
+            let frameStr = String(name.dropFirst("dog_idle_frame".count))
+            return gen.dogIdle(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("dog_sleep_frame") {
+            let frameStr = String(name.dropFirst("dog_sleep_frame".count))
+            return gen.dogSleep(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("dog_walk_frame") {
+            let frameStr = String(name.dropFirst("dog_walk_frame".count))
+            return gen.dogWalk(frame: Int(frameStr) ?? 0)
+        }
+        if name.hasPrefix("dog_wag_frame") {
+            let frameStr = String(name.dropFirst("dog_wag_frame".count))
+            return gen.dogTailWag(frame: Int(frameStr) ?? 0)
         }
 
         // Characters - Claude
@@ -428,6 +473,7 @@ public final class TextureManager: @unchecked Sendable {
         case furnitureCoffeeMug: CGSize(width: 10, height: 12)
         case furnitureLaptopDesk: CGSize(width: 48, height: 30)
         case furnitureLaptopOn, furnitureLaptopOff, furnitureLaptopScreensaver: CGSize(width: 24, height: 18)
+        case furnitureLongTable: CGSize(width: 240, height: 30)
         default: CGSize(width: 32, height: 32)
         }
     }

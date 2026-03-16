@@ -8,6 +8,7 @@ public enum IdleBehavior: CaseIterable, Sendable {
     case checkBulletinBoard
     case lookOutWindow
     case petTheCat
+    case petTheDog
     case whiteboard
     case waterPlant
     case getCoffee
@@ -161,6 +162,11 @@ public class IdleBehaviorManager {
             candidates.removeAll { $0 == .petTheCat }
         }
 
+        // Remove petTheDog if no dog position available
+        if context.dogPosition == nil {
+            candidates.removeAll { $0 == .petTheDog }
+        }
+
         // Remove loungeCouch if no lounge position available
         if context.loungePosition == nil {
             candidates.removeAll { $0 == .loungeCouch }
@@ -207,6 +213,8 @@ public class IdleBehaviorManager {
             return context.windowStandPosition
         case .petTheCat:
             return context.catPosition
+        case .petTheDog:
+            return context.dogPosition
         case .whiteboard:
             return context.whiteboardStandPosition
         case .waterPlant:
@@ -234,6 +242,7 @@ public struct IdleContext {
     public let whiteboardStandPosition: CGPoint
     public let plantPositions: [CGPoint]
     public let catPosition: CGPoint?
+    public let dogPosition: CGPoint?
     public let otherIdleAgentDeskPositions: [CGPoint]
     public let loungePosition: CGPoint?
     public let radioStandPosition: CGPoint?

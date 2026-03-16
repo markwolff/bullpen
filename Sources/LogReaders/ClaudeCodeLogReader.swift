@@ -184,6 +184,18 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         // Parse timestamp
         let timestamp = parseTimestamp(from: json["timestamp"] as? String)
 
+        // Extract parent session ID from JSON metadata
+        let jsonSessionID = json["sessionId"] as? String
+        let agentID = json["agentId"] as? String
+        // When agentId exists and differs from the file-derived session ID,
+        // the sessionId field is the parent session
+        let parentSessionID: String?
+        if let agentID, let jsonSessionID, agentID != jsonSessionID {
+            parentSessionID = jsonSessionID
+        } else {
+            parentSessionID = nil
+        }
+
         // Check for error in tool results
         if type == "result" {
             if let content = contentArray {
@@ -197,7 +209,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             activityType: .error,
                             summary: summary,
                             rawPayload: rawEntry,
-                            isPlanMode: isPlanMode
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
                         )
                     }
                 }
@@ -209,7 +222,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 activityType: .toolResult,
                 summary: "Tool result received",
                 rawPayload: rawEntry,
-                isPlanMode: isPlanMode
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
             )
         }
 
@@ -229,7 +243,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                                 activityType: .error,
                                 summary: summary,
                                 rawPayload: rawEntry,
-                                isPlanMode: isPlanMode
+                                isPlanMode: isPlanMode,
+                                parentSessionID: parentSessionID
                             )
                         }
                         // Non-error tool result
@@ -239,7 +254,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             activityType: .toolResult,
                             summary: "Tool result received",
                             rawPayload: rawEntry,
-                            isPlanMode: isPlanMode
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
                         )
                     }
                 }
@@ -250,24 +266,27 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 activityType: .userMessage,
                 summary: "User message",
                 rawPayload: rawEntry,
-                isPlanMode: isPlanMode
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
             )
         }
 
         // Handle assistant messages
         if type == "assistant" {
-            // Check for end_turn → sessionEnd
+            // Check for end_turn — text-only responses without tool_use
             if stopReason == "end_turn" {
-                // But only if there are no tool_use blocks (pure text end_turn)
                 let hasToolUse = contentArray?.contains(where: { ($0["type"] as? String) == "tool_use" }) ?? false
                 if !hasToolUse {
+                    // Don't classify as sessionEnd — instead treat as a completed response.
+                    // The natural idle timeout will handle the transition to idle/finished.
                     return AgentActivity(
                         sessionID: sessionID,
                         timestamp: timestamp,
-                        activityType: .sessionEnd,
-                        summary: "Finished",
+                        activityType: .assistantMessage,
+                        summary: "Response complete",
                         rawPayload: rawEntry,
-                        isPlanMode: isPlanMode
+                        isPlanMode: isPlanMode,
+                        parentSessionID: parentSessionID
                     )
                 }
             }
@@ -285,7 +304,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             activityType: .toolUse,
                             summary: summary,
                             rawPayload: rawEntry,
-                            isPlanMode: isPlanMode
+                            isPlanMode: isPlanMode,
+                            parentSessionID: parentSessionID
                         )
                     }
                 }
@@ -298,7 +318,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 activityType: .thinking,
                 summary: "Thinking...",
                 rawPayload: rawEntry,
-                isPlanMode: isPlanMode
+                isPlanMode: isPlanMode,
+                parentSessionID: parentSessionID
             )
         }
 

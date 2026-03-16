@@ -30,6 +30,9 @@ public enum AgentState: String, Sendable, CaseIterable {
     /// Agent session has ended
     case finished
 
+    /// Agent is supervising active subagents
+    case supervisingAgents
+
     /// Human-readable description for display in thought bubbles
     public var displayLabel: String {
         switch self {
@@ -42,6 +45,7 @@ public enum AgentState: String, Sendable, CaseIterable {
         case .waitingForInput: "Waiting for input"
         case .error: "Error!"
         case .finished: "Done"
+        case .supervisingAgents: "Supervising..."
         }
     }
 }

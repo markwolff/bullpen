@@ -5,6 +5,12 @@ import Foundation
 public struct AgentInfo: Identifiable, Sendable, Equatable {
     public static func == (lhs: AgentInfo, rhs: AgentInfo) -> Bool {
         lhs.id == rhs.id
+            && lhs.state == rhs.state
+            && lhs.currentTaskDescription == rhs.currentTaskDescription
+            && lhs.isPlanMode == rhs.isPlanMode
+            && lhs.isSubagent == rhs.isSubagent
+            && lhs.nameRefined == rhs.nameRefined
+            && lhs.name == rhs.name
     }
 
     /// Unique identifier for this agent session (derived from log file or session ID)
@@ -29,7 +35,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     public var currentTaskDescription: String
 
     /// When this agent session started
-    public let startedAt: Date
+    public var startedAt: Date
 
     /// When the agent's state was last updated
     public var lastUpdatedAt: Date
@@ -60,6 +66,17 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// Whether this agent is currently in plan mode
     public var isPlanMode: Bool = false
 
+    /// The session ID of the parent agent that spawned this subagent
+    public var parentSessionID: String?
+
+    /// Session IDs of currently active child subagents
+    public var activeChildSessionIDs: Set<String> = []
+
+    /// Whether this agent has any active child subagents
+    public var hasActiveChildren: Bool {
+        !activeChildSessionIDs.isEmpty
+    }
+
     public init(
         id: String,
         name: String,
@@ -72,7 +89,8 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         workspacePath: String? = nil,
         stateEnteredAt: Date? = nil,
         isSubagent: Bool = false,
-        projectName: String? = nil
+        projectName: String? = nil,
+        parentSessionID: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -86,6 +104,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         self.stateEnteredAt = stateEnteredAt ?? startedAt
         self.isSubagent = isSubagent
         self.projectName = projectName
+        self.parentSessionID = parentSessionID
     }
 }
 

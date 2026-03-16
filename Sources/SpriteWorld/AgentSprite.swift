@@ -176,7 +176,7 @@ public class AgentSprite: SKSpriteNode {
             if let deskID = assignedDeskID {
                 let layout = OfficeLayout.defaultLayout()
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
-                    let isWorking = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching].contains(newInfo.state)
+                    let isWorking = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents].contains(newInfo.state)
                     let targetY = isWorking ? desk.chairPosition.y + 15 : desk.chairPosition.y
                     let targetPos = CGPoint(x: desk.chairPosition.x, y: targetY)
 
@@ -334,6 +334,11 @@ public class AgentSprite: SKSpriteNode {
             let animate = SKAction.animate(with: frames, timePerFrame: 1.0)
             run(animate, withKey: "stateAnimation")
             addConfettiEmitter()
+
+        case .supervisingAgents:
+            // 4 frames, 2.0s per frame, loop forever — arms-crossed watching
+            let animate = SKAction.animate(with: frames, timePerFrame: 2.0)
+            run(SKAction.repeatForever(animate), withKey: "stateAnimation")
         }
     }
 
@@ -555,6 +560,8 @@ public class AgentSprite: SKSpriteNode {
             SKColor(red: 0.878, green: 0.314, blue: 0.314, alpha: 1.0) // #E05050
         case .finished:
             SKColor(red: 0.439, green: 0.439, blue: 0.439, alpha: 1.0) // #707070
+        case .supervisingAgents:
+            SKColor(red: 0.251, green: 0.690, blue: 0.690, alpha: 1.0) // #40B0B0 teal
         }
     }
 
@@ -624,6 +631,7 @@ public class AgentSprite: SKSpriteNode {
         case .checkBulletinBoard: emoji = "📌"
         case .lookOutWindow: emoji = "🌤"
         case .petTheCat: emoji = "❤️"
+        case .petTheDog: emoji = "🐕"
         case .whiteboard: emoji = "💡"
         case .waterPlant: emoji = "🌱"
         case .getCoffee: emoji = "☕️"

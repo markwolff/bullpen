@@ -15,7 +15,7 @@ public class NightOwlManager {
 
     /// Updates night mode based on current hour. Call periodically (e.g. every 60s).
     public func update(hour: Int, scene: SKScene, agentSprites: [SKSpriteNode]) {
-        let shouldBeNight = hour >= 22 || hour < 6
+        let shouldBeNight = false  // Disabled: was hour >= 22 || hour < 6
 
         if shouldBeNight && !isNightMode {
             activateNightMode(scene: scene, agentSprites: agentSprites)

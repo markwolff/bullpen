@@ -34,7 +34,7 @@ public class DeskClutterManager {
         for (deskID, agentID) in deskAssignments {
             guard let agent = agents.first(where: { $0.id == agentID }) else { continue }
 
-            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching]
+            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
                 .contains(agent.state)
 
             if isWorking {

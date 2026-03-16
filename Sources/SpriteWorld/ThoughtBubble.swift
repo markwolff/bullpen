@@ -26,17 +26,20 @@ public class ThoughtBubble: SKNode {
     /// Current index in the display cycle
     private var cycleIndex: Int = 0
 
-    /// Timer for cycling
+    /// Timer for cycling — randomized initial offset so agents don't cycle in sync
     private var cycleTimer: TimeInterval = 0
 
     /// Cycle interval with jitter (5s ± 500ms)
-    private var cycleInterval: TimeInterval = TimeInterval.random(in: 4.5...5.5)
+    private var cycleInterval: TimeInterval = 0
 
     public override init() {
         bubbleBackground = SKShapeNode()
         label = SKLabelNode()
         cropNode = SKCropNode()
         super.init()
+        // Randomize cycle timing so agents spawned together don't talk in lockstep
+        cycleInterval = TimeInterval.random(in: 4.5...5.5)
+        cycleTimer = TimeInterval.random(in: 0.0..<cycleInterval)
         setupNodes()
     }
 
@@ -131,17 +134,21 @@ public class ThoughtBubble: SKNode {
         cropNode.maskNode = maskNode
     }
 
-    /// Shows the bubble with a fade-in animation.
+    /// Shows the bubble with a fade-in animation, staggered by a small random delay
+    /// so multiple agents spawning together don't all pop bubbles at once.
     public func show() {
         guard isHidden else { return }
         isHidden = false
         alpha = 0
-        run(SKAction.fadeIn(withDuration: 0.2))
+        let delay = SKAction.wait(forDuration: TimeInterval.random(in: 0.0...0.6))
+        let fadeIn = SKAction.fadeIn(withDuration: 0.2)
+        run(SKAction.sequence([delay, fadeIn]), withKey: "showDelay")
     }
 
     /// Hides the bubble with a fade-out animation.
     public func hide() {
         removeAction(forKey: "autoHide")
+        removeAction(forKey: "showDelay")
         guard !isHidden else { return }
         run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
             self?.isHidden = true
@@ -231,7 +238,7 @@ public class ThoughtBubble: SKNode {
     /// Schedules the bubble to fade out after 2 seconds.
     private func scheduleAutoHide() {
         removeAction(forKey: "autoHide")
-        let wait = SKAction.wait(forDuration: 2.0)
+        let wait = SKAction.wait(forDuration: TimeInterval.random(in: 1.8...2.5))
         let fadeOut = SKAction.fadeOut(withDuration: 0.2)
         let markHidden = SKAction.run { [weak self] in
             self?.isHidden = true

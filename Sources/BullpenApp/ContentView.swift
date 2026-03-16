@@ -107,6 +107,7 @@ struct ContentView: View {
         case .waitingForInput: .blue
         case .error: .red
         case .finished: Color(white: 0.4)
+        case .supervisingAgents: .teal
         }
     }
 }

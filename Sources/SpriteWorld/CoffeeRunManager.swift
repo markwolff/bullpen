@@ -30,7 +30,7 @@ public class CoffeeRunManager {
         var triggeredAgents: [String] = []
 
         for agent in agents {
-            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching]
+            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
                 .contains(agent.state)
 
             if isWorking && !onCoffeeRun.contains(agent.id) {

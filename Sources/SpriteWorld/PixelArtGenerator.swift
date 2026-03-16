@@ -70,6 +70,14 @@ public final class PixelArtGenerator: Sendable {
     static let catEar = RGB(0xF0C0A0)
     static let catNose = RGB(0xF08080)
 
+    // Dog colors - Pancake (apricot Maltipoo)
+    static let dogApricot = RGB(0xE8C090)       // Main body - warm apricot
+    static let dogApricotLight = RGB(0xF0D8B0)  // Lighter highlights/chest
+    static let dogApricotDark = RGB(0xD0A070)   // Darker shading
+    static let dogNose = RGB(0x303030)           // Black nose
+    static let dogEye = RGB(0x282828)            // Dark eyes
+    static let dogTongue = RGB(0xF08080)         // Pink tongue (for panting)
+
     // MARK: - Tile Textures (16x16)
 
     func floorTile() -> SKTexture {
@@ -457,6 +465,20 @@ public final class PixelArtGenerator: Sendable {
                 // "Exhale" — tiny highlight shift on hoodie
                 fill(ctx, rect: r(5, 12, 6, 1), color: hoodieDark)
             }
+        case "supervisingAgents":
+            // Arms-crossed pose with eyes shifting per frame
+            // Crossed arms over body
+            fill(ctx, rect: r(3, 9, 2, 3), color: hoodie)
+            fill(ctx, rect: r(11, 9, 2, 3), color: hoodie)
+            fill(ctx, rect: r(4, 10, 8, 2), color: hoodieDark) // crossed-arm band
+            fill(ctx, rect: r(3, 10, 1, 1), color: skin) // left hand
+            fill(ctx, rect: r(12, 10, 1, 1), color: skin) // right hand
+            // Eyes shift side to side — watching subagents
+            let superviseShift = frame % 4
+            let leftEye = superviseShift < 2 ? 6 : 7
+            let rightEye = superviseShift < 2 ? 9 : 10
+            fill(ctx, rect: r(leftEye, 19, 1, 1), color: eyeColor)
+            fill(ctx, rect: r(rightEye, 19, 1, 1), color: eyeColor)
         default:
             break
         }
@@ -839,6 +861,274 @@ public final class PixelArtGenerator: Sendable {
         }
     }
 
+    // MARK: - Dog Textures (14x12 pixel art) - Pancake the Maltipoo
+
+    func dogIdle() -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: false)
+        }
+    }
+
+    func dogSleep() -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: true)
+        }
+    }
+
+    func dogWalk() -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: false, walking: true)
+        }
+    }
+
+    func dogWalk(frame: Int) -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: false, walking: true, walkFrame: frame)
+        }
+    }
+
+    func dogIdle(frame: Int) -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: false, idleFrame: frame)
+        }
+    }
+
+    func dogSleep(frame: Int) -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: true, sleepFrame: frame)
+        }
+    }
+
+    func dogEat() -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: false, eating: true)
+        }
+    }
+
+    func dogTailWag(frame: Int) -> SKTexture {
+        drawTexture(width: 14, height: 12) { [self] ctx in
+            self.drawDog(ctx, sleeping: false, wagging: true, wagFrame: frame)
+        }
+    }
+
+    private func drawDog(_ ctx: CGContext, sleeping: Bool, walking: Bool = false,
+                          eating: Bool = false, wagging: Bool = false,
+                          walkFrame: Int = 0, idleFrame: Int = 0,
+                          sleepFrame: Int = 0, wagFrame: Int = 0) {
+        // Fluffy body (maltipoos are round and fluffy)
+        fill(ctx, rect: r(3, 2, 8, 5), color: Self.dogApricot)
+        fill(ctx, rect: r(2, 3, 10, 3), color: Self.dogApricot)       // Extra width for fluff
+        fill(ctx, rect: r(4, 3, 6, 3), color: Self.dogApricotLight)   // Lighter belly/chest
+
+        // Fluffy texture (random highlight pixels for curly fur)
+        fill(ctx, rect: r(4, 5, 1, 1), color: Self.dogApricotLight)
+        fill(ctx, rect: r(8, 4, 1, 1), color: Self.dogApricotLight)
+        fill(ctx, rect: r(6, 6, 1, 1), color: Self.dogApricotDark)
+
+        // Head (round maltipoo head with fluffy cheeks)
+        fill(ctx, rect: r(4, 7, 6, 4), color: Self.dogApricot)
+        fill(ctx, rect: r(3, 8, 8, 3), color: Self.dogApricot)        // Wider for fluffy cheeks
+        fill(ctx, rect: r(5, 8, 4, 2), color: Self.dogApricotLight)   // Lighter face
+
+        // Floppy ears (maltipoos have droopy, fluffy ears)
+        fill(ctx, rect: r(3, 9, 2, 3), color: Self.dogApricotDark)
+        fill(ctx, rect: r(9, 9, 2, 3), color: Self.dogApricotDark)
+
+        // Fluffy top of head
+        fill(ctx, rect: r(5, 11, 4, 1), color: Self.dogApricot)
+
+        // Eyes
+        if sleeping {
+            // Closed eyes - horizontal lines
+            fill(ctx, rect: r(5, 9, 2, 1), color: Self.dogEye)
+            fill(ctx, rect: r(8, 9, 2, 1), color: Self.dogEye)
+        } else {
+            // Open eyes - round and dark
+            fill(ctx, rect: r(5, 9, 2, 2), color: Self.dogEye)
+            fill(ctx, rect: r(8, 9, 2, 2), color: Self.dogEye)
+            // Eye shine
+            fill(ctx, rect: r(5, 10, 1, 1), color: Self.RGB(0xFFFFFF))
+            fill(ctx, rect: r(8, 10, 1, 1), color: Self.RGB(0xFFFFFF))
+        }
+
+        // Nose
+        fill(ctx, rect: r(7, 8, 1, 1), color: Self.dogNose)
+
+        // Tongue (when eating or panting on certain idle frames)
+        if eating || (!sleeping && idleFrame % 4 == 2) {
+            fill(ctx, rect: r(7, 7, 1, 1), color: Self.dogTongue)
+        }
+
+        // Tail (fluffy upward curl - maltipoo signature)
+        if wagging {
+            // Tail wag animation
+            if wagFrame % 2 == 0 {
+                fill(ctx, rect: r(10, 6, 2, 1), color: Self.dogApricot)
+                fill(ctx, rect: r(11, 7, 2, 1), color: Self.dogApricot)
+                fill(ctx, rect: r(12, 8, 1, 1), color: Self.dogApricotLight)
+            } else {
+                fill(ctx, rect: r(10, 6, 2, 1), color: Self.dogApricot)
+                fill(ctx, rect: r(11, 7, 1, 1), color: Self.dogApricot)
+                fill(ctx, rect: r(11, 8, 1, 1), color: Self.dogApricotLight)
+            }
+        } else {
+            fill(ctx, rect: r(10, 5, 2, 1), color: Self.dogApricot)
+            fill(ctx, rect: r(11, 6, 2, 1), color: Self.dogApricot)
+            fill(ctx, rect: r(12, 7, 1, 1), color: Self.dogApricotLight)
+        }
+
+        // Legs with frame-based animation
+        if walking {
+            if walkFrame % 2 == 0 {
+                fill(ctx, rect: r(4, 0, 2, 2), color: Self.dogApricot)
+                fill(ctx, rect: r(8, 1, 2, 2), color: Self.dogApricot)
+                fill(ctx, rect: r(4, 0, 2, 1), color: Self.dogApricotDark)
+                fill(ctx, rect: r(8, 1, 2, 1), color: Self.dogApricotDark)
+            } else {
+                fill(ctx, rect: r(4, 1, 2, 2), color: Self.dogApricot)
+                fill(ctx, rect: r(8, 0, 2, 2), color: Self.dogApricot)
+                fill(ctx, rect: r(4, 1, 2, 1), color: Self.dogApricotDark)
+                fill(ctx, rect: r(8, 0, 2, 1), color: Self.dogApricotDark)
+            }
+        } else if eating {
+            // Head down pose - legs slightly apart
+            fill(ctx, rect: r(3, 0, 2, 2), color: Self.dogApricot)
+            fill(ctx, rect: r(9, 0, 2, 2), color: Self.dogApricot)
+            fill(ctx, rect: r(3, 0, 2, 1), color: Self.dogApricotDark)
+            fill(ctx, rect: r(9, 0, 2, 1), color: Self.dogApricotDark)
+        } else {
+            // Standing legs
+            fill(ctx, rect: r(4, 0, 2, 2), color: Self.dogApricot)
+            fill(ctx, rect: r(8, 0, 2, 2), color: Self.dogApricot)
+            fill(ctx, rect: r(4, 0, 2, 1), color: Self.dogApricotDark)
+            fill(ctx, rect: r(8, 0, 2, 1), color: Self.dogApricotDark)
+        }
+
+        // Idle tail wag on specific frames (subtle)
+        if !walking && !sleeping && !wagging && idleFrame % 3 == 1 {
+            // Slight tail movement
+            fill(ctx, rect: r(12, 7, 1, 1), color: Self.dogApricot)
+        }
+
+        // Sleeping breathing - body slightly expands on even frames
+        if sleeping && sleepFrame % 2 == 1 {
+            fill(ctx, rect: r(2, 4, 1, 1), color: Self.dogApricot)
+        }
+    }
+
+    // MARK: - Dog Bowl Texture (10x6 pixel art)
+
+    func dogBowl() -> SKTexture {
+        drawTexture(width: 10, height: 6) { [self] ctx in
+            // Bowl body (metallic silver)
+            fill(ctx, rect: r(1, 0, 8, 3), color: Self.RGB(0xB0B0B8))   // Main bowl
+            fill(ctx, rect: r(0, 1, 10, 2), color: Self.RGB(0xB0B0B8))  // Wider middle
+            fill(ctx, rect: r(2, 3, 6, 1), color: Self.RGB(0xC8C8D0))   // Rim highlight
+
+            // Bowl rim
+            fill(ctx, rect: r(1, 3, 8, 1), color: Self.RGB(0x989898))
+            fill(ctx, rect: r(0, 2, 1, 1), color: Self.RGB(0x989898))
+            fill(ctx, rect: r(9, 2, 1, 1), color: Self.RGB(0x989898))
+
+            // Food inside (kibble brown)
+            fill(ctx, rect: r(2, 2, 6, 1), color: Self.RGB(0x8B5A2B))
+            fill(ctx, rect: r(3, 3, 4, 1), color: Self.RGB(0xA06830))
+
+            // Shine on bowl
+            fill(ctx, rect: r(2, 1, 1, 1), color: Self.RGB(0xD0D0D8))
+
+            // "PANCAKE" text area (just a bone shape decoration)
+            fill(ctx, rect: r(4, 0, 2, 1), color: Self.RGB(0xE8C090))   // Bone color accent
+        }
+    }
+
+    // MARK: - Dog Toy Textures
+
+    /// Red bouncy ball — 8x8 pixel art
+    func dogToyBall() -> SKTexture {
+        drawTexture(width: 8, height: 8) { [self] ctx in
+            // Main ball body (red)
+            fill(ctx, rect: r(2, 0, 4, 1), color: Self.RGB(0xC02020))
+            fill(ctx, rect: r(1, 1, 6, 1), color: Self.RGB(0xD03030))
+            fill(ctx, rect: r(0, 2, 8, 4), color: Self.RGB(0xE03030))
+            fill(ctx, rect: r(1, 6, 6, 1), color: Self.RGB(0xD03030))
+            fill(ctx, rect: r(2, 7, 4, 1), color: Self.RGB(0xC02020))
+
+            // Shadow on bottom-left
+            fill(ctx, rect: r(0, 2, 1, 2), color: Self.RGB(0xA02020))
+            fill(ctx, rect: r(1, 1, 1, 1), color: Self.RGB(0xA02020))
+
+            // Highlight on top-right
+            fill(ctx, rect: r(4, 5, 2, 1), color: Self.RGB(0xF06060))
+            fill(ctx, rect: r(5, 4, 1, 1), color: Self.RGB(0xF08080))
+        }
+    }
+
+    /// Classic dog bone — 10x6 pixel art
+    func dogToyBone() -> SKTexture {
+        drawTexture(width: 10, height: 6) { [self] ctx in
+            let boneMain = Self.RGB(0xF0E8D0)   // Cream white
+            let boneDark = Self.RGB(0xD8C8A8)    // Shading
+            let boneHighlight = Self.RGB(0xFFF8E8)  // Highlight
+
+            // Left knob
+            fill(ctx, rect: r(0, 0, 2, 2), color: boneMain)
+            fill(ctx, rect: r(0, 4, 2, 2), color: boneMain)
+            fill(ctx, rect: r(0, 1, 1, 4), color: boneMain)
+
+            // Right knob
+            fill(ctx, rect: r(8, 0, 2, 2), color: boneMain)
+            fill(ctx, rect: r(8, 4, 2, 2), color: boneMain)
+            fill(ctx, rect: r(9, 1, 1, 4), color: boneMain)
+
+            // Center shaft
+            fill(ctx, rect: r(2, 1, 6, 4), color: boneMain)
+
+            // Shading on bottom edges
+            fill(ctx, rect: r(0, 0, 2, 1), color: boneDark)
+            fill(ctx, rect: r(8, 0, 2, 1), color: boneDark)
+            fill(ctx, rect: r(2, 1, 6, 1), color: boneDark)
+
+            // Highlight on top
+            fill(ctx, rect: r(3, 4, 4, 1), color: boneHighlight)
+            fill(ctx, rect: r(0, 5, 2, 1), color: boneHighlight)
+            fill(ctx, rect: r(8, 5, 2, 1), color: boneHighlight)
+        }
+    }
+
+    /// Braided rope toy with colored knots — 12x6 pixel art
+    func dogToyRope() -> SKTexture {
+        drawTexture(width: 12, height: 6) { [self] ctx in
+            let ropeLight = Self.RGB(0xE8D8B0)  // Natural rope color
+            let ropeDark = Self.RGB(0xC0A878)    // Rope shading
+            let knotBlue = Self.RGB(0x5088D0)    // Blue knot
+            let knotRed = Self.RGB(0xD05050)     // Red knot
+
+            // Left knot (blue)
+            fill(ctx, rect: r(0, 1, 3, 4), color: knotBlue)
+            fill(ctx, rect: r(1, 0, 1, 1), color: knotBlue)
+            fill(ctx, rect: r(1, 5, 1, 1), color: knotBlue)
+
+            // Rope body - braided pattern (alternating light/dark)
+            fill(ctx, rect: r(3, 2, 6, 2), color: ropeLight)
+            fill(ctx, rect: r(3, 2, 1, 1), color: ropeDark)
+            fill(ctx, rect: r(5, 2, 1, 1), color: ropeDark)
+            fill(ctx, rect: r(7, 2, 1, 1), color: ropeDark)
+            fill(ctx, rect: r(4, 3, 1, 1), color: ropeDark)
+            fill(ctx, rect: r(6, 3, 1, 1), color: ropeDark)
+            fill(ctx, rect: r(8, 3, 1, 1), color: ropeDark)
+
+            // Frayed fibers top and bottom of rope
+            fill(ctx, rect: r(4, 1, 1, 1), color: ropeLight)
+            fill(ctx, rect: r(6, 4, 1, 1), color: ropeLight)
+
+            // Right knot (red)
+            fill(ctx, rect: r(9, 1, 3, 4), color: knotRed)
+            fill(ctx, rect: r(10, 0, 1, 1), color: knotRed)
+            fill(ctx, rect: r(10, 5, 1, 1), color: knotRed)
+        }
+    }
+
     // MARK: - Laptop Desk Textures
 
     /// Laptop desk — 16x10 pixel art, compact startup-style desk
@@ -854,6 +1144,29 @@ public final class PixelArtGenerator: Sendable {
             // Wood grain
             fill(ctx, rect: r(4, 6, 3, 1), color: Self.woodHighlight)
             fill(ctx, rect: r(10, 7, 3, 1), color: Self.woodHighlight)
+        }
+    }
+
+    /// Long communal table — 80x10 pixel art, tiled wood surface with legs at ends
+    func longTable() -> SKTexture {
+        drawTexture(width: 80, height: 10) { [self] ctx in
+            // Table surface
+            fill(ctx, rect: r(0, 4, 80, 5), color: Self.woodMid)
+            fill(ctx, rect: r(0, 9, 80, 1), color: Self.woodLight) // front edge
+            fill(ctx, rect: r(0, 4, 80, 1), color: Self.woodDark)  // back edge
+            // Four legs
+            fill(ctx, rect: r(1, 0, 2, 4), color: Self.woodDark)
+            fill(ctx, rect: r(26, 0, 2, 4), color: Self.woodDark)
+            fill(ctx, rect: r(52, 0, 2, 4), color: Self.woodDark)
+            fill(ctx, rect: r(77, 0, 2, 4), color: Self.woodDark)
+            // Wood grain highlights
+            fill(ctx, rect: r(5, 6, 4, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(15, 7, 3, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(28, 6, 4, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(38, 7, 3, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(50, 6, 4, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(62, 7, 3, 1), color: Self.woodHighlight)
+            fill(ctx, rect: r(70, 6, 4, 1), color: Self.woodHighlight)
         }
     }
 

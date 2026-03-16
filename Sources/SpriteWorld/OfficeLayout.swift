@@ -19,31 +19,53 @@ public struct OfficeLayout: Sendable {
         }
     }
 
+    /// Long communal table definition — one table surface with multiple seat positions
+    public struct TableDefinition: Sendable {
+        public let id: Int
+        public let centerY: CGFloat
+        public let seatXPositions: [CGFloat]
+
+        /// Left edge of the table surface (with margin before first seat)
+        public var leftX: CGFloat { (seatXPositions.first ?? 0) - 40 }
+        /// Right edge of the table surface (with margin after last seat)
+        public var rightX: CGFloat { (seatXPositions.last ?? 0) + 40 }
+        /// Width of the table surface
+        public var width: CGFloat { rightX - leftX }
+        /// Center X of the table surface
+        public var centerX: CGFloat { (leftX + rightX) / 2 }
+    }
+
     /// Size of the office scene in points
     public let sceneSize: CGSize
 
-    /// All available desk positions in the office
+    /// All available seat positions (one per agent) along the communal tables
     public let desks: [DeskPosition]
+
+    /// The communal tables in the office
+    public let tables: [TableDefinition]
 
     /// Area where agents can walk (simplified as a rect for now)
     public let walkableArea: CGRect
 
-    /// Creates the default office layout with Stardew Valley-proportioned desk spacing.
+    /// Creates the default office layout with two long communal tables.
     public static func defaultLayout() -> OfficeLayout {
         let sceneSize = CGSize(width: 1280, height: 768)
 
-        // Dense startup layout: 4 rows x 4 columns = 16 laptop desks
-        var desks: [DeskPosition] = []
-        let columnX: [CGFloat] = [200, 450, 700, 950]
-        let rowY: [CGFloat] = [520, 400, 280, 160]
+        // Two long communal tables, 8 seats each, tight co-working spacing
+        let seatXPositions: [CGFloat] = [200, 300, 400, 500, 600, 700, 800, 900]
+        let tableDefinitions = [
+            TableDefinition(id: 0, centerY: 430, seatXPositions: seatXPositions),
+            TableDefinition(id: 1, centerY: 260, seatXPositions: seatXPositions),
+        ]
 
+        var desks: [DeskPosition] = []
         var deskID = 0
-        for y in rowY {
-            for x in columnX {
+        for table in tableDefinitions {
+            for x in table.seatXPositions {
                 desks.append(DeskPosition(
                     id: deskID,
-                    position: CGPoint(x: x, y: y),
-                    chairPosition: CGPoint(x: x, y: y - 30)
+                    position: CGPoint(x: x, y: table.centerY),
+                    chairPosition: CGPoint(x: x, y: table.centerY - 30)
                 ))
                 deskID += 1
             }
@@ -52,6 +74,7 @@ public struct OfficeLayout: Sendable {
         return OfficeLayout(
             sceneSize: sceneSize,
             desks: desks,
+            tables: tableDefinitions,
             walkableArea: CGRect(x: 50, y: 50, width: 1180, height: 668)
         )
     }
@@ -63,30 +86,30 @@ public struct OfficeLayout: Sendable {
         desks.first { !occupiedDeskIDs.contains($0.id) }
     }
 
-    // MARK: - Desk Obstacles
+    // MARK: - Table Obstacles
 
-    /// Bounding rectangles for desk+chair obstacles (for pathfinding)
+    /// Bounding rectangles for table+chair obstacles (for pathfinding)
     public var deskObstacles: [CGRect] {
-        desks.map { desk in
+        tables.map { table in
             CGRect(
-                x: desk.position.x - 30,
-                y: desk.chairPosition.y - 10,
-                width: 60,
-                height: desk.position.y - desk.chairPosition.y + 20
+                x: table.leftX,
+                y: table.centerY - 40,
+                width: table.width,
+                height: 50
             )
         }
     }
 
     // MARK: - Aisles
 
-    /// Y coordinates of horizontal aisles between desk rows
+    /// Y coordinates of horizontal aisles between/around communal tables
     public var aisleYPositions: [CGFloat] {
-        [580, 460, 340, 220, 100]
+        [550, 345, 170, 100]
     }
 
     /// X coordinates of vertical corridors (left wall, center aisle, right wall)
     public var corridorXPositions: [CGFloat] {
-        [100, 575, 1180]
+        [100, 550, 1180]
     }
 
     // MARK: - Door Position
@@ -143,6 +166,25 @@ public struct OfficeLayout: Sendable {
         CGPoint(x: 80, y: 80)
     }
 
+    /// Dog bowl position - near the lounge area
+    public var dogBowlPosition: CGPoint {
+        CGPoint(x: 150, y: 90)
+    }
+
+    /// Dog starting/sleep position - near her bowl
+    public var dogSleepPosition: CGPoint {
+        CGPoint(x: 180, y: 80)
+    }
+
+    /// Positions where dog toys can be scattered in the office
+    public var dogToyPositions: [CGPoint] {
+        [
+            CGPoint(x: 120, y: 70),   // Near the dog bowl area
+            CGPoint(x: 280, y: 85),   // Middle of the office floor
+            CGPoint(x: 420, y: 75),   // Near the far side
+        ]
+    }
+
     /// Position to stand near the radio
     public var radioStandPosition: CGPoint {
         CGPoint(x: 130, y: sceneSize.height - 100)
@@ -167,14 +209,14 @@ public struct OfficeLayout: Sendable {
         )
     }
 
-    /// Pizza drop position (center of rug area)
+    /// Pizza drop position (open area below tables)
     public var pizzaDropPosition: CGPoint {
-        CGPoint(x: sceneSize.width / 2, y: 270)
+        CGPoint(x: sceneSize.width / 2, y: 120)
     }
 
-    /// Standup huddle positions (circle formation near center-right)
+    /// Standup huddle positions (circle formation in open area between tables)
     public var standupHuddlePositions: [CGPoint] {
-        let center = CGPoint(x: sceneSize.width * 0.65, y: 340)
+        let center = CGPoint(x: sceneSize.width * 0.5, y: 345)
         let radius: CGFloat = 50
         return (0..<8).map { i in
             let angle = CGFloat(i) * (.pi * 2 / 8)

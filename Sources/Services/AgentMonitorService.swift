@@ -9,7 +9,7 @@ import LogReaders
 public final class AgentMonitorService: ObservableObject {
     /// The current set of known agents and their states.
     /// The sprite world observes this to update character animations.
-    @Published public private(set) var agents: [AgentInfo] = []
+    @Published public internal(set) var agents: [AgentInfo] = []
 
     /// All registered log readers
     private let logReaders: [any AgentLogReader]
@@ -23,8 +23,14 @@ public final class AgentMonitorService: ObservableObject {
     /// Known session log file paths (sessionID -> URL)
     private var sessionFiles: [String: URL] = [:]
 
-    /// Sessions that have been removed — skip during re-discovery
-    private var dismissedSessions: Set<String> = []
+    /// Sessions that have been removed — skip during re-discovery unless log file modified after dismissal
+    private var dismissedSessionTimestamps: [String: Date] = [:]
+
+    /// Child session → parent session lookup
+    private var childToParentMap: [String: String] = [:]
+
+    /// Parent session → child sessions lookup
+    private var parentToChildrenMap: [String: Set<String>] = [:]
 
     /// How often to scan for new sessions (seconds)
     private let discoveryInterval: TimeInterval
@@ -133,7 +139,9 @@ public final class AgentMonitorService: ObservableObject {
         agents.removeAll()
         readOffsets.removeAll()
         sessionFiles.removeAll()
-        dismissedSessions.removeAll()
+        dismissedSessionTimestamps.removeAll()
+        childToParentMap.removeAll()
+        parentToChildrenMap.removeAll()
     }
 
     // MARK: - Public methods for testing
@@ -167,7 +175,17 @@ public final class AgentMonitorService: ObservableObject {
                 var newSessions: [(id: String, url: URL)] = []
                 for (sessionID, fileURL) in sessions {
                     guard sessionFiles[sessionID] == nil else { continue }
-                    guard !dismissedSessions.contains(sessionID) else { continue }
+                    // Allow re-discovery if log file was modified after dismissal
+                    if let dismissedAt = dismissedSessionTimestamps[sessionID] {
+                        let fm = FileManager.default
+                        if let attrs = try? fm.attributesOfItem(atPath: fileURL.path),
+                           let modDate = attrs[.modificationDate] as? Date,
+                           modDate > dismissedAt {
+                            dismissedSessionTimestamps.removeValue(forKey: sessionID)
+                        } else {
+                            continue
+                        }
+                    }
                     guard agents.count + newSessions.count < maxAgents else {
                         print("Bullpen: Max agents (\(maxAgents)) reached, skipping session \(sessionID)")
                         break
@@ -189,6 +207,17 @@ public final class AgentMonitorService: ObservableObject {
                     // Detect subagents by checking if the path contains "/subagents/"
                     let isSubagent = session.url.path.contains("/subagents/")
 
+                    // Extract parent session ID from subagent file path:
+                    // <hash>/<parent-uuid>/subagents/agent-<id>.jsonl
+                    var parentSessionID: String?
+                    if isSubagent {
+                        let subagentsDir = session.url.deletingLastPathComponent()
+                        if subagentsDir.lastPathComponent == "subagents" {
+                            let parentDir = subagentsDir.deletingLastPathComponent()
+                            parentSessionID = parentDir.lastPathComponent
+                        }
+                    }
+
                     // Create an AgentInfo for this new session
                     let agent = AgentInfo(
                         id: session.id,
@@ -198,9 +227,15 @@ public final class AgentMonitorService: ObservableObject {
                         state: .idle,
                         currentTaskDescription: "Starting up...",
                         isSubagent: isSubagent,
-                        projectName: projectName
+                        projectName: projectName,
+                        parentSessionID: parentSessionID
                     )
                     agents.append(agent)
+
+                    // Register parent-child relationship
+                    if let parentID = parentSessionID {
+                        registerParentChild(parentID: parentID, childID: session.id)
+                    }
 
                     // Set up a file watcher for this session's log
                     setupWatcher(for: session.id, fileURL: session.url, reader: reader)
@@ -219,6 +254,8 @@ public final class AgentMonitorService: ObservableObject {
             let agent = agents[i]
             // Don't transition finished agents to idle (finished is terminal until new activity)
             guard agent.state != .finished && agent.state != .idle else { continue }
+            // Never idle-timeout a parent with active children
+            guard !agent.hasActiveChildren else { continue }
             if now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
                 agents[i].state = .idle
                 agents[i].lastUpdatedAt = now
@@ -233,24 +270,28 @@ public final class AgentMonitorService: ObservableObject {
     /// Call directly in tests instead of waiting for timers.
     public func checkAgentRemoval() {
         let now = Date()
-        agents.removeAll { agent in
-            // Never remove error agents
-            if agent.state == .error { return false }
+
+        // Collect IDs to remove first (avoid mutating agents during iteration)
+        var idsToRemove: [String] = []
+        for agent in agents {
+            if agent.state == .error { continue }
+            if agent.hasActiveChildren { continue }
+            if now.timeIntervalSince(agent.startedAt) < 10.0 { continue }
 
             if agent.state == .finished,
                now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout {
-                cleanupAgent(sessionID: agent.id)
-                return true
-            }
-
-            if agent.state == .idle,
+                idsToRemove.append(agent.id)
+            } else if agent.state == .idle,
                now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout {
-                cleanupAgent(sessionID: agent.id)
-                return true
+                idsToRemove.append(agent.id)
             }
-
-            return false
         }
+
+        // Cleanup and remove
+        for id in idsToRemove {
+            cleanupAgent(sessionID: id)
+        }
+        agents.removeAll { idsToRemove.contains($0.id) }
     }
 
     /// Updates an agent's state based on a new activity.
@@ -293,6 +334,23 @@ public final class AgentMonitorService: ObservableObject {
                     await service.notifyAgentError(agent: agent, windowVisible: visible)
                 }
             }
+        }
+
+        // Register parent-child relationship from activity metadata
+        if let parentID = activity.parentSessionID {
+            registerParentChild(parentID: parentID, childID: sessionID)
+        }
+
+        // After updating a subagent's state, check if its parent should be supervising
+        if let parentID = childToParentMap[sessionID],
+           let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+            if agents[parentIndex].hasActiveChildren && agents[parentIndex].state != .supervisingAgents {
+                agents[parentIndex].state = .supervisingAgents
+                agents[parentIndex].currentTaskDescription = "Supervising..."
+                agents[parentIndex].stateEnteredAt = Date()
+            }
+            // Keep parent alive while children are active
+            agents[parentIndex].lastUpdatedAt = Date()
         }
 
         // Propagate plan mode (sticky: stays true until explicitly false)
@@ -381,6 +439,7 @@ public final class AgentMonitorService: ObservableObject {
         reader: any AgentLogReader
     ) async {
         let currentOffset = readOffsets[sessionID] ?? 0
+        let isInitialRead = currentOffset == 0
 
         do {
             let (activities, newOffset) = try await reader.readActivities(
@@ -389,9 +448,38 @@ public final class AgentMonitorService: ObservableObject {
             )
             readOffsets[sessionID] = newOffset
 
+            // On first read, find first user message for name refinement
+            if isInitialRead {
+                if let firstUserMsg = activities.first(where: { $0.activityType == .userMessage }) {
+                    if let index = agents.firstIndex(where: { $0.id == sessionID }),
+                       !agents[index].nameRefined,
+                       let rawPayload = firstUserMsg.rawPayload,
+                       let taskName = Self.extractTaskName(from: rawPayload) {
+                        agents[index].name = taskName
+                        agents[index].nameRefined = true
+                    }
+                }
+
+                // Register parent-child from any activity's metadata
+                for activity in activities {
+                    if let parentID = activity.parentSessionID {
+                        registerParentChild(parentID: parentID, childID: sessionID)
+                        break
+                    }
+                }
+            }
+
             // Update the agent's state based on the latest activity
             if let latestActivity = activities.last {
                 updateAgentState(sessionID: sessionID, activity: latestActivity)
+
+                // Fix stale timestamps on initial read: use current time instead of
+                // potentially minutes-old log timestamps to prevent immediate removal
+                if isInitialRead {
+                    if let index = agents.firstIndex(where: { $0.id == sessionID }) {
+                        agents[index].lastUpdatedAt = Date()
+                    }
+                }
             }
         } catch {
             print("Bullpen: Error reading log for session \(sessionID): \(error)")
@@ -403,10 +491,45 @@ public final class AgentMonitorService: ObservableObject {
     /// performDiscovery() won't re-discover this session and cause
     /// the agent sprite to disappear and reappear.
     private func cleanupAgent(sessionID: String) {
-        dismissedSessions.insert(sessionID)
+        dismissedSessionTimestamps[sessionID] = Date()
         watchers[sessionID]?.stopWatching()
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
+
+        // Remove child from parent's tracking
+        if let parentID = childToParentMap[sessionID] {
+            parentToChildrenMap[parentID]?.remove(sessionID)
+            if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+                agents[parentIndex].activeChildSessionIDs.remove(sessionID)
+                // If parent has no more children and is supervising, transition back
+                if agents[parentIndex].activeChildSessionIDs.isEmpty
+                    && agents[parentIndex].state == .supervisingAgents {
+                    agents[parentIndex].state = .waitingForInput
+                    agents[parentIndex].currentTaskDescription = "Waiting for input"
+                    agents[parentIndex].stateEnteredAt = Date()
+                    agents[parentIndex].lastUpdatedAt = Date()
+                }
+            }
+            childToParentMap.removeValue(forKey: sessionID)
+        }
+
+        // If this agent was a parent, clean up its children map entry
+        parentToChildrenMap.removeValue(forKey: sessionID)
+    }
+
+    /// Registers a parent-child relationship between sessions.
+    private func registerParentChild(parentID: String, childID: String) {
+        childToParentMap[childID] = parentID
+        parentToChildrenMap[parentID, default: []].insert(childID)
+
+        // Update parent's AgentInfo if it exists
+        if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+            agents[parentIndex].activeChildSessionIDs.insert(childID)
+        }
+        // Update child's AgentInfo if it exists
+        if let childIndex = agents.firstIndex(where: { $0.id == childID }) {
+            agents[childIndex].parentSessionID = parentID
+        }
     }
 
     // MARK: - Smart Naming

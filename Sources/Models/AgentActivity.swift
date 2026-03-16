@@ -27,6 +27,9 @@ public struct AgentActivity: Sendable {
     /// Whether the agent is in plan mode during this activity
     public var isPlanMode: Bool
 
+    /// The session ID of the parent agent (for subagent activities)
+    public var parentSessionID: String?
+
     public init(
         sessionID: String,
         timestamp: Date,
@@ -35,7 +38,8 @@ public struct AgentActivity: Sendable {
         rawPayload: String? = nil,
         inputTokens: Int = 0,
         outputTokens: Int = 0,
-        isPlanMode: Bool = false
+        isPlanMode: Bool = false,
+        parentSessionID: String? = nil
     ) {
         self.sessionID = sessionID
         self.timestamp = timestamp
@@ -45,6 +49,7 @@ public struct AgentActivity: Sendable {
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
         self.isPlanMode = isPlanMode
+        self.parentSessionID = parentSessionID
     }
 }
 
