@@ -54,6 +54,12 @@ public class EmptyOfficeManager {
     private func activate(scene: SKScene) {
         isActive = true
 
+        // Remove any stale overlays from prior activations
+        scene.enumerateChildNodes(withName: "empty_office_overlay") { node, _ in
+            node.removeAllActions()
+            node.removeFromParent()
+        }
+
         // Add dim overlay
         let overlay = SKShapeNode(rectOf: CGSize(width: 1280, height: 768))
         overlay.fillColor = SKColor(red: 0.063, green: 0.094, blue: 0.188, alpha: 0.1)
@@ -82,11 +88,13 @@ public class EmptyOfficeManager {
         isActive = false
         emptyTimer = 0
 
-        // Remove overlay
-        dimOverlay?.run(SKAction.sequence([
-            SKAction.fadeOut(withDuration: 1.0),
-            SKAction.removeFromParent()
-        ]))
+        // Remove all overlays (including any orphaned ones from rapid activate/deactivate cycles)
+        scene.enumerateChildNodes(withName: "empty_office_overlay") { node, _ in
+            node.run(SKAction.sequence([
+                SKAction.fadeOut(withDuration: 1.0),
+                SKAction.removeFromParent()
+            ]))
+        }
         dimOverlay = nil
 
         // Restore laptops

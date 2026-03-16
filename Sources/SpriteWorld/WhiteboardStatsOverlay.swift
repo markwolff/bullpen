@@ -28,7 +28,7 @@ public class WhiteboardStatsOverlay: SKNode {
         agentCountLabel.horizontalAlignmentMode = .left
         agentCountLabel.position = CGPoint(x: -45, y: 15)
         agentCountLabel.text = "Today: 0"
-        agentCountLabel.zPosition = 1
+        agentCountLabel.zPosition = 2
         addChild(agentCountLabel)
 
         activeCountLabel.fontName = "Menlo"
@@ -37,7 +37,7 @@ public class WhiteboardStatsOverlay: SKNode {
         activeCountLabel.horizontalAlignmentMode = .left
         activeCountLabel.position = CGPoint(x: -45, y: 5)
         activeCountLabel.text = "Active: 0"
-        activeCountLabel.zPosition = 1
+        activeCountLabel.zPosition = 2
         addChild(activeCountLabel)
     }
 
@@ -46,7 +46,7 @@ public class WhiteboardStatsOverlay: SKNode {
             let bar = SKShapeNode(rectOf: CGSize(width: 2, height: 1))
             bar.fillColor = SKColor(red: 0.314, green: 0.784, blue: 0.471, alpha: 1.0)
             bar.strokeColor = .clear
-            bar.position = CGPoint(x: -45 + CGFloat(i) * 4, y: -10)
+            bar.position = CGPoint(x: -45 + CGFloat(i) * 4, y: -15)
             bar.zPosition = 1
             addChild(bar)
             sparklineBars.append(bar)
@@ -62,7 +62,7 @@ public class WhiteboardStatsOverlay: SKNode {
         let maxVal = max(1, activityHistory.max() ?? 1)
         for (i, bar) in sparklineBars.enumerated() {
             let value = i < activityHistory.count ? activityHistory[i] : 0
-            let height = max(1, CGFloat(value) / CGFloat(maxVal) * 10)
+            let height = max(1, CGFloat(value) / CGFloat(maxVal) * 8)
             bar.path = CGPath(rect: CGRect(x: -1, y: 0, width: 2, height: height), transform: nil)
         }
     }

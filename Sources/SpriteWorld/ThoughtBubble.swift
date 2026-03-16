@@ -29,8 +29,8 @@ public class ThoughtBubble: SKNode {
     /// Timer for cycling
     private var cycleTimer: TimeInterval = 0
 
-    /// Cycle interval with jitter (1.5-2.5s)
-    private var cycleInterval: TimeInterval = TimeInterval.random(in: 1.5...2.5)
+    /// Cycle interval with jitter (5s ± 500ms)
+    private var cycleInterval: TimeInterval = TimeInterval.random(in: 4.5...5.5)
 
     public override init() {
         bubbleBackground = SKShapeNode()
@@ -74,21 +74,22 @@ public class ThoughtBubble: SKNode {
 
     /// Updates the bubble to show the given text.
     /// Pass nil or empty string to hide the bubble.
+    /// Only shows the bubble if the text has changed from the current message.
     public func update(text: String?, for state: AgentState) {
         guard let text, !text.isEmpty, state != .idle && state != .finished else {
             hide()
             return
         }
 
-        let textChanged = label.text != text
+        // Don't re-show the bubble if the message hasn't changed
+        guard label.text != text else { return }
+
         label.text = text
         updateBubblePath()
         show()
-
-        if textChanged {
-            resetFadeTimer()
-            setupScrollIfNeeded()
-        }
+        resetFadeTimer()
+        setupScrollIfNeeded()
+        scheduleAutoHide()
     }
 
     /// Rebuilds the bubble shape to fit the current label text.
@@ -140,6 +141,7 @@ public class ThoughtBubble: SKNode {
 
     /// Hides the bubble with a fade-out animation.
     public func hide() {
+        removeAction(forKey: "autoHide")
         guard !isHidden else { return }
         run(SKAction.fadeOut(withDuration: 0.2)) { [weak self] in
             self?.isHidden = true
@@ -194,16 +196,25 @@ public class ThoughtBubble: SKNode {
 
     /// Called each frame to advance the thought bubble cycle.
     public func updateCycle(deltaTime: TimeInterval) {
-        guard displayCycle.count > 1, !isHidden else { return }
+        guard displayCycle.count > 1 else { return }
 
         cycleTimer += deltaTime
         if cycleTimer >= cycleInterval {
             cycleTimer = 0
-            cycleInterval = TimeInterval.random(in: 1.5...2.5) // Re-jitter
-            cycleIndex = (cycleIndex + 1) % displayCycle.count
+            cycleInterval = TimeInterval.random(in: 4.5...5.5) // ~5s with jitter
 
-            // Cross-fade to new text
+            // Find the next message that differs from the current one
+            let startIndex = cycleIndex
+            repeat {
+                cycleIndex = (cycleIndex + 1) % displayCycle.count
+            } while displayCycle[cycleIndex] == label.text && cycleIndex != startIndex
+
             let newText = displayCycle[cycleIndex]
+            // Skip if we looped all the way around and every message is the same
+            guard newText != label.text else { return }
+
+            // Cross-fade to new text, then auto-hide after 2s
+            isHidden = false
             let fadeOut = SKAction.fadeAlpha(to: 0.3, duration: 0.15)
             let swap = SKAction.run { [weak self] in
                 self?.label.text = newText
@@ -211,7 +222,21 @@ public class ThoughtBubble: SKNode {
             }
             let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.15)
             run(SKAction.sequence([fadeOut, swap, fadeIn]), withKey: "cycleFade")
+            scheduleAutoHide()
         }
+    }
+
+    // MARK: - Auto-Hide
+
+    /// Schedules the bubble to fade out after 2 seconds.
+    private func scheduleAutoHide() {
+        removeAction(forKey: "autoHide")
+        let wait = SKAction.wait(forDuration: 2.0)
+        let fadeOut = SKAction.fadeOut(withDuration: 0.2)
+        let markHidden = SKAction.run { [weak self] in
+            self?.isHidden = true
+        }
+        run(SKAction.sequence([wait, fadeOut, markHidden]), withKey: "autoHide")
     }
 
     // MARK: - Opacity
