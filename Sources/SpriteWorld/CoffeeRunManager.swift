@@ -18,6 +18,8 @@ public class CoffeeRunManager {
     /// Work duration threshold before coffee run (seconds)
     private let workThreshold: TimeInterval = 300 // 5 minutes
 
+    private static let workingStates: Set<AgentState> = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
+
     public init() {}
 
     /// Call each frame from OfficeScene.update().
@@ -30,8 +32,7 @@ public class CoffeeRunManager {
         var triggeredAgents: [String] = []
 
         for agent in agents {
-            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
-                .contains(agent.state)
+            let isWorking = Self.workingStates.contains(agent.state)
 
             if isWorking && !onCoffeeRun.contains(agent.id) {
                 workTimers[agent.id, default: 0] += deltaTime

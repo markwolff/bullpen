@@ -174,6 +174,45 @@ public final class TextureManager: @unchecked Sendable {
         dogToyBall, dogToyBone, dogToyRope,
     ]
 
+    // MARK: - Status Indicator Textures
+
+    /// Returns a pre-rendered status indicator texture for the given state and size.
+    /// Circle for all states except error (square). Cached after first generation.
+    public func statusIndicatorTexture(for state: AgentState, radius: CGFloat) -> SKTexture {
+        let shape = state == .error ? "square" : "circle"
+        let cacheKey = "status_\(state.rawValue)_\(shape)_\(Int(radius))"
+
+        lock.lock()
+        if let cached = cache[cacheKey] {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        let rgb = state.displayColorRGB
+        let color = NSColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1.0)
+        let diameter = radius * 2
+        let size = CGSize(width: diameter, height: diameter)
+
+        let image = NSImage(size: size, flipped: false) { rect in
+            color.setFill()
+            if state == .error {
+                rect.fill()
+            } else {
+                NSBezierPath(ovalIn: rect).fill()
+            }
+            return true
+        }
+
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .nearest
+
+        lock.lock()
+        cache[cacheKey] = texture
+        lock.unlock()
+        return texture
+    }
+
     // MARK: - Public API
 
     /// Returns a texture for the given name, using pixel art generator first.
@@ -212,37 +251,44 @@ public final class TextureManager: @unchecked Sendable {
         let frameCount = Self.frameCount(for: state)
         let gen = PixelArtGenerator.shared
 
-        var frames: [SKTexture] = []
+        // Check cache for all frames with a single lock acquisition
+        var frames = [SKTexture?](repeating: nil, count: frameCount)
+        var missingIndices: [Int] = []
+
+        lock.lock()
         for i in 0..<frameCount {
             let cacheKey = "\(prefix)_\(state.rawValue)_frame\(i)"
+            frames[i] = cache[cacheKey]
+            if frames[i] == nil { missingIndices.append(i) }
+        }
+        lock.unlock()
 
-            lock.lock()
-            if let cached = cache[cacheKey] {
-                lock.unlock()
-                frames.append(cached)
-                continue
-            }
-            lock.unlock()
-
-            let texture: SKTexture
+        // Generate missing textures without holding the lock
+        if !missingIndices.isEmpty {
             let stateStr = state.rawValue
-            if prefix == "char_claude" {
-                texture = gen.claudeCharacter(state: stateStr, frame: i)
-            } else if prefix == "char_codex" {
-                texture = gen.codexCharacter(state: stateStr, frame: i)
-            } else {
-                // Fallback: use the base state texture
-                texture = self.texture(for: "\(prefix)_\(stateStr)")
+            var newTextures: [(Int, String, SKTexture)] = []
+            for i in missingIndices {
+                let texture: SKTexture
+                if prefix == "char_claude" {
+                    texture = gen.claudeCharacter(state: stateStr, frame: i)
+                } else if prefix == "char_codex" {
+                    texture = gen.codexCharacter(state: stateStr, frame: i)
+                } else {
+                    texture = self.texture(for: "\(prefix)_\(stateStr)")
+                }
+                texture.filteringMode = .nearest
+                let cacheKey = "\(prefix)_\(stateStr)_frame\(i)"
+                newTextures.append((i, cacheKey, texture))
+                frames[i] = texture
             }
-
-            texture.filteringMode = .nearest
             lock.lock()
-            cache[cacheKey] = texture
+            for (_, key, texture) in newTextures {
+                cache[key] = texture
+            }
             lock.unlock()
-            frames.append(texture)
         }
 
-        return frames
+        return frames.map { $0! }
     }
 
     /// Returns animation frames for a trait-based character.
@@ -250,30 +296,38 @@ public final class TextureManager: @unchecked Sendable {
     public func animationFrames(traits: CharacterTraits, state: AgentState) -> [SKTexture] {
         let frameCount = Self.frameCount(for: state)
         let gen = PixelArtGenerator.shared
-        let traitKey = "char_\(traits.hoodieColor)_\(traits.skinColor)_\(traits.hairStyle.rawValue)_\(traits.accessory.rawValue)"
+        let traitKey = "char_\(traits.hoodieColor)_\(traits.skinColor)_\(traits.eyeColor)_\(traits.hairColor)_\(traits.hairStyle.rawValue)_\(traits.accessory.rawValue)"
 
-        var frames: [SKTexture] = []
+        // Check cache for all frames with a single lock acquisition
+        var frames = [SKTexture?](repeating: nil, count: frameCount)
+        var missingIndices: [Int] = []
+
+        lock.lock()
         for i in 0..<frameCount {
             let cacheKey = "\(traitKey)_\(state.rawValue)_frame\(i)"
+            frames[i] = cache[cacheKey]
+            if frames[i] == nil { missingIndices.append(i) }
+        }
+        lock.unlock()
 
+        // Generate missing textures without holding the lock
+        if !missingIndices.isEmpty {
+            var newTextures: [(Int, String, SKTexture)] = []
+            for i in missingIndices {
+                let texture = gen.character(traits: traits, state: state.rawValue, frame: i)
+                texture.filteringMode = .nearest
+                let cacheKey = "\(traitKey)_\(state.rawValue)_frame\(i)"
+                newTextures.append((i, cacheKey, texture))
+                frames[i] = texture
+            }
             lock.lock()
-            if let cached = cache[cacheKey] {
-                lock.unlock()
-                frames.append(cached)
-                continue
+            for (_, key, texture) in newTextures {
+                cache[key] = texture
             }
             lock.unlock()
-
-            let texture = gen.character(traits: traits, state: state.rawValue, frame: i)
-            texture.filteringMode = .nearest
-
-            lock.lock()
-            cache[cacheKey] = texture
-            lock.unlock()
-            frames.append(texture)
         }
 
-        return frames
+        return frames.map { $0! }
     }
 
     /// Returns the expected frame count for a given state.

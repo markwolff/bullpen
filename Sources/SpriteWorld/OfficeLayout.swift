@@ -71,6 +71,15 @@ public struct OfficeLayout: Sendable {
     public let walkableArea: CGRect
     public let barriers: [Barrier]
 
+    /// Pre-computed collision rectangles (barriers + desk tops). Avoids recomputing on every pathfinding call.
+    public let collisionObstacles: [CGRect]
+
+    /// Pre-computed desk-top obstacle rectangles.
+    public let deskObstacles: [CGRect]
+
+    /// Pre-computed furniture obstacle rectangles.
+    public let furnitureObstacles: [CGRect]
+
     public init(
         sceneSize: CGSize,
         desks: [DeskPosition],
@@ -85,10 +94,20 @@ public struct OfficeLayout: Sendable {
         self.rooms = rooms
         self.walkableArea = walkableArea
         self.barriers = barriers
+
+        // Pre-compute obstacle arrays once
+        self.deskObstacles = tables.map { table in
+            CGRect(x: table.leftX, y: table.centerY - 12, width: table.width, height: 24)
+        }
+        self.furnitureObstacles = barriers.compactMap { barrier in
+            barrier.kind == .furniture ? barrier.rect : nil
+        }
+        self.collisionObstacles = barriers.map(\.rect) + self.deskObstacles
     }
 
     /// Creates a multi-room office with three desk rooms and a recreation lounge.
-    public static func defaultLayout() -> OfficeLayout {
+    /// Cached as a static let to avoid reconstructing on every access.
+    public static let defaultLayout: OfficeLayout = {
         let sceneSize = CGSize(width: 1280, height: 768)
 
         let focusRoom = RoomDefinition(
@@ -171,7 +190,7 @@ public struct OfficeLayout: Sendable {
             walkableArea: CGRect(x: 40, y: 40, width: 1200, height: 688),
             barriers: barriers
         )
-    }
+    }()
 
     public func nextAvailableDesk(occupiedDeskIDs: Set<Int>) -> DeskPosition? {
         desks.filter { !occupiedDeskIDs.contains($0.id) }.randomElement()
@@ -187,22 +206,7 @@ public struct OfficeLayout: Sendable {
         barriers.filter { $0.kind == .solidWall }
     }
 
-    public var furnitureObstacles: [CGRect] {
-        barriers.compactMap { barrier in
-            barrier.kind == .furniture ? barrier.rect : nil
-        }
-    }
-
-    /// Table tops only. Chair landings remain walkable for seated agents.
-    public var deskObstacles: [CGRect] {
-        tables.map { table in
-            CGRect(x: table.leftX, y: table.centerY - 12, width: table.width, height: 24)
-        }
-    }
-
-    public var collisionObstacles: [CGRect] {
-        barriers.map(\.rect) + deskObstacles
-    }
+    // collisionObstacles, deskObstacles, and furnitureObstacles are now stored properties (see init)
 
     // MARK: - Aisles
 

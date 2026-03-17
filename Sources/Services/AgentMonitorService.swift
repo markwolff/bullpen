@@ -50,8 +50,12 @@ public final class AgentMonitorService: ObservableObject {
     /// Process liveness checker for PID-based deep thinking validation
     private let livenessChecker = ProcessLivenessChecker()
 
-    /// Cached session PID mappings (populated lazily on first deep thinking transition)
+    /// Cached session PID mappings (populated lazily on first deep thinking transition).
+    /// Cleared periodically so new sessions get fresh PID mappings.
     private var sessionPIDs: [String: Int32] = [:]
+
+    /// Timestamp of last sessionPIDs refresh
+    private var lastPIDRefresh: Date = .distantPast
 
     /// Maximum number of simultaneous agents
     private let maxAgents: Int = 1000
@@ -64,6 +68,9 @@ public final class AgentMonitorService: ObservableObject {
 
     /// Whether the app window is currently visible (set externally)
     public var windowVisible: Bool = true
+
+    /// O(1) agent lookup by session ID → array index (rebuilt on add/remove)
+    private var agentIndexMap: [String: Int] = [:]
 
     /// Timer for periodic session discovery
     private var discoveryTimer: Timer?
@@ -79,6 +86,9 @@ public final class AgentMonitorService: ObservableObject {
 
     /// Remembers that another discovery pass was requested while one was in flight.
     private var pendingDiscoveryPass: Bool = false
+
+    /// Consecutive empty discovery passes (for adaptive interval)
+    private var consecutiveEmptyDiscoveries: Int = 0
 
     /// When true, the next discovery pass defers agent creation for existing sessions.
     /// Set by startMonitoring() so that app launch doesn't spawn hundreds of agents
@@ -143,6 +153,7 @@ public final class AgentMonitorService: ObservableObject {
         }
         watchers.removeAll()
         agents.removeAll()
+        agentIndexMap.removeAll()
         readOffsets.removeAll()
         sessionFiles.removeAll()
         dismissedSessionTimestamps.removeAll()
@@ -150,6 +161,7 @@ public final class AgentMonitorService: ObservableObject {
         parentToChildrenMap.removeAll()
         pendingSessions.removeAll()
         sessionPIDs.removeAll()
+        consecutiveEmptyDiscoveries = 0
         deferNextDiscovery = false
     }
 
@@ -257,6 +269,29 @@ public final class AgentMonitorService: ObservableObject {
                 print("Bullpen: Error discovering sessions for \(reader.agentType): \(error)")
             }
         }
+
+        // Adaptive discovery: slow down when nothing is happening
+        if agents.isEmpty {
+            consecutiveEmptyDiscoveries += 1
+            if consecutiveEmptyDiscoveries == 3 {
+                discoveryTimer?.invalidate()
+                discoveryTimer = Timer.scheduledTimer(
+                    withTimeInterval: 30.0,
+                    repeats: true
+                ) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        await self?.performDiscovery()
+                    }
+                }
+                discoveryTimer?.tolerance = 6.0
+            }
+        } else {
+            if consecutiveEmptyDiscoveries >= 3 {
+                // Restore normal discovery rate
+                resetTimers()
+            }
+            consecutiveEmptyDiscoveries = 0
+        }
     }
 
     /// Checks all agents for idle timeout and transitions them to .idle or .deepThinking.
@@ -265,27 +300,27 @@ public final class AgentMonitorService: ObservableObject {
         let now = Date()
         for i in agents.indices {
             let agent = agents[i]
-            // Don't transition finished, idle, or deepThinking agents
             guard agent.state != .finished && agent.state != .idle && agent.state != .deepThinking else { continue }
-            // Never idle-timeout a parent with active children
             guard !agent.hasActiveChildren else { continue }
             if now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
+                var updated = agent
                 if agent.state == .thinking {
-                    // Thinking agents enter deep thinking instead of idle
-                    agents[i].state = .deepThinking
-                    agents[i].stateEnteredAt = now
-                    agents[i].lastUpdatedAt = now
-                    // Look up and store PID for liveness checking
-                    if agents[i].pid == nil && agents[i].agentType == .claudeCode {
-                        if sessionPIDs.isEmpty {
+                    updated.state = .deepThinking
+                    updated.stateEnteredAt = now
+                    updated.lastUpdatedAt = now
+                    if updated.pid == nil && updated.agentType == .claudeCode {
+                        // Refresh PID cache if empty or stale (>60s)
+                        if sessionPIDs.isEmpty || now.timeIntervalSince(lastPIDRefresh) > 60.0 {
                             sessionPIDs = livenessChecker.discoverSessionPIDs()
+                            lastPIDRefresh = now
                         }
-                        agents[i].pid = sessionPIDs[agent.id]
+                        updated.pid = sessionPIDs[agent.id]
                     }
                 } else {
-                    agents[i].state = .idle
-                    agents[i].lastUpdatedAt = now
+                    updated.state = .idle
+                    updated.lastUpdatedAt = now
                 }
+                agents[i] = updated
             }
         }
     }
@@ -298,19 +333,25 @@ public final class AgentMonitorService: ObservableObject {
             let agent = agents[i]
             guard agent.state == .deepThinking else { continue }
 
+            var shouldTransitionToIdle = false
+
             // Check PID liveness for Claude Code agents
             if agent.agentType == .claudeCode, let pid = agent.pid {
                 if !livenessChecker.isProcessAlive(pid: pid) {
-                    agents[i].state = .idle
-                    agents[i].lastUpdatedAt = now
-                    continue
+                    shouldTransitionToIdle = true
                 }
             }
 
             // Check deep thinking timeout
-            if now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
-                agents[i].state = .idle
-                agents[i].lastUpdatedAt = now
+            if !shouldTransitionToIdle && now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
+                shouldTransitionToIdle = true
+            }
+
+            if shouldTransitionToIdle {
+                var updated = agent
+                updated.state = .idle
+                updated.lastUpdatedAt = now
+                agents[i] = updated
             }
         }
     }
@@ -343,114 +384,223 @@ public final class AgentMonitorService: ObservableObject {
         for id in idsToRemove {
             cleanupAgent(sessionID: id)
         }
-        agents.removeAll { idsToRemove.contains($0.id) }
+        if !idsToRemove.isEmpty {
+            let removeSet = Set(idsToRemove)
+            agents.removeAll { removeSet.contains($0.id) }
+            rebuildAgentIndexMap()
+        }
+
+        // Periodically purge stale dismissedSessionTimestamps (older than 1 hour)
+        let oneHourAgo = now.addingTimeInterval(-3600)
+        if !dismissedSessionTimestamps.isEmpty {
+            dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
+        }
+    }
+
+    /// Combined timer check: idle timeouts, deep thinking timeouts, and agent removal
+    /// in a single pass over the agents array (called every 5 seconds by idleCheckTimer).
+    private func performTimerChecks() {
+        let now = Date()
+        var idsToRemove: [String] = []
+
+        for i in agents.indices {
+            let agent = agents[i]
+
+            // Idle timeout check
+            if agent.state != .finished && agent.state != .idle && agent.state != .deepThinking
+               && !agent.hasActiveChildren
+               && now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
+                var updated = agent
+                if agent.state == .thinking {
+                    updated.state = .deepThinking
+                    updated.stateEnteredAt = now
+                    updated.lastUpdatedAt = now
+                    if updated.pid == nil && updated.agentType == .claudeCode {
+                        if sessionPIDs.isEmpty || now.timeIntervalSince(lastPIDRefresh) > 60.0 {
+                            sessionPIDs = livenessChecker.discoverSessionPIDs()
+                            lastPIDRefresh = now
+                        }
+                        updated.pid = sessionPIDs[agent.id]
+                    }
+                } else {
+                    updated.state = .idle
+                    updated.lastUpdatedAt = now
+                }
+                agents[i] = updated
+                continue
+            }
+
+            // Deep thinking timeout check
+            if agent.state == .deepThinking {
+                var shouldIdle = false
+                if agent.agentType == .claudeCode, let pid = agent.pid,
+                   !livenessChecker.isProcessAlive(pid: pid) {
+                    shouldIdle = true
+                }
+                if !shouldIdle && now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
+                    shouldIdle = true
+                }
+                if shouldIdle {
+                    var updated = agent
+                    updated.state = .idle
+                    updated.lastUpdatedAt = now
+                    agents[i] = updated
+                }
+            }
+
+            // Removal check
+            if agent.state != .error && !agent.hasActiveChildren
+               && now.timeIntervalSince(agent.startedAt) >= 10.0 {
+                if (agent.state == .finished && now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout)
+                   || (agent.state == .idle && now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout) {
+                    idsToRemove.append(agent.id)
+                }
+            }
+        }
+
+        for id in idsToRemove { cleanupAgent(sessionID: id) }
+        if !idsToRemove.isEmpty {
+            let removeSet = Set(idsToRemove)
+            agents.removeAll { removeSet.contains($0.id) }
+            rebuildAgentIndexMap()
+        }
+
+        let oneHourAgo = now.addingTimeInterval(-3600)
+        if !dismissedSessionTimestamps.isEmpty {
+            dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
+        }
     }
 
     /// Updates an agent's state based on a new activity.
     /// Exposed for testing.
     public func updateAgentState(sessionID: String, activity: AgentActivity) {
-        guard let index = agents.firstIndex(where: { $0.id == sessionID }) else { return }
+        guard let index = agentIndex(for: sessionID) else { return }
 
-        let oldState = agents[index].state
+        // Batch mutations: copy agent locally, apply all changes, write back once
+        // to fire only a single @Published notification instead of 5-8 per update.
+        var agent = agents[index]
+        let oldState = agent.state
         let newState = determineState(from: activity)
 
-        agents[index].state = newState
-        agents[index].currentTaskDescription = activity.summary
-        agents[index].lastUpdatedAt = activity.timestamp
+        agent.state = newState
+        agent.currentTaskDescription = activity.summary
+        agent.lastUpdatedAt = activity.timestamp
 
         // Refine name from first user message prompt
-        if !agents[index].nameRefined && activity.activityType == .userMessage,
-           let rawPayload = activity.rawPayload {
-            if let taskName = Self.extractTaskName(from: rawPayload) {
-                agents[index].name = taskName
-                agents[index].nameRefined = true
-            }
+        if !agent.nameRefined && activity.activityType == .userMessage,
+           let text = activity.userMessageText {
+            agent.name = Self.shortenPrompt(text)
+            agent.nameRefined = true
         }
 
         // 7.10: Only update stateEnteredAt when the state actually transitions
         if oldState != newState {
-            agents[index].stateEnteredAt = activity.timestamp
+            agent.stateEnteredAt = activity.timestamp
+        }
 
-            // 8.6-8.7: Send notifications on state transitions
-            let agent = agents[index]
+        // Register parent-child relationship from activity metadata
+        if activity.parentSessionID != nil {
+            agent.isSubagent = true
+            if let rawRole = activity.codexRoleTitle {
+                agent.roleTitle = Self.mapAgentTypeToTitle(rawRole)
+            } else if agent.roleTitle == "Developer" || agent.roleTitle == nil {
+                agent.roleTitle = "Subagent"
+            }
+        }
+
+        // Propagate plan mode (sticky: stays true until explicitly false)
+        if activity.isPlanMode {
+            agent.isPlanMode = true
+        } else if activity.activityType == .sessionEnd {
+            agent.isPlanMode = false
+        }
+
+        // Dynamically update role title for main agents based on current state.
+        if !agent.isSubagent {
+            if agent.isPlanMode {
+                agent.roleTitle = "Planner"
+            } else if agent.hasActiveChildren {
+                agent.roleTitle = "Lead"
+            } else {
+                agent.roleTitle = "Developer"
+            }
+        }
+
+        // 7.7: Accumulate token usage
+        agent.totalInputTokens += activity.inputTokens
+        agent.totalOutputTokens += activity.outputTokens
+
+        // Track latest context usage
+        if activity.inputTokens > 0 {
+            agent.currentContextTokens = activity.inputTokens
+        }
+
+        // 7.8: Track recent tool-use activities (FIFO, most recent first, cap at 5)
+        if activity.activityType == .toolUse {
+            agent.recentTools.insert(activity, at: 0)
+            if agent.recentTools.count > 5 {
+                agent.recentTools = Array(agent.recentTools.prefix(5))
+            }
+        }
+
+        // Single write-back triggers one @Published notification
+        agents[index] = agent
+
+        // Side effects that need to happen after the write-back
+        if oldState != newState {
+            let updatedAgent = agents[index]
             if newState == .finished {
                 let service = notificationService
                 let visible = windowVisible
                 Task {
-                    await service.notifyAgentFinished(agent: agent, windowVisible: visible)
+                    await service.notifyAgentFinished(agent: updatedAgent, windowVisible: visible)
                 }
             } else if newState == .error {
                 let service = notificationService
                 let visible = windowVisible
                 Task {
-                    await service.notifyAgentError(agent: agent, windowVisible: visible)
+                    await service.notifyAgentError(agent: updatedAgent, windowVisible: visible)
                 }
             }
         }
 
-        // Register parent-child relationship from activity metadata
+        // Register parent-child relationship (modifies other agents)
         if let parentID = activity.parentSessionID {
-            agents[index].isSubagent = true
-            if let roleTitle = Self.extractCodexSubagentRoleTitle(from: activity.rawPayload) {
-                agents[index].roleTitle = roleTitle
-            } else if agents[index].roleTitle == "Developer" || agents[index].roleTitle == nil {
-                agents[index].roleTitle = "Subagent"
-            }
             registerParentChild(parentID: parentID, childID: sessionID)
         }
 
         // After updating a subagent's state, check if its parent should be supervising
         if let parentID = childToParentMap[sessionID],
-           let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
-            if agents[parentIndex].hasActiveChildren && agents[parentIndex].state != .supervisingAgents {
-                agents[parentIndex].state = .supervisingAgents
-                agents[parentIndex].currentTaskDescription = "Supervising..."
-                agents[parentIndex].stateEnteredAt = Date()
+           let parentIndex = agentIndex(for: parentID) {
+            var parent = agents[parentIndex]
+            var parentChanged = false
+            if parent.hasActiveChildren && parent.state != .supervisingAgents {
+                parent.state = .supervisingAgents
+                parent.currentTaskDescription = "Supervising..."
+                parent.stateEnteredAt = Date()
+                parentChanged = true
             }
-            // Keep parent alive while children are active
-            agents[parentIndex].lastUpdatedAt = Date()
-        }
-
-        // Propagate plan mode (sticky: stays true until explicitly false)
-        if activity.isPlanMode {
-            agents[index].isPlanMode = true
-        } else if activity.activityType == .sessionEnd {
-            agents[index].isPlanMode = false
-        }
-
-        // Dynamically update role title for main agents based on current state.
-        // Subagent roles are static (set from meta.json at creation time).
-        if !agents[index].isSubagent {
-            if agents[index].isPlanMode {
-                agents[index].roleTitle = "Planner"
-            } else if agents[index].hasActiveChildren {
-                agents[index].roleTitle = "Lead"
-            } else {
-                agents[index].roleTitle = "Developer"
-            }
-        }
-
-        // 7.7: Accumulate token usage
-        agents[index].totalInputTokens += activity.inputTokens
-        agents[index].totalOutputTokens += activity.outputTokens
-
-        // Track latest context usage (input tokens = context window size for this API call)
-        if activity.inputTokens > 0 {
-            agents[index].currentContextTokens = activity.inputTokens
-        }
-
-        // 7.8: Track recent tool-use activities (FIFO, most recent first, cap at 5)
-        if activity.activityType == .toolUse {
-            agents[index].recentTools.insert(activity, at: 0)
-            if agents[index].recentTools.count > 5 {
-                agents[index].recentTools = Array(agents[index].recentTools.prefix(5))
+            parent.lastUpdatedAt = Date()
+            if parentChanged || parent.lastUpdatedAt != agents[parentIndex].lastUpdatedAt {
+                agents[parentIndex] = parent
             }
         }
 
         if shouldImmediatelyDismiss(activity: activity) {
             cleanupAgent(sessionID: sessionID)
             agents.removeAll { $0.id == sessionID }
+            rebuildAgentIndexMap()
         }
+    }
+
+    // MARK: - Agent Index
+
+    private func agentIndex(for id: String) -> Int? {
+        agentIndexMap[id]
+    }
+
+    private func rebuildAgentIndexMap() {
+        agentIndexMap = Dictionary(uniqueKeysWithValues: agents.enumerated().map { ($1.id, $0) })
     }
 
     // MARK: - Private helpers
@@ -467,6 +617,7 @@ public final class AgentMonitorService: ObservableObject {
                 await self?.performDiscovery()
             }
         }
+        discoveryTimer?.tolerance = discoveryInterval * 0.2
 
         idleCheckTimer?.invalidate()
         idleCheckTimer = Timer.scheduledTimer(
@@ -474,11 +625,10 @@ public final class AgentMonitorService: ObservableObject {
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.checkIdleTimeouts()
-                self?.checkDeepThinkingTimeouts()
-                self?.checkAgentRemoval()
+                self?.performTimerChecks()
             }
         }
+        idleCheckTimer?.tolerance = 1.0
     }
 
     /// Determines the correct AgentState from an activity by examining
@@ -590,6 +740,7 @@ public final class AgentMonitorService: ObservableObject {
             parentSessionID: parentSessionID
         )
         agents.append(agent)
+        agentIndexMap[agent.id] = agents.count - 1
 
         if let parentID = parentSessionID {
             registerParentChild(parentID: parentID, childID: sessionID)
@@ -641,11 +792,10 @@ public final class AgentMonitorService: ObservableObject {
             // On first read, find first user message for name refinement
             if isInitialRead {
                 if let firstUserMsg = activities.first(where: { $0.activityType == .userMessage }) {
-                    if let index = agents.firstIndex(where: { $0.id == sessionID }),
+                    if let index = agentIndex(for: sessionID),
                        !agents[index].nameRefined,
-                       let rawPayload = firstUserMsg.rawPayload,
-                       let taskName = Self.extractTaskName(from: rawPayload) {
-                        agents[index].name = taskName
+                       let text = firstUserMsg.userMessageText {
+                        agents[index].name = Self.shortenPrompt(text)
                         agents[index].nameRefined = true
                     }
                 }
@@ -666,7 +816,7 @@ public final class AgentMonitorService: ObservableObject {
                 // Fix stale timestamps on initial read: use current time instead of
                 // potentially minutes-old log timestamps to prevent immediate removal
                 if isInitialRead {
-                    if let index = agents.firstIndex(where: { $0.id == sessionID }) {
+                    if let index = agentIndex(for: sessionID) {
                         agents[index].lastUpdatedAt = Date()
                     }
                 }
@@ -685,11 +835,12 @@ public final class AgentMonitorService: ObservableObject {
         watchers[sessionID]?.stopWatching()
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
+        notificationService.cleanup(agentID: sessionID)
 
         // Remove child from parent's tracking
         if let parentID = childToParentMap[sessionID] {
             parentToChildrenMap[parentID]?.remove(sessionID)
-            if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+            if let parentIndex = agentIndex(for: parentID) {
                 agents[parentIndex].activeChildSessionIDs.remove(sessionID)
                 // If parent has no more children and is supervising, transition back
                 if agents[parentIndex].activeChildSessionIDs.isEmpty
@@ -713,11 +864,11 @@ public final class AgentMonitorService: ObservableObject {
         parentToChildrenMap[parentID, default: []].insert(childID)
 
         // Update parent's AgentInfo if it exists
-        if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+        if let parentIndex = agentIndex(for: parentID) {
             agents[parentIndex].activeChildSessionIDs.insert(childID)
         }
         // Update child's AgentInfo if it exists
-        if let childIndex = agents.firstIndex(where: { $0.id == childID }) {
+        if let childIndex = agentIndex(for: childID) {
             agents[childIndex].parentSessionID = parentID
         }
     }
@@ -789,7 +940,7 @@ public final class AgentMonitorService: ObservableObject {
             return nil
         }
 
-        for line in text.components(separatedBy: "\n") {
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty,
                   let data = trimmed.data(using: .utf8),
@@ -836,18 +987,6 @@ public final class AgentMonitorService: ObservableObject {
         return mapAgentTypeToTitle(role)
     }
 
-    private static func extractCodexSubagentRoleTitle(from rawPayload: String?) -> String? {
-        guard let rawPayload,
-              let data = rawPayload.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let payload = json["payload"] as? [String: Any]
-        else {
-            return nil
-        }
-
-        return extractCodexRoleTitle(from: payload)
-    }
-
     /// Maps a raw Claude Code subagent type string to a clean display title.
     ///
     /// Known agentType values observed in real logs include:
@@ -892,37 +1031,6 @@ public final class AgentMonitorService: ObservableObject {
                 .map { $0.prefix(1).uppercased() + $0.dropFirst() }
                 .joined(separator: " ")
         }
-    }
-
-    /// Extracts a short task name from a user message's raw JSON payload.
-    /// Parses the user's prompt text and produces a concise label.
-    static func extractTaskName(from rawPayload: String) -> String? {
-        guard let data = rawPayload.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let message = json["message"] as? [String: Any],
-              let content = message["content"] as? [[String: Any]]
-        else {
-            return nil
-        }
-
-        // Find the text content in the user message
-        var promptText: String?
-        for item in content {
-            if (item["type"] as? String) == "text",
-               let text = item["text"] as? String {
-                promptText = text
-                break
-            }
-        }
-
-        // Also handle content as a plain string
-        if promptText == nil, let text = message["content"] as? String {
-            promptText = text
-        }
-
-        guard let text = promptText, !text.isEmpty else { return nil }
-
-        return shortenPrompt(text)
     }
 
     /// Distills a user prompt into a short display name (max 28 chars).

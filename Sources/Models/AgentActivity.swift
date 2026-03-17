@@ -15,8 +15,11 @@ public struct AgentActivity: Sendable {
     /// Human-readable summary of the activity (e.g., "Read Package.swift", "Ran `swift build`")
     public let summary: String
 
-    /// Optional: the raw log line or JSON payload for debugging
-    public let rawPayload: String?
+    /// Extracted user message text (for task name refinement, avoids retaining full JSON)
+    public var userMessageText: String?
+
+    /// Extracted Codex subagent role title (avoids retaining full JSON)
+    public var codexRoleTitle: String?
 
     /// Number of input tokens consumed by this activity (7.7)
     public let inputTokens: Int
@@ -35,7 +38,8 @@ public struct AgentActivity: Sendable {
         timestamp: Date,
         activityType: ActivityType,
         summary: String,
-        rawPayload: String? = nil,
+        userMessageText: String? = nil,
+        codexRoleTitle: String? = nil,
         inputTokens: Int = 0,
         outputTokens: Int = 0,
         isPlanMode: Bool = false,
@@ -45,7 +49,8 @@ public struct AgentActivity: Sendable {
         self.timestamp = timestamp
         self.activityType = activityType
         self.summary = summary
-        self.rawPayload = rawPayload
+        self.userMessageText = userMessageText
+        self.codexRoleTitle = codexRoleTitle
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
         self.isPlanMode = isPlanMode

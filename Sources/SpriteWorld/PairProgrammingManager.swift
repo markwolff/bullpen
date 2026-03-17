@@ -61,7 +61,7 @@ public class PairProgrammingManager {
             guard let hostDeskID = deskAssignments.first(where: { $0.value == host.id })?.key else { continue }
 
             // Find the desk position for the host
-            let layout = OfficeLayout.defaultLayout()
+            let layout = OfficeLayout.defaultLayout
             guard let hostDesk = layout.desks.first(where: { $0.id == hostDeskID }) else { continue }
 
             // Observer stands diagonally beside host's chair so both sprites are clearly visible

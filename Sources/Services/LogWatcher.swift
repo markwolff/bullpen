@@ -16,6 +16,12 @@ public final class LogWatcher: Sendable {
     // nonisolated(unsafe) because DispatchSource manages its own thread safety
     private nonisolated(unsafe) var watchState: WatchState?
 
+    /// Pending debounce work item — cancelled and replaced on each rapid-fire event
+    private nonisolated(unsafe) var debounceWorkItem: DispatchWorkItem?
+
+    /// Debounce interval for rapid file writes (100ms)
+    private let debounceInterval: TimeInterval = 0.1
+
     /// Creates a new LogWatcher.
     /// - Parameters:
     ///   - path: The file or directory path to watch
@@ -32,7 +38,6 @@ public final class LogWatcher: Sendable {
 
         let fd = open(watchedPath, O_EVTONLY)
         guard fd >= 0 else {
-            // TODO: Log error — could not open file for watching
             return
         }
 
@@ -42,8 +47,13 @@ public final class LogWatcher: Sendable {
             queue: queue
         )
 
-        source.setEventHandler { [onChange] in
-            onChange()
+        source.setEventHandler { [weak self, onChange] in
+            // Debounce: cancel any pending work item and schedule a new one.
+            // During rapid log writes, this coalesces into a single callback.
+            self?.debounceWorkItem?.cancel()
+            let item = DispatchWorkItem { onChange() }
+            self?.debounceWorkItem = item
+            self?.queue.asyncAfter(deadline: .now() + (self?.debounceInterval ?? 0.1), execute: item)
         }
 
         source.setCancelHandler {

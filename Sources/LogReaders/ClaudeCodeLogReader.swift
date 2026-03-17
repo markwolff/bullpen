@@ -110,21 +110,33 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
     // MARK: - readActivities (task 2.2)
 
+    /// Reads raw file data from the given offset. Extracted for off-main-thread execution.
+    private func readFileData(from fileURL: URL, afterOffset: UInt64) throws -> Data {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let handle = FileHandle(forReadingAtPath: fileURL.path) else {
+            return Data()
+        }
+        defer { handle.closeFile() }
+        handle.seek(toFileOffset: afterOffset)
+        return handle.readDataToEndOfFile()
+    }
+
     public func readActivities(
         from logFileURL: URL,
         afterOffset: UInt64
     ) async throws -> (activities: [AgentActivity], newOffset: UInt64) {
-        guard FileManager.default.fileExists(atPath: logFileURL.path) else {
-            return (activities: [], newOffset: afterOffset)
+        // Move large reads off the main thread to avoid blocking UI
+        let data: Data
+        let attrs = try? FileManager.default.attributesOfItem(atPath: logFileURL.path)
+        let fileSize = (attrs?[.size] as? UInt64) ?? 0
+        let readSize = fileSize > afterOffset ? fileSize - afterOffset : 0
+        if readSize > 50_000 {
+            data = try await Task.detached { [self] in
+                try self.readFileData(from: logFileURL, afterOffset: afterOffset)
+            }.value
+        } else {
+            data = try readFileData(from: logFileURL, afterOffset: afterOffset)
         }
-
-        guard let fileHandle = FileHandle(forReadingAtPath: logFileURL.path) else {
-            return (activities: [], newOffset: afterOffset)
-        }
-        defer { fileHandle.closeFile() }
-
-        fileHandle.seek(toFileOffset: afterOffset)
-        let data = fileHandle.readDataToEndOfFile()
 
         guard !data.isEmpty else {
             return (activities: [], newOffset: afterOffset)
@@ -140,7 +152,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             return (activities: [], newOffset: afterOffset)
         }
 
-        let lines = text.components(separatedBy: "\n")
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             // Calculate byte length of this line including the newline
@@ -205,7 +217,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .sessionEnd,
                 summary: "Rate limited: \(truncate(errorText, to: 120))",
-                rawPayload: rawEntry,
+
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
@@ -223,7 +235,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .error,
                             summary: summary,
-                            rawPayload: rawEntry,
+            
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -236,7 +248,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .toolResult,
                 summary: "Tool result received",
-                rawPayload: rawEntry,
+
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
@@ -251,7 +263,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     timestamp: timestamp,
                     activityType: .sessionEnd,
                     summary: "Session completed",
-                    rawPayload: rawEntry,
+    
                     isPlanMode: isPlanMode,
                     parentSessionID: parentSessionID
                 )
@@ -269,7 +281,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     timestamp: timestamp,
                     activityType: .sessionEnd,
                     summary: "Session stopping",
-                    rawPayload: rawEntry,
+    
                     isPlanMode: isPlanMode,
                     parentSessionID: parentSessionID
                 )
@@ -293,7 +305,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                                 timestamp: timestamp,
                                 activityType: .error,
                                 summary: summary,
-                                rawPayload: rawEntry,
+                
                                 isPlanMode: isPlanMode,
                                 parentSessionID: parentSessionID
                             )
@@ -304,7 +316,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolResult,
                             summary: "Tool result received",
-                            rawPayload: rawEntry,
+            
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -321,7 +333,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .sessionEnd,
                             summary: "User exited session",
-                            rawPayload: rawEntry,
+            
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -335,10 +347,24 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     timestamp: timestamp,
                     activityType: .sessionEnd,
                     summary: "User exited session",
-                    rawPayload: rawEntry,
+    
                     isPlanMode: isPlanMode,
                     parentSessionID: parentSessionID
                 )
+            }
+
+            // Extract user message text for task name refinement
+            var userText: String?
+            if let content = contentArray {
+                for item in content {
+                    if let text = item["text"] as? String {
+                        userText = text
+                        break
+                    }
+                }
+            }
+            if userText == nil, let text = message?["content"] as? String {
+                userText = text
             }
 
             return AgentActivity(
@@ -346,7 +372,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: "User message",
-                rawPayload: rawEntry,
+                userMessageText: userText,
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
@@ -372,7 +398,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                         timestamp: timestamp,
                         activityType: .assistantMessage,
                         summary: "Response complete",
-                        rawPayload: rawEntry,
+        
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
                         isPlanMode: isPlanMode,
@@ -393,7 +419,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolUse,
                             summary: summary,
-                            rawPayload: rawEntry,
+            
                             inputTokens: inputTokens,
                             outputTokens: outputTokens,
                             isPlanMode: isPlanMode,
@@ -409,7 +435,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: rawEntry,
+
                 inputTokens: inputTokens,
                 outputTokens: outputTokens,
                 isPlanMode: isPlanMode,
@@ -423,15 +449,24 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
     // MARK: - Private helpers
 
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func parseTimestamp(from string: String?) -> Date {
         guard let string else { return Date() }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) {
+        if let date = Self.isoFormatterWithFractional.date(from: string) {
             return date
         }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: string) {
+        if let date = Self.isoFormatterBasic.date(from: string) {
             return date
         }
         return Date()

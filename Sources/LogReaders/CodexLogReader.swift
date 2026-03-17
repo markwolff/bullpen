@@ -45,21 +45,33 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         return sessions
     }
 
+    /// Reads raw file data from the given offset. Extracted for off-main-thread execution.
+    private func readFileData(from fileURL: URL, afterOffset: UInt64) throws -> Data {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let handle = FileHandle(forReadingAtPath: fileURL.path) else {
+            return Data()
+        }
+        defer { handle.closeFile() }
+        handle.seek(toFileOffset: afterOffset)
+        return handle.readDataToEndOfFile()
+    }
+
     public func readActivities(
         from logFileURL: URL,
         afterOffset: UInt64
     ) async throws -> (activities: [AgentActivity], newOffset: UInt64) {
-        guard FileManager.default.fileExists(atPath: logFileURL.path) else {
-            return (activities: [], newOffset: afterOffset)
+        // Move large reads off the main thread
+        let data: Data
+        let attrs = try? FileManager.default.attributesOfItem(atPath: logFileURL.path)
+        let fileSize = (attrs?[.size] as? UInt64) ?? 0
+        let readSize = fileSize > afterOffset ? fileSize - afterOffset : 0
+        if readSize > 50_000 {
+            data = try await Task.detached { [self] in
+                try self.readFileData(from: logFileURL, afterOffset: afterOffset)
+            }.value
+        } else {
+            data = try readFileData(from: logFileURL, afterOffset: afterOffset)
         }
-
-        guard let fileHandle = FileHandle(forReadingAtPath: logFileURL.path) else {
-            return (activities: [], newOffset: afterOffset)
-        }
-        defer { fileHandle.closeFile() }
-
-        fileHandle.seek(toFileOffset: afterOffset)
-        let data = fileHandle.readDataToEndOfFile()
 
         guard !data.isEmpty else {
             return (activities: [], newOffset: afterOffset)
@@ -74,7 +86,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
 
         var activities: [AgentActivity] = []
 
-        let lines = text.components(separatedBy: "\n")
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
@@ -203,7 +215,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: rawEntry
+
             )
 
         default:
@@ -227,7 +239,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: truncate(text.isEmpty ? "User message" : text, to: 60),
-                rawPayload: rawEntry
+                userMessageText: text.isEmpty ? nil : text
             )
         }
 
@@ -238,7 +250,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .assistantMessage,
                 summary: truncate(text.isEmpty ? "Codex response" : text, to: 60),
-                rawPayload: rawEntry
+
             )
         }
 
@@ -261,8 +273,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             sessionID: sessionID,
             timestamp: timestamp,
             activityType: .toolUse,
-            summary: summary,
-            rawPayload: rawEntry
+            summary: summary
         )
     }
 
@@ -290,7 +301,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .error,
                 summary: "Error: \(truncate(errorLine, to: 120))",
-                rawPayload: rawEntry
+
             )
         }
 
@@ -298,8 +309,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             sessionID: sessionID,
             timestamp: timestamp,
             activityType: .toolResult,
-            summary: "Tool result received",
-            rawPayload: rawEntry
+            summary: "Tool result received"
         )
     }
 
@@ -318,7 +328,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .sessionStart,
                 summary: "Session started",
-                rawPayload: rawEntry
+
             )
 
         case "task_complete":
@@ -329,7 +339,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .sessionEnd,
                 summary: summary,
-                rawPayload: rawEntry
+
             )
 
         case "turn_aborted":
@@ -339,7 +349,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: "Turn aborted: \(reason)",
-                rawPayload: rawEntry
+
             )
 
         case "agent_message":
@@ -352,7 +362,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                     timestamp: timestamp,
                     activityType: .assistantMessage,
                     summary: summary,
-                    rawPayload: rawEntry
+    
                 )
             }
             // Non-final agent_message events are redundant with response_items
@@ -399,7 +409,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             timestamp: timestamp,
             activityType: .sessionStart,
             summary: summary,
-            rawPayload: rawEntry,
+            codexRoleTitle: agentRole,
             parentSessionID: parentThreadID
         )
     }
@@ -600,12 +610,21 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         return String(string.prefix(maxLength - 1)) + "…"
     }
 
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func parseISO8601(_ string: String?) -> Date? {
         guard let string else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
+        if let date = Self.isoFormatterWithFractional.date(from: string) { return date }
+        return Self.isoFormatterBasic.date(from: string)
     }
 }

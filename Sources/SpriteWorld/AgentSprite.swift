@@ -41,7 +41,7 @@ public class AgentSprite: SKSpriteNode {
     private let tokenLabel: SKLabelNode
 
     /// Visual state indicator (colored dot or square)
-    public let statusIndicator: SKShapeNode
+    public let statusIndicator: SKSpriteNode
 
     /// Laptop shown while an active agent is pacing without a desk.
     private let carriedLaptopNode: SKSpriteNode
@@ -87,7 +87,8 @@ public class AgentSprite: SKSpriteNode {
         )
 
         let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4
-        self.statusIndicator = SKShapeNode(circleOfRadius: indicatorRadius)
+        let indicatorTexture = TextureManager.shared.statusIndicatorTexture(for: agentInfo.state, radius: indicatorRadius)
+        self.statusIndicator = SKSpriteNode(texture: indicatorTexture, size: CGSize(width: indicatorRadius * 2, height: indicatorRadius * 2))
 
         // Load trait-based texture — 16x24 pixel art
         // Normal agents: scaled 3x = 48x72, Subagents: scaled 2x = 32x48
@@ -160,9 +161,7 @@ public class AgentSprite: SKSpriteNode {
             addChild(tokenLabel)
         }
 
-        // Status indicator dot — smaller for subagents
-        statusIndicator.fillColor = AgentSprite.colorForState(agentInfo.state)
-        statusIndicator.strokeColor = .clear
+        // Status indicator dot — smaller for subagents (texture-based for draw call batching)
         let indicatorOffset: CGFloat = isSubagent ? 5 : 6
         statusIndicator.position = CGPoint(x: size.width / 2 + indicatorOffset, y: size.height / 2 - indicatorOffset)
         statusIndicator.name = "statusIndicator"
@@ -221,14 +220,8 @@ public class AgentSprite: SKSpriteNode {
             }
         }
 
-        // Update status indicator color and shape — task 4.8
-        // Plan mode overrides status color to purple/indigo
-        if newInfo.isPlanMode {
-            statusIndicator.fillColor = SKColor(red: 0.502, green: 0.376, blue: 0.816, alpha: 1.0)
-        } else {
-            statusIndicator.fillColor = stateColor
-        }
-        updateStatusIndicatorShape(for: newInfo.state)
+        // Update status indicator texture — swaps pre-rendered circle/square textures
+        updateStatusIndicatorTexture(for: newInfo.state, isPlanMode: newInfo.isPlanMode)
 
         // Update planning clipboard overlay
         updatePlanModeOverlay(isPlanMode: newInfo.isPlanMode)
@@ -252,7 +245,7 @@ public class AgentSprite: SKSpriteNode {
 
             // Move back to desk when state changes — use proper walk for long distances
             if let deskID = assignedDeskID {
-                let layout = OfficeLayout.defaultLayout()
+                let layout = OfficeLayout.defaultLayout
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let isWorking = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents].contains(newInfo.state)
                     let targetY = isWorking ? desk.chairPosition.y + 15 : desk.chairPosition.y
@@ -286,19 +279,21 @@ public class AgentSprite: SKSpriteNode {
         }
     }
 
-    /// Updates status indicator to square for error, circle for everything else — task 4.8
-    private func updateStatusIndicatorShape(for state: AgentState) {
-        let r: CGFloat = isSubagent ? 3 : 4
-        if state == .error {
-            statusIndicator.path = CGPath(
-                rect: CGRect(x: -r, y: -r, width: r * 2, height: r * 2),
-                transform: nil
-            )
+    /// Swaps the status indicator texture for the given state and plan mode.
+    /// Uses pre-rendered textures from TextureManager instead of rebuilding CGPaths.
+    private func updateStatusIndicatorTexture(for state: AgentState, isPlanMode: Bool) {
+        let radius: CGFloat = isSubagent ? 3 : 4
+        if isPlanMode {
+            // Plan mode: use a custom purple indicator
+            let planState = AgentState.supervisingAgents // reuse teal-ish for shape; override color below
+            let texture = TextureManager.shared.statusIndicatorTexture(for: planState, radius: radius)
+            statusIndicator.texture = texture
+            statusIndicator.color = SKColor(red: 0.502, green: 0.376, blue: 0.816, alpha: 1.0)
+            statusIndicator.colorBlendFactor = 1.0
         } else {
-            statusIndicator.path = CGPath(
-                ellipseIn: CGRect(x: -r, y: -r, width: r * 2, height: r * 2),
-                transform: nil
-            )
+            let texture = TextureManager.shared.statusIndicatorTexture(for: state, radius: radius)
+            statusIndicator.texture = texture
+            statusIndicator.colorBlendFactor = 0
         }
     }
 
@@ -662,38 +657,20 @@ public class AgentSprite: SKSpriteNode {
     /// Returns a color representing the agent's current state.
     /// Uses exact hex colors from VISION.md — task 4.7
     public static func colorForState(_ state: AgentState) -> SKColor {
-        switch state {
-        case .idle:
-            SKColor(red: 0.627, green: 0.627, blue: 0.627, alpha: 1.0) // #A0A0A0
-        case .thinking:
-            SKColor(red: 0.941, green: 0.753, blue: 0.251, alpha: 1.0) // #F0C040
-        case .writingCode:
-            SKColor(red: 0.314, green: 0.784, blue: 0.471, alpha: 1.0) // #50C878
-        case .readingFiles:
-            SKColor(red: 0.376, green: 0.690, blue: 0.816, alpha: 1.0) // #60B0D0
-        case .runningCommand:
-            SKColor(red: 0.910, green: 0.565, blue: 0.251, alpha: 1.0) // #E89040
-        case .searching:
-            SKColor(red: 0.690, green: 0.502, blue: 0.816, alpha: 1.0) // #B080D0
-        case .waitingForInput:
-            SKColor(red: 0.376, green: 0.565, blue: 0.816, alpha: 1.0) // #6090D0
-        case .error:
-            SKColor(red: 0.878, green: 0.314, blue: 0.314, alpha: 1.0) // #E05050
-        case .finished:
-            SKColor(red: 0.439, green: 0.439, blue: 0.439, alpha: 1.0) // #707070
-        case .supervisingAgents:
-            SKColor(red: 0.251, green: 0.690, blue: 0.690, alpha: 1.0) // #40B0B0 teal
-        case .deepThinking:
-            SKColor(red: 0.910, green: 0.753, blue: 0.251, alpha: 1.0) // Amber/gold
-        }
+        let rgb = state.displayColorRGB
+        return SKColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1.0)
     }
+
+    private static let tokenFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.groupingSeparator = ","
+        return f
+    }()
 
     /// Formats a token count with comma separators (e.g., 50000 → "50,000").
     static func formatTokenCount(_ count: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = ","
-        return formatter.string(from: NSNumber(value: count)) ?? "\(count)"
+        Self.tokenFormatter.string(from: NSNumber(value: count)) ?? "\(count)"
     }
 
     /// Whether this sprite currently has a state-specific particle emitter.
@@ -734,7 +711,7 @@ public class AgentSprite: SKSpriteNode {
             // Walk back to desk chair if we still have one assigned
             // Hustle (1.5x) if in an active working state
             if let deskID = assignedDeskID {
-                let layout = OfficeLayout.defaultLayout()
+                let layout = OfficeLayout.defaultLayout
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let path = layout.findPath(from: position, to: desk.chairPosition)
                     let hustle: CGFloat = agentInfo.state.isActive ? 1.5 : 1.0
@@ -865,7 +842,7 @@ public class AgentSprite: SKSpriteNode {
     public func startDeepThinkingPacing(waypoints: [CGPoint], otherAgentPositions: [CGPoint] = []) {
         let action = deepThinkingBehaviorManager.startPacing(waypoints: waypoints, otherAgentPositions: otherAgentPositions)
         showDeepThinkingEmoji()
-        handleDeepThinkingAction(action, layout: OfficeLayout.defaultLayout())
+        handleDeepThinkingAction(action, layout: OfficeLayout.defaultLayout)
     }
 
     /// Cancels deep thinking pacing and walks back to desk at 1.5x speed.
@@ -879,7 +856,7 @@ public class AgentSprite: SKSpriteNode {
 
             // Walk back to desk if assigned
             if let deskID = assignedDeskID {
-                let layout = OfficeLayout.defaultLayout()
+                let layout = OfficeLayout.defaultLayout
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let path = layout.findPath(from: position, to: desk.chairPosition)
                     walk(to: desk.chairPosition, via: path, speedMultiplier: 1.5)

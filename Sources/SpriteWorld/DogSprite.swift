@@ -41,7 +41,7 @@ public class DogSprite: SKSpriteNode {
     public var bowlPosition: CGPoint = .zero
 
     /// Layout used for navigation.
-    public var navigationLayout: OfficeLayout = .defaultLayout()
+    public var navigationLayout: OfficeLayout = .defaultLayout
 
     /// Timer for eating behavior.
     private var eatTimer: TimeInterval = 0
