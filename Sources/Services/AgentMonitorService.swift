@@ -161,6 +161,7 @@ public final class AgentMonitorService: ObservableObject {
         parentToChildrenMap.removeAll()
         pendingSessions.removeAll()
         sessionPIDs.removeAll()
+        consecutiveEmptyDiscoveries = 0
         deferNextDiscovery = false
     }
 
