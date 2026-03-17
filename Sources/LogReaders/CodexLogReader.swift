@@ -74,7 +74,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
 
         var activities: [AgentActivity] = []
 
-        let lines = text.components(separatedBy: "\n")
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }

@@ -827,7 +827,7 @@ public final class AgentMonitorService: ObservableObject {
             return nil
         }
 
-        for line in text.components(separatedBy: "\n") {
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty,
                   let data = trimmed.data(using: .utf8),

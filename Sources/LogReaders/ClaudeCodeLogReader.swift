@@ -140,7 +140,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
             return (activities: [], newOffset: afterOffset)
         }
 
-        let lines = text.components(separatedBy: "\n")
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             // Calculate byte length of this line including the newline
