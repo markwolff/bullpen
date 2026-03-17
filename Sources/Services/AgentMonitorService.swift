@@ -84,6 +84,9 @@ public final class AgentMonitorService: ObservableObject {
     /// Remembers that another discovery pass was requested while one was in flight.
     private var pendingDiscoveryPass: Bool = false
 
+    /// Consecutive empty discovery passes (for adaptive interval)
+    private var consecutiveEmptyDiscoveries: Int = 0
+
     /// When true, the next discovery pass defers agent creation for existing sessions.
     /// Set by startMonitoring() so that app launch doesn't spawn hundreds of agents
     /// from stale log files — only sessions with post-startup activity become agents.
@@ -261,6 +264,29 @@ public final class AgentMonitorService: ObservableObject {
                 print("Bullpen: Error discovering sessions for \(reader.agentType): \(error)")
             }
         }
+
+        // Adaptive discovery: slow down when nothing is happening
+        if agents.isEmpty {
+            consecutiveEmptyDiscoveries += 1
+            if consecutiveEmptyDiscoveries == 3 {
+                discoveryTimer?.invalidate()
+                discoveryTimer = Timer.scheduledTimer(
+                    withTimeInterval: 30.0,
+                    repeats: true
+                ) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        await self?.performDiscovery()
+                    }
+                }
+                discoveryTimer?.tolerance = 6.0
+            }
+        } else {
+            if consecutiveEmptyDiscoveries >= 3 {
+                // Restore normal discovery rate
+                resetTimers()
+            }
+            consecutiveEmptyDiscoveries = 0
+        }
     }
 
     /// Checks all agents for idle timeout and transitions them to .idle or .deepThinking.
@@ -359,6 +385,79 @@ public final class AgentMonitorService: ObservableObject {
         }
 
         // Periodically purge stale dismissedSessionTimestamps (older than 1 hour)
+        let oneHourAgo = now.addingTimeInterval(-3600)
+        if !dismissedSessionTimestamps.isEmpty {
+            dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
+        }
+    }
+
+    /// Combined timer check: idle timeouts, deep thinking timeouts, and agent removal
+    /// in a single pass over the agents array (called every 5 seconds by idleCheckTimer).
+    private func performTimerChecks() {
+        let now = Date()
+        var idsToRemove: [String] = []
+
+        for i in agents.indices {
+            let agent = agents[i]
+
+            // Idle timeout check
+            if agent.state != .finished && agent.state != .idle && agent.state != .deepThinking
+               && !agent.hasActiveChildren
+               && now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
+                var updated = agent
+                if agent.state == .thinking {
+                    updated.state = .deepThinking
+                    updated.stateEnteredAt = now
+                    updated.lastUpdatedAt = now
+                    if updated.pid == nil && updated.agentType == .claudeCode {
+                        if sessionPIDs.isEmpty || now.timeIntervalSince(lastPIDRefresh) > 60.0 {
+                            sessionPIDs = livenessChecker.discoverSessionPIDs()
+                            lastPIDRefresh = now
+                        }
+                        updated.pid = sessionPIDs[agent.id]
+                    }
+                } else {
+                    updated.state = .idle
+                    updated.lastUpdatedAt = now
+                }
+                agents[i] = updated
+                continue
+            }
+
+            // Deep thinking timeout check
+            if agent.state == .deepThinking {
+                var shouldIdle = false
+                if agent.agentType == .claudeCode, let pid = agent.pid,
+                   !livenessChecker.isProcessAlive(pid: pid) {
+                    shouldIdle = true
+                }
+                if !shouldIdle && now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
+                    shouldIdle = true
+                }
+                if shouldIdle {
+                    var updated = agent
+                    updated.state = .idle
+                    updated.lastUpdatedAt = now
+                    agents[i] = updated
+                }
+            }
+
+            // Removal check
+            if agent.state != .error && !agent.hasActiveChildren
+               && now.timeIntervalSince(agent.startedAt) >= 10.0 {
+                if (agent.state == .finished && now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout)
+                   || (agent.state == .idle && now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout) {
+                    idsToRemove.append(agent.id)
+                }
+            }
+        }
+
+        for id in idsToRemove { cleanupAgent(sessionID: id) }
+        if !idsToRemove.isEmpty {
+            let removeSet = Set(idsToRemove)
+            agents.removeAll { removeSet.contains($0.id) }
+        }
+
         let oneHourAgo = now.addingTimeInterval(-3600)
         if !dismissedSessionTimestamps.isEmpty {
             dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
@@ -508,9 +607,7 @@ public final class AgentMonitorService: ObservableObject {
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.checkIdleTimeouts()
-                self?.checkDeepThinkingTimeouts()
-                self?.checkAgentRemoval()
+                self?.performTimerChecks()
             }
         }
         idleCheckTimer?.tolerance = 1.0

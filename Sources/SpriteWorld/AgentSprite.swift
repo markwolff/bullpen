@@ -662,30 +662,8 @@ public class AgentSprite: SKSpriteNode {
     /// Returns a color representing the agent's current state.
     /// Uses exact hex colors from VISION.md — task 4.7
     public static func colorForState(_ state: AgentState) -> SKColor {
-        switch state {
-        case .idle:
-            SKColor(red: 0.627, green: 0.627, blue: 0.627, alpha: 1.0) // #A0A0A0
-        case .thinking:
-            SKColor(red: 0.941, green: 0.753, blue: 0.251, alpha: 1.0) // #F0C040
-        case .writingCode:
-            SKColor(red: 0.314, green: 0.784, blue: 0.471, alpha: 1.0) // #50C878
-        case .readingFiles:
-            SKColor(red: 0.376, green: 0.690, blue: 0.816, alpha: 1.0) // #60B0D0
-        case .runningCommand:
-            SKColor(red: 0.910, green: 0.565, blue: 0.251, alpha: 1.0) // #E89040
-        case .searching:
-            SKColor(red: 0.690, green: 0.502, blue: 0.816, alpha: 1.0) // #B080D0
-        case .waitingForInput:
-            SKColor(red: 0.376, green: 0.565, blue: 0.816, alpha: 1.0) // #6090D0
-        case .error:
-            SKColor(red: 0.878, green: 0.314, blue: 0.314, alpha: 1.0) // #E05050
-        case .finished:
-            SKColor(red: 0.439, green: 0.439, blue: 0.439, alpha: 1.0) // #707070
-        case .supervisingAgents:
-            SKColor(red: 0.251, green: 0.690, blue: 0.690, alpha: 1.0) // #40B0B0 teal
-        case .deepThinking:
-            SKColor(red: 0.910, green: 0.753, blue: 0.251, alpha: 1.0) // Amber/gold
-        }
+        let rgb = state.displayColorRGB
+        return SKColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1.0)
     }
 
     private static let tokenFormatter: NumberFormatter = {

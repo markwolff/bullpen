@@ -118,6 +118,9 @@ public class OfficeScene: SKScene {
     /// Cached set of active desk IDs, updated when deskAssignments changes
     private var cachedActiveDeskIDs: Set<Int> = []
 
+    /// Tracks how long the scene has had zero agents (for auto-pause)
+    private var emptySceneTimer: TimeInterval = 0
+
     // MARK: - Initialization
 
     public init(layout: OfficeLayout = .defaultLayout) {
@@ -855,6 +858,12 @@ public class OfficeScene: SKScene {
     /// Synchronizes the scene with the current list of agents.
     /// Call this from the main update loop whenever AgentMonitorService publishes changes.
     public func updateAgents(_ agents: [AgentInfo]) {
+        // Resume if scene was auto-paused and agents appear
+        if !agents.isEmpty && self.isPaused {
+            self.isPaused = false
+            emptySceneTimer = 0
+        }
+
         let currentIDs = Set(agents.map(\.id))
         let existingIDs = Set(agentSprites.keys)
 
@@ -1318,6 +1327,18 @@ public class OfficeScene: SKScene {
         // Calculate delta time
         let deltaTime = lastUpdateTime > 0 ? currentTime - lastUpdateTime : 0
         lastUpdateTime = currentTime
+
+        // Auto-pause when no agents for 30+ seconds (saves CPU/GPU).
+        // Cap deltaTime contribution to 1s to prevent single large-delta frames from triggering pause.
+        if agentSprites.isEmpty {
+            emptySceneTimer += min(deltaTime, 1.0)
+            if emptySceneTimer > 30.0 {
+                self.isPaused = true
+                return
+            }
+        } else {
+            emptySceneTimer = 0
+        }
 
         // Use cached data from updateAgents(_:) instead of allocating per-frame
         let agents = cachedAgentInfos

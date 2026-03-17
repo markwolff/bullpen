@@ -120,18 +120,7 @@ struct AgentDetailView: View {
     }
 
     private func colorForState(_ state: AgentState) -> Color {
-        switch state {
-        case .idle: .gray
-        case .thinking: .yellow
-        case .writingCode: .green
-        case .readingFiles: .cyan
-        case .runningCommand: .orange
-        case .searching: .purple
-        case .waitingForInput: .blue
-        case .error: .red
-        case .finished: Color(white: 0.4)
-        case .supervisingAgents: .teal
-        case .deepThinking: .orange
-        }
+        let rgb = state.displayColorRGB
+        return Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 }

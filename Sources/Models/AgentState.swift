@@ -62,4 +62,22 @@ public enum AgentState: String, Sendable, CaseIterable {
         case .deepThinking: "Deep in thought..."
         }
     }
+
+    /// RGB color components (0-1 range) for UI display of this state.
+    /// Single source of truth used by SpriteKit (SKColor) and SwiftUI (Color).
+    public var displayColorRGB: (red: Double, green: Double, blue: Double) {
+        switch self {
+        case .idle:              (0.627, 0.627, 0.627) // #A0A0A0
+        case .thinking:          (0.941, 0.753, 0.251) // #F0C040
+        case .writingCode:       (0.314, 0.784, 0.471) // #50C878
+        case .readingFiles:      (0.376, 0.690, 0.816) // #60B0D0
+        case .runningCommand:    (0.910, 0.565, 0.251) // #E89040
+        case .searching:         (0.690, 0.502, 0.816) // #B080D0
+        case .waitingForInput:   (0.376, 0.565, 0.816) // #6090D0
+        case .error:             (0.878, 0.314, 0.314) // #E05050
+        case .finished:          (0.439, 0.439, 0.439) // #707070
+        case .supervisingAgents: (0.251, 0.690, 0.690) // #40B0B0
+        case .deepThinking:      (0.910, 0.753, 0.251) // Amber/gold
+        }
+    }
 }
