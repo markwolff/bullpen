@@ -205,7 +205,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .sessionEnd,
                 summary: "Rate limited: \(truncate(errorText, to: 120))",
-                rawPayload: rawEntry,
+
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
@@ -223,7 +223,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .error,
                             summary: summary,
-                            rawPayload: rawEntry,
+            
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -236,7 +236,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .toolResult,
                 summary: "Tool result received",
-                rawPayload: rawEntry,
+
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
@@ -251,7 +251,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     timestamp: timestamp,
                     activityType: .sessionEnd,
                     summary: "Session completed",
-                    rawPayload: rawEntry,
+    
                     isPlanMode: isPlanMode,
                     parentSessionID: parentSessionID
                 )
@@ -269,7 +269,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     timestamp: timestamp,
                     activityType: .sessionEnd,
                     summary: "Session stopping",
-                    rawPayload: rawEntry,
+    
                     isPlanMode: isPlanMode,
                     parentSessionID: parentSessionID
                 )
@@ -293,7 +293,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                                 timestamp: timestamp,
                                 activityType: .error,
                                 summary: summary,
-                                rawPayload: rawEntry,
+                
                                 isPlanMode: isPlanMode,
                                 parentSessionID: parentSessionID
                             )
@@ -304,7 +304,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolResult,
                             summary: "Tool result received",
-                            rawPayload: rawEntry,
+            
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -321,7 +321,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .sessionEnd,
                             summary: "User exited session",
-                            rawPayload: rawEntry,
+            
                             isPlanMode: isPlanMode,
                             parentSessionID: parentSessionID
                         )
@@ -335,10 +335,24 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                     timestamp: timestamp,
                     activityType: .sessionEnd,
                     summary: "User exited session",
-                    rawPayload: rawEntry,
+    
                     isPlanMode: isPlanMode,
                     parentSessionID: parentSessionID
                 )
+            }
+
+            // Extract user message text for task name refinement
+            var userText: String?
+            if let content = contentArray {
+                for item in content {
+                    if let text = item["text"] as? String {
+                        userText = text
+                        break
+                    }
+                }
+            }
+            if userText == nil, let text = message?["content"] as? String {
+                userText = text
             }
 
             return AgentActivity(
@@ -346,7 +360,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: "User message",
-                rawPayload: rawEntry,
+                userMessageText: userText,
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
             )
@@ -372,7 +386,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                         timestamp: timestamp,
                         activityType: .assistantMessage,
                         summary: "Response complete",
-                        rawPayload: rawEntry,
+        
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
                         isPlanMode: isPlanMode,
@@ -393,7 +407,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                             timestamp: timestamp,
                             activityType: .toolUse,
                             summary: summary,
-                            rawPayload: rawEntry,
+            
                             inputTokens: inputTokens,
                             outputTokens: outputTokens,
                             isPlanMode: isPlanMode,
@@ -409,7 +423,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: rawEntry,
+
                 inputTokens: inputTokens,
                 outputTokens: outputTokens,
                 isPlanMode: isPlanMode,

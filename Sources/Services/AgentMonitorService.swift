@@ -382,11 +382,9 @@ public final class AgentMonitorService: ObservableObject {
 
         // Refine name from first user message prompt
         if !agent.nameRefined && activity.activityType == .userMessage,
-           let rawPayload = activity.rawPayload {
-            if let taskName = Self.extractTaskName(from: rawPayload) {
-                agent.name = taskName
-                agent.nameRefined = true
-            }
+           let text = activity.userMessageText {
+            agent.name = Self.shortenPrompt(text)
+            agent.nameRefined = true
         }
 
         // 7.10: Only update stateEnteredAt when the state actually transitions
@@ -397,8 +395,8 @@ public final class AgentMonitorService: ObservableObject {
         // Register parent-child relationship from activity metadata
         if activity.parentSessionID != nil {
             agent.isSubagent = true
-            if let roleTitle = Self.extractCodexSubagentRoleTitle(from: activity.rawPayload) {
-                agent.roleTitle = roleTitle
+            if let rawRole = activity.codexRoleTitle {
+                agent.roleTitle = Self.mapAgentTypeToTitle(rawRole)
             } else if agent.roleTitle == "Developer" || agent.roleTitle == nil {
                 agent.roleTitle = "Subagent"
             }
@@ -680,9 +678,8 @@ public final class AgentMonitorService: ObservableObject {
                 if let firstUserMsg = activities.first(where: { $0.activityType == .userMessage }) {
                     if let index = agents.firstIndex(where: { $0.id == sessionID }),
                        !agents[index].nameRefined,
-                       let rawPayload = firstUserMsg.rawPayload,
-                       let taskName = Self.extractTaskName(from: rawPayload) {
-                        agents[index].name = taskName
+                       let text = firstUserMsg.userMessageText {
+                        agents[index].name = Self.shortenPrompt(text)
                         agents[index].nameRefined = true
                     }
                 }
@@ -874,18 +871,6 @@ public final class AgentMonitorService: ObservableObject {
         return mapAgentTypeToTitle(role)
     }
 
-    private static func extractCodexSubagentRoleTitle(from rawPayload: String?) -> String? {
-        guard let rawPayload,
-              let data = rawPayload.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let payload = json["payload"] as? [String: Any]
-        else {
-            return nil
-        }
-
-        return extractCodexRoleTitle(from: payload)
-    }
-
     /// Maps a raw Claude Code subagent type string to a clean display title.
     ///
     /// Known agentType values observed in real logs include:
@@ -930,37 +915,6 @@ public final class AgentMonitorService: ObservableObject {
                 .map { $0.prefix(1).uppercased() + $0.dropFirst() }
                 .joined(separator: " ")
         }
-    }
-
-    /// Extracts a short task name from a user message's raw JSON payload.
-    /// Parses the user's prompt text and produces a concise label.
-    static func extractTaskName(from rawPayload: String) -> String? {
-        guard let data = rawPayload.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let message = json["message"] as? [String: Any],
-              let content = message["content"] as? [[String: Any]]
-        else {
-            return nil
-        }
-
-        // Find the text content in the user message
-        var promptText: String?
-        for item in content {
-            if (item["type"] as? String) == "text",
-               let text = item["text"] as? String {
-                promptText = text
-                break
-            }
-        }
-
-        // Also handle content as a plain string
-        if promptText == nil, let text = message["content"] as? String {
-            promptText = text
-        }
-
-        guard let text = promptText, !text.isEmpty else { return nil }
-
-        return shortenPrompt(text)
     }
 
     /// Distills a user prompt into a short display name (max 28 chars).

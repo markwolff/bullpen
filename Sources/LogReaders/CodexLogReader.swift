@@ -203,7 +203,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .thinking,
                 summary: "Thinking...",
-                rawPayload: rawEntry
+
             )
 
         default:
@@ -227,7 +227,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: truncate(text.isEmpty ? "User message" : text, to: 60),
-                rawPayload: rawEntry
+                userMessageText: text.isEmpty ? nil : text
             )
         }
 
@@ -238,7 +238,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .assistantMessage,
                 summary: truncate(text.isEmpty ? "Codex response" : text, to: 60),
-                rawPayload: rawEntry
+
             )
         }
 
@@ -261,8 +261,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             sessionID: sessionID,
             timestamp: timestamp,
             activityType: .toolUse,
-            summary: summary,
-            rawPayload: rawEntry
+            summary: summary
         )
     }
 
@@ -290,7 +289,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .error,
                 summary: "Error: \(truncate(errorLine, to: 120))",
-                rawPayload: rawEntry
+
             )
         }
 
@@ -298,8 +297,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             sessionID: sessionID,
             timestamp: timestamp,
             activityType: .toolResult,
-            summary: "Tool result received",
-            rawPayload: rawEntry
+            summary: "Tool result received"
         )
     }
 
@@ -318,7 +316,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .sessionStart,
                 summary: "Session started",
-                rawPayload: rawEntry
+
             )
 
         case "task_complete":
@@ -329,7 +327,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .sessionEnd,
                 summary: summary,
-                rawPayload: rawEntry
+
             )
 
         case "turn_aborted":
@@ -339,7 +337,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 timestamp: timestamp,
                 activityType: .userMessage,
                 summary: "Turn aborted: \(reason)",
-                rawPayload: rawEntry
+
             )
 
         case "agent_message":
@@ -352,7 +350,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                     timestamp: timestamp,
                     activityType: .assistantMessage,
                     summary: summary,
-                    rawPayload: rawEntry
+    
                 )
             }
             // Non-final agent_message events are redundant with response_items
@@ -399,7 +397,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             timestamp: timestamp,
             activityType: .sessionStart,
             summary: summary,
-            rawPayload: rawEntry,
+            codexRoleTitle: agentRole,
             parentSessionID: parentThreadID
         )
     }
