@@ -122,27 +122,8 @@ public final class AgentMonitorService: ObservableObject {
             await self?.performDiscovery()
         }
 
-        // Set up periodic discovery timer
-        discoveryTimer = Timer.scheduledTimer(
-            withTimeInterval: discoveryInterval,
-            repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.performDiscovery()
-            }
-        }
-
-        // Set up periodic idle/removal check timer (every 5 seconds)
-        idleCheckTimer = Timer.scheduledTimer(
-            withTimeInterval: 5.0,
-            repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkIdleTimeouts()
-                self?.checkDeepThinkingTimeouts()
-                self?.checkAgentRemoval()
-            }
-        }
+        // Set up periodic timers for discovery and idle checks
+        resetTimers()
     }
 
     /// Stops monitoring and tears down all watchers.
@@ -170,6 +151,34 @@ public final class AgentMonitorService: ObservableObject {
         pendingSessions.removeAll()
         sessionPIDs.removeAll()
         deferNextDiscovery = false
+    }
+
+    // MARK: - Sleep/Wake Recovery
+
+    /// Called when the system wakes from sleep.
+    /// VNODE dispatch sources may silently stop delivering events after sleep,
+    /// and Foundation timers (Mach time) miss all intervals while the CPU is off.
+    /// This method restarts watchers, forces catch-up reads, and resets timers.
+    public func handleSystemWake() {
+        guard isMonitoring else { return }
+
+        // 1. Restart all watchers — creates fresh file descriptors and VNODE sources
+        for watcher in watchers.values {
+            watcher.startWatching()
+        }
+
+        // 2. Force catch-up reads — process log entries written during sleep
+        for watcher in watchers.values {
+            watcher.triggerCheck()
+        }
+
+        // 3. Reset timers — Foundation timers don't compensate for missed intervals
+        resetTimers()
+
+        // 4. Immediate discovery to find sessions started during sleep
+        Task { [weak self] in
+            await self?.performDiscovery()
+        }
     }
 
     // MARK: - Public methods for testing
@@ -445,6 +454,32 @@ public final class AgentMonitorService: ObservableObject {
     }
 
     // MARK: - Private helpers
+
+    /// Invalidates and recreates both periodic timers.
+    /// Used by `startMonitoring()` and `handleSystemWake()` to avoid duplication.
+    private func resetTimers() {
+        discoveryTimer?.invalidate()
+        discoveryTimer = Timer.scheduledTimer(
+            withTimeInterval: discoveryInterval,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.performDiscovery()
+            }
+        }
+
+        idleCheckTimer?.invalidate()
+        idleCheckTimer = Timer.scheduledTimer(
+            withTimeInterval: 5.0,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkIdleTimeouts()
+                self?.checkDeepThinkingTimeouts()
+                self?.checkAgentRemoval()
+            }
+        }
+    }
 
     /// Determines the correct AgentState from an activity by examining
     /// the summary text for more precise state mapping.

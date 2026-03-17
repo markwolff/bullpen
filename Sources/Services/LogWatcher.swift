@@ -54,6 +54,15 @@ public final class LogWatcher: Sendable {
         source.resume()
     }
 
+    /// Manually triggers the onChange callback.
+    /// Used after system wake to force processing of any log entries
+    /// written while the system was asleep and missed by the VNODE source.
+    public func triggerCheck() {
+        queue.async { [onChange] in
+            onChange()
+        }
+    }
+
     /// Stops watching the file.
     public func stopWatching() {
         if let state = watchState {
