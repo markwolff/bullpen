@@ -174,6 +174,45 @@ public final class TextureManager: @unchecked Sendable {
         dogToyBall, dogToyBone, dogToyRope,
     ]
 
+    // MARK: - Status Indicator Textures
+
+    /// Returns a pre-rendered status indicator texture for the given state and size.
+    /// Circle for all states except error (square). Cached after first generation.
+    public func statusIndicatorTexture(for state: AgentState, radius: CGFloat) -> SKTexture {
+        let shape = state == .error ? "square" : "circle"
+        let cacheKey = "status_\(state.rawValue)_\(shape)_\(Int(radius))"
+
+        lock.lock()
+        if let cached = cache[cacheKey] {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        let rgb = state.displayColorRGB
+        let color = NSColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1.0)
+        let diameter = radius * 2
+        let size = CGSize(width: diameter, height: diameter)
+
+        let image = NSImage(size: size, flipped: false) { rect in
+            color.setFill()
+            if state == .error {
+                rect.fill()
+            } else {
+                NSBezierPath(ovalIn: rect).fill()
+            }
+            return true
+        }
+
+        let texture = SKTexture(image: image)
+        texture.filteringMode = .nearest
+
+        lock.lock()
+        cache[cacheKey] = texture
+        lock.unlock()
+        return texture
+    }
+
     // MARK: - Public API
 
     /// Returns a texture for the given name, using pixel art generator first.

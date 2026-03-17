@@ -41,7 +41,7 @@ public class AgentSprite: SKSpriteNode {
     private let tokenLabel: SKLabelNode
 
     /// Visual state indicator (colored dot or square)
-    public let statusIndicator: SKShapeNode
+    public let statusIndicator: SKSpriteNode
 
     /// Laptop shown while an active agent is pacing without a desk.
     private let carriedLaptopNode: SKSpriteNode
@@ -87,7 +87,8 @@ public class AgentSprite: SKSpriteNode {
         )
 
         let indicatorRadius: CGFloat = agentInfo.isSubagent ? 3 : 4
-        self.statusIndicator = SKShapeNode(circleOfRadius: indicatorRadius)
+        let indicatorTexture = TextureManager.shared.statusIndicatorTexture(for: agentInfo.state, radius: indicatorRadius)
+        self.statusIndicator = SKSpriteNode(texture: indicatorTexture, size: CGSize(width: indicatorRadius * 2, height: indicatorRadius * 2))
 
         // Load trait-based texture — 16x24 pixel art
         // Normal agents: scaled 3x = 48x72, Subagents: scaled 2x = 32x48
@@ -160,9 +161,7 @@ public class AgentSprite: SKSpriteNode {
             addChild(tokenLabel)
         }
 
-        // Status indicator dot — smaller for subagents
-        statusIndicator.fillColor = AgentSprite.colorForState(agentInfo.state)
-        statusIndicator.strokeColor = .clear
+        // Status indicator dot — smaller for subagents (texture-based for draw call batching)
         let indicatorOffset: CGFloat = isSubagent ? 5 : 6
         statusIndicator.position = CGPoint(x: size.width / 2 + indicatorOffset, y: size.height / 2 - indicatorOffset)
         statusIndicator.name = "statusIndicator"
@@ -221,14 +220,8 @@ public class AgentSprite: SKSpriteNode {
             }
         }
 
-        // Update status indicator color and shape — task 4.8
-        // Plan mode overrides status color to purple/indigo
-        if newInfo.isPlanMode {
-            statusIndicator.fillColor = SKColor(red: 0.502, green: 0.376, blue: 0.816, alpha: 1.0)
-        } else {
-            statusIndicator.fillColor = stateColor
-        }
-        updateStatusIndicatorShape(for: newInfo.state)
+        // Update status indicator texture — swaps pre-rendered circle/square textures
+        updateStatusIndicatorTexture(for: newInfo.state, isPlanMode: newInfo.isPlanMode)
 
         // Update planning clipboard overlay
         updatePlanModeOverlay(isPlanMode: newInfo.isPlanMode)
@@ -286,19 +279,21 @@ public class AgentSprite: SKSpriteNode {
         }
     }
 
-    /// Updates status indicator to square for error, circle for everything else — task 4.8
-    private func updateStatusIndicatorShape(for state: AgentState) {
-        let r: CGFloat = isSubagent ? 3 : 4
-        if state == .error {
-            statusIndicator.path = CGPath(
-                rect: CGRect(x: -r, y: -r, width: r * 2, height: r * 2),
-                transform: nil
-            )
+    /// Swaps the status indicator texture for the given state and plan mode.
+    /// Uses pre-rendered textures from TextureManager instead of rebuilding CGPaths.
+    private func updateStatusIndicatorTexture(for state: AgentState, isPlanMode: Bool) {
+        let radius: CGFloat = isSubagent ? 3 : 4
+        if isPlanMode {
+            // Plan mode: use a custom purple indicator
+            let planState = AgentState.supervisingAgents // reuse teal-ish for shape; override color below
+            let texture = TextureManager.shared.statusIndicatorTexture(for: planState, radius: radius)
+            statusIndicator.texture = texture
+            statusIndicator.color = SKColor(red: 0.502, green: 0.376, blue: 0.816, alpha: 1.0)
+            statusIndicator.colorBlendFactor = 1.0
         } else {
-            statusIndicator.path = CGPath(
-                ellipseIn: CGRect(x: -r, y: -r, width: r * 2, height: r * 2),
-                transform: nil
-            )
+            let texture = TextureManager.shared.statusIndicatorTexture(for: state, radius: radius)
+            statusIndicator.texture = texture
+            statusIndicator.colorBlendFactor = 0
         }
     }
 
