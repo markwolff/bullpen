@@ -101,9 +101,26 @@ public class OfficeScene: SKScene {
     /// Last time we updated stats overlay
     private var lastStatsUpdate: TimeInterval = 0
 
+    /// Last time we updated throttled feature managers (2-second cadence)
+    private var lastManagerUpdateTime: TimeInterval = 0
+
+    // MARK: - Cached Per-Frame Data
+
+    /// Cached agent infos, updated in updateAgents(_:) to avoid per-frame allocation
+    private var cachedAgentInfos: [AgentInfo] = []
+
+    /// Cached active agent count, updated in updateAgents(_:)
+    private var cachedActiveAgentCount: Int = 0
+
+    /// Cached desk positions for cat/dog updates, updated when deskAssignments changes
+    private var cachedDeskPositions: [(id: Int, position: CGPoint)] = []
+
+    /// Cached set of active desk IDs, updated when deskAssignments changes
+    private var cachedActiveDeskIDs: Set<Int> = []
+
     // MARK: - Initialization
 
-    public init(layout: OfficeLayout = .defaultLayout()) {
+    public init(layout: OfficeLayout = .defaultLayout) {
         self.layout = layout
         super.init(size: layout.sceneSize)
         self.scaleMode = .aspectFit
@@ -404,30 +421,6 @@ public class OfficeScene: SKScene {
             glowNode.alpha = 0
             seatNode.addChild(glowNode)
         }
-    }
-
-    // MARK: - 6.15: Coffee Mug Steam Particles
-
-    /// Creates a subtle steam emitter for coffee mugs with horizontal wobble (8.3).
-    private func createSteamEmitter() -> SKEmitterNode {
-        let emitter = SKEmitterNode()
-        emitter.particleBirthRate = 1
-        emitter.particleLifetime = 2.0
-        emitter.particleLifetimeRange = 0.5
-        emitter.particleColor = SKColor(white: 1.0, alpha: 0.3)
-        emitter.particleColorAlphaSpeed = -0.15
-        emitter.particleSpeed = 5
-        emitter.particleSpeedRange = 2
-        emitter.emissionAngle = .pi / 2 // Upward
-        emitter.emissionAngleRange = .pi / 8
-        emitter.particleScale = 0.2
-        emitter.particleScaleSpeed = 0.05
-        emitter.particleAlpha = 0.3
-        emitter.particleAlphaSpeed = -0.15
-        // 8.3: Slight horizontal wobble via position range
-        emitter.particlePositionRange = CGVector(dx: 2, dy: 0)
-        emitter.xAcceleration = 1.5
-        return emitter
     }
 
     // MARK: - 6.17: Decorations
@@ -919,6 +912,12 @@ public class OfficeScene: SKScene {
                 }
             }
         }
+
+        // Update cached data for the update loop to avoid per-frame allocations
+        cachedAgentInfos = agentSprites.values.map(\.agentInfo)
+        cachedActiveAgentCount = cachedAgentInfos.filter { $0.state.isActive }.count
+        cachedDeskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
+        cachedActiveDeskIDs = Set(deskAssignments.keys)
     }
 
     /// Creates and adds a new agent sprite to the scene.
@@ -1320,10 +1319,11 @@ public class OfficeScene: SKScene {
         let deltaTime = lastUpdateTime > 0 ? currentTime - lastUpdateTime : 0
         lastUpdateTime = currentTime
 
-        let agents = agentSprites.values.map(\.agentInfo)
-        let activeAgentCount = agents.filter { $0.state.isActive }.count
+        // Use cached data from updateAgents(_:) instead of allocating per-frame
+        let agents = cachedAgentInfos
+        let activeAgentCount = cachedActiveAgentCount
 
-        // Update idle ZZZ, idle roaming, and thought bubble cycling for all agent sprites
+        // Per-frame updates: idle ZZZ, idle roaming, deep thinking, depth sorting
         for sprite in agentSprites.values {
             sprite.updateIdleZZZ(currentTime: currentTime)
             updateIdleBehavior(for: sprite, deltaTime: deltaTime)
@@ -1331,131 +1331,127 @@ public class OfficeScene: SKScene {
             updateDesklessPacing(for: sprite)
 
             // Y-based depth sorting: agents closer to bottom (lower Y) render in front
-            // Map Y range to zPosition 5.0–5.9 so agents always stay in the agent layer
             let normalizedDepth = 1.0 - min(max(sprite.position.y, 0), 700) / 700.0
-            sprite.zPosition = 5.0 + CGFloat(normalizedDepth) * 0.9
+            let newZ = 5.0 + CGFloat(normalizedDepth) * 0.9
+            if abs(sprite.zPosition - newZ) > 0.001 { sprite.zPosition = newZ }
         }
 
-        // Update office cat (8.10-8.13)
+        // Per-frame: cat/dog updates (use cached desk positions)
         if let cat = catSprite {
-            let deskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
-            let activeDeskIDs = Set(deskAssignments.keys)
-            cat.update(deltaTime: deltaTime, agents: agents, deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+            cat.update(deltaTime: deltaTime, agents: agents, deskPositions: cachedDeskPositions, activeDeskIDs: cachedActiveDeskIDs)
         }
-
-        // Update office dog - Pancake (same pattern as cat)
         if let dog = dogSprite {
-            let deskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
-            let activeDeskIDs = Set(deskAssignments.keys)
-            dog.update(deltaTime: deltaTime, agents: agents, deskPositions: deskPositions, activeDeskIDs: activeDeskIDs)
+            dog.update(deltaTime: deltaTime, agents: agents, deskPositions: cachedDeskPositions, activeDeskIDs: cachedActiveDeskIDs)
         }
 
-        // Empty office manager (0C)
+        // Per-frame: empty office manager, radio, bird
         emptyOfficeManager.update(deltaTime: deltaTime, agentCount: agentSprites.count, scene: self)
-
-        // Rubber duck debugging (2A)
-        rubberDuckManager.update(agents: agents, deskAssignments: deskAssignments, scene: self)
-
-        // Desk clutter accumulation (2B)
-        deskClutterManager.update(deltaTime: deltaTime, agents: agents, deskAssignments: deskAssignments, scene: self)
-
-        // Office stats tracker (2C)
-        officeStatsTracker.update(deltaTime: deltaTime, agents: agents)
-
-        // Radio waves (1B)
         radioSprite?.updateWaves(hasActiveAgents: activeAgentCount > 0)
-
-        // Bird cage chirps
         birdCageSprite?.update(hasActiveAgents: activeAgentCount > 0)
 
-        // Coffee runs (3A)
-        let coffeeTriggered = coffeeRunManager.update(deltaTime: deltaTime, agents: agents, deskAssignments: deskAssignments)
-        for agentID in coffeeTriggered {
-            if let sprite = agentSprites[agentID], let deskID = sprite.assignedDeskID {
-                let coffeeDest = layout.baristaCustomerPosition
-                let path = layout.findPath(from: sprite.position, to: coffeeDest)
-                sprite.walk(to: coffeeDest, via: path) { [weak self, weak sprite] in
-                    guard let self, let sprite else { return }
-                    // Pause at coffee machine, then walk back
-                    self.baristaSprite?.serveCustomer()
-                    sprite.run(SKAction.wait(forDuration: 5.0)) {
-                        let desk = self.layout.desks.first { $0.id == deskID }
-                        if let chairPos = desk?.chairPosition {
-                            let returnPath = self.layout.findPath(from: sprite.position, to: chairPos)
-                            sprite.walk(to: chairPos, via: returnPath) { [weak self] in
-                                self?.coffeeRunManager.coffeeRunCompleted(agentID: agentID)
-                                self?.coffeeRunManager.placeCup(deskID: deskID, scene: self!)
+        // Throttled feature managers (every 2 seconds)
+        if currentTime - lastManagerUpdateTime > 2.0 {
+            lastManagerUpdateTime = currentTime
+
+            // Rubber duck debugging (2A)
+            rubberDuckManager.update(agents: agents, deskAssignments: deskAssignments, scene: self)
+
+            // Desk clutter accumulation (2B)
+            deskClutterManager.update(deltaTime: 2.0, agents: agents, deskAssignments: deskAssignments, scene: self)
+
+            // Office stats tracker (2C)
+            officeStatsTracker.update(deltaTime: 2.0, agents: agents)
+
+            // Coffee runs (3A)
+            let coffeeTriggered = coffeeRunManager.update(deltaTime: 2.0, agents: agents, deskAssignments: deskAssignments)
+            for agentID in coffeeTriggered {
+                if let sprite = agentSprites[agentID], let deskID = sprite.assignedDeskID {
+                    let coffeeDest = layout.baristaCustomerPosition
+                    let path = layout.findPath(from: sprite.position, to: coffeeDest)
+                    sprite.walk(to: coffeeDest, via: path) { [weak self, weak sprite] in
+                        guard let self, let sprite else { return }
+                        self.baristaSprite?.serveCustomer()
+                        sprite.run(SKAction.wait(forDuration: 5.0)) {
+                            let desk = self.layout.desks.first { $0.id == deskID }
+                            if let chairPos = desk?.chairPosition {
+                                let returnPath = self.layout.findPath(from: sprite.position, to: chairPos)
+                                sprite.walk(to: chairPos, via: returnPath) { [weak self] in
+                                    guard let self else { return }
+                                    self.coffeeRunManager.coffeeRunCompleted(agentID: agentID)
+                                    self.coffeeRunManager.placeCup(deskID: deskID, scene: self)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // Water cooler chats (3B)
-        if let chatRequest = waterCoolerChatManager.update(
-            deltaTime: deltaTime,
-            agents: agents,
-            chatPositions: layout.waterCoolerChatPositions
-        ) {
-            if let spriteA = agentSprites[chatRequest.agentA],
-               let spriteB = agentSprites[chatRequest.agentB] {
-                let pathA = layout.findPath(from: spriteA.position, to: chatRequest.posA)
-                spriteA.walk(to: chatRequest.posA, via: pathA)
-                let pathB = layout.findPath(from: spriteB.position, to: chatRequest.posB)
-                spriteB.walk(to: chatRequest.posB, via: pathB)
-            }
-        }
-
-        // Pair programming (3C)
-        if let pairRequest = pairProgrammingManager.update(
-            deltaTime: deltaTime,
-            agents: agents,
-            deskAssignments: deskAssignments
-        ) {
-            if let visitor = agentSprites[pairRequest.visitorID] {
-                let path = layout.findPath(from: visitor.position, to: pairRequest.observePosition)
-                visitor.walk(to: pairRequest.observePosition, via: path)
-            }
-        }
-
-        // Pizza delivery (4A)
-        pizzaDeliveryManager.update(
-            deltaTime: deltaTime,
-            activeAgentCount: activeAgentCount,
-            scene: self,
-            layout: layout,
-            doorPosition: layout.doorPosition,
-            dropPosition: layout.pizzaDropPosition
-        )
-
-        // Standup meeting (4B)
-        let hour = currentHour()
-        let minute = Calendar.current.component(.minute, from: Date())
-        if let standupAssignments = standupMeetingManager.update(
-            deltaTime: deltaTime,
-            currentHour: hour,
-            currentMinute: minute,
-            agents: agents,
-            huddlePositions: layout.standupHuddlePositions
-        ) {
-            for assignment in standupAssignments {
-                if let sprite = agentSprites[assignment.agentID] {
-                    let path = layout.findPath(from: sprite.position, to: assignment.position)
-                    sprite.walk(to: assignment.position, via: path)
+            // Water cooler chats (3B)
+            if let chatRequest = waterCoolerChatManager.update(
+                deltaTime: 2.0,
+                agents: agents,
+                chatPositions: layout.waterCoolerChatPositions
+            ) {
+                if let spriteA = agentSprites[chatRequest.agentA],
+                   let spriteB = agentSprites[chatRequest.agentB] {
+                    let pathA = layout.findPath(from: spriteA.position, to: chatRequest.posA)
+                    spriteA.walk(to: chatRequest.posA, via: pathA)
+                    let pathB = layout.findPath(from: spriteB.position, to: chatRequest.posB)
+                    spriteB.walk(to: chatRequest.posB, via: pathB)
                 }
             }
-        }
 
-        // Achievement tracking (5B)
-        let newAchievements = achievementTracker.update(agents: agents)
-        for achievement in newAchievements {
-            achievementShelf?.unlockTrophy(for: achievement)
+            // Pair programming (3C)
+            if let pairRequest = pairProgrammingManager.update(
+                deltaTime: 2.0,
+                agents: agents,
+                deskAssignments: deskAssignments
+            ) {
+                if let visitor = agentSprites[pairRequest.visitorID] {
+                    let path = layout.findPath(from: visitor.position, to: pairRequest.observePosition)
+                    visitor.walk(to: pairRequest.observePosition, via: path)
+                }
+            }
+
+            // Pizza delivery (4A)
+            pizzaDeliveryManager.update(
+                deltaTime: 2.0,
+                activeAgentCount: activeAgentCount,
+                scene: self,
+                layout: layout,
+                doorPosition: layout.doorPosition,
+                dropPosition: layout.pizzaDropPosition
+            )
+
+            // Standup meeting (4B)
+            let hour = currentHour()
+            let minute = Calendar.current.component(.minute, from: Date())
+            if let standupAssignments = standupMeetingManager.update(
+                deltaTime: 2.0,
+                currentHour: hour,
+                currentMinute: minute,
+                agents: agents,
+                huddlePositions: layout.standupHuddlePositions
+            ) {
+                for assignment in standupAssignments {
+                    if let sprite = agentSprites[assignment.agentID] {
+                        let path = layout.findPath(from: sprite.position, to: assignment.position)
+                        sprite.walk(to: assignment.position, via: path)
+                    }
+                }
+            }
+
+            // Achievement tracking (5B)
+            let newAchievements = achievementTracker.update(agents: agents)
+            for achievement in newAchievements {
+                achievementShelf?.unlockTrophy(for: achievement)
+            }
         }
 
         // Periodically update window daylight, stats overlay, night mode (every 60 seconds)
         if currentTime - lastDaylightUpdate > 60.0 {
             lastDaylightUpdate = currentTime
+            let hour = currentHour()
             applyWindowDaylight(hour: hour)
             updateRainState()
             nightOwlManager.update(hour: hour, scene: self, agentSprites: Array(agentSprites.values))

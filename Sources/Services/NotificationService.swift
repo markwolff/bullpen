@@ -43,6 +43,11 @@ public class NotificationService {
 
     /// Sends a notification when an agent encounters an error.
     /// Only sends if the window is not currently visible. Debounces per agent.
+    /// Removes cached state for a removed agent.
+    public func cleanup(agentID: String) {
+        lastErrorNotificationTime.removeValue(forKey: agentID)
+    }
+
     public func notifyAgentError(agent: AgentInfo, windowVisible: Bool) async {
         guard !windowVisible else { return }
 

@@ -27,6 +27,8 @@ public class DeskClutterManager {
         TextureManager.itemStickyNoteBlue,
     ]
 
+    private static let workingStates: Set<AgentState> = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
+
     public init() {}
 
     /// Call each frame from OfficeScene.update()
@@ -34,8 +36,7 @@ public class DeskClutterManager {
         for (deskID, agentID) in deskAssignments {
             guard let agent = agents.first(where: { $0.id == agentID }) else { continue }
 
-            let isWorking = [AgentState.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents]
-                .contains(agent.state)
+            let isWorking = Self.workingStates.contains(agent.state)
 
             if isWorking {
                 deskWorkTimers[deskID, default: 0] += deltaTime

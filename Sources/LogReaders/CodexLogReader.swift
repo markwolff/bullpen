@@ -600,12 +600,21 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         return String(string.prefix(maxLength - 1)) + "…"
     }
 
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func parseISO8601(_ string: String?) -> Date? {
         guard let string else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
+        if let date = Self.isoFormatterWithFractional.date(from: string) { return date }
+        return Self.isoFormatterBasic.date(from: string)
     }
 }

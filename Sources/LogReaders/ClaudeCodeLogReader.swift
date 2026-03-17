@@ -423,15 +423,24 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
     // MARK: - Private helpers
 
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func parseTimestamp(from string: String?) -> Date {
         guard let string else { return Date() }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) {
+        if let date = Self.isoFormatterWithFractional.date(from: string) {
             return date
         }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: string) {
+        if let date = Self.isoFormatterBasic.date(from: string) {
             return date
         }
         return Date()

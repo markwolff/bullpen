@@ -289,6 +289,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               let contentView = window.contentView,
               let skView = findSKView(in: contentView) else { return }
         skView.preferredFramesPerSecond = fps
+        skView.ignoresSiblingOrder = true
         skView.isPaused = false
     }
 

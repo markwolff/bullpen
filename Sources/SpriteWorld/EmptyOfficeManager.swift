@@ -21,16 +21,12 @@ public class EmptyOfficeManager {
     /// Threshold before activating empty mode (seconds)
     private let activationDelay: TimeInterval = 10.0
 
-    /// Reference to scene for node management
-    private weak var scene: SKScene?
-
     public init() {}
 
     /// Call each frame from OfficeScene.update()
     /// - Returns: true if empty mode state changed (for scene to react)
     @discardableResult
     public func update(deltaTime: TimeInterval, agentCount: Int, scene: SKScene) -> Bool {
-        self.scene = scene
 
         if agentCount == 0 {
             emptyTimer += deltaTime

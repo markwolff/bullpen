@@ -39,7 +39,7 @@ public class CatSprite: SKSpriteNode {
     private let walkSpeed: CGFloat = 20.0
 
     /// Layout used for wander pathfinding.
-    public var navigationLayout: OfficeLayout = .defaultLayout()
+    public var navigationLayout: OfficeLayout = .defaultLayout
 
     // MARK: - Initialization
 
