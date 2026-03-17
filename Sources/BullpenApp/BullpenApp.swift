@@ -69,6 +69,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Set up menu bar status item (7.1)
         setupStatusItem()
 
+        // Set up sleep/wake recovery for file monitoring
+        setupSleepWakeHandling()
+
         // Configure window after short delay to let SwiftUI create it
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.configureMainWindow()
@@ -160,6 +163,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.statusItem.menu = nil  // Reset so left-click still works
         }
+    }
+
+    // MARK: - Sleep/Wake Recovery
+
+    /// Registers for system wake notifications to restart file monitoring.
+    /// GCD DispatchSource VNODE watchers and Foundation timers can silently
+    /// stop working after macOS sleep — this ensures recovery.
+    private func setupSleepWakeHandling() {
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+            .sink { [weak self] _ in
+                // Brief delay for hardware and file systems to stabilize
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self?.monitorService?.handleSystemWake()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - 7.12: Window position persistence
