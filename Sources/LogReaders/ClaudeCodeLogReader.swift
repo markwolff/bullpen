@@ -110,21 +110,33 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
     // MARK: - readActivities (task 2.2)
 
+    /// Reads raw file data from the given offset. Extracted for off-main-thread execution.
+    private func readFileData(from fileURL: URL, afterOffset: UInt64) throws -> Data {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let handle = FileHandle(forReadingAtPath: fileURL.path) else {
+            return Data()
+        }
+        defer { handle.closeFile() }
+        handle.seek(toFileOffset: afterOffset)
+        return handle.readDataToEndOfFile()
+    }
+
     public func readActivities(
         from logFileURL: URL,
         afterOffset: UInt64
     ) async throws -> (activities: [AgentActivity], newOffset: UInt64) {
-        guard FileManager.default.fileExists(atPath: logFileURL.path) else {
-            return (activities: [], newOffset: afterOffset)
+        // Move large reads off the main thread to avoid blocking UI
+        let data: Data
+        let attrs = try? FileManager.default.attributesOfItem(atPath: logFileURL.path)
+        let fileSize = (attrs?[.size] as? UInt64) ?? 0
+        let readSize = fileSize > afterOffset ? fileSize - afterOffset : 0
+        if readSize > 50_000 {
+            data = try await Task.detached { [self] in
+                try self.readFileData(from: logFileURL, afterOffset: afterOffset)
+            }.value
+        } else {
+            data = try readFileData(from: logFileURL, afterOffset: afterOffset)
         }
-
-        guard let fileHandle = FileHandle(forReadingAtPath: logFileURL.path) else {
-            return (activities: [], newOffset: afterOffset)
-        }
-        defer { fileHandle.closeFile() }
-
-        fileHandle.seek(toFileOffset: afterOffset)
-        let data = fileHandle.readDataToEndOfFile()
 
         guard !data.isEmpty else {
             return (activities: [], newOffset: afterOffset)

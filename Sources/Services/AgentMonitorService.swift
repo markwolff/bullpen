@@ -69,6 +69,9 @@ public final class AgentMonitorService: ObservableObject {
     /// Whether the app window is currently visible (set externally)
     public var windowVisible: Bool = true
 
+    /// O(1) agent lookup by session ID → array index (rebuilt on add/remove)
+    private var agentIndexMap: [String: Int] = [:]
+
     /// Timer for periodic session discovery
     private var discoveryTimer: Timer?
 
@@ -150,6 +153,7 @@ public final class AgentMonitorService: ObservableObject {
         }
         watchers.removeAll()
         agents.removeAll()
+        agentIndexMap.removeAll()
         readOffsets.removeAll()
         sessionFiles.removeAll()
         dismissedSessionTimestamps.removeAll()
@@ -382,6 +386,7 @@ public final class AgentMonitorService: ObservableObject {
         if !idsToRemove.isEmpty {
             let removeSet = Set(idsToRemove)
             agents.removeAll { removeSet.contains($0.id) }
+            rebuildAgentIndexMap()
         }
 
         // Periodically purge stale dismissedSessionTimestamps (older than 1 hour)
@@ -456,6 +461,7 @@ public final class AgentMonitorService: ObservableObject {
         if !idsToRemove.isEmpty {
             let removeSet = Set(idsToRemove)
             agents.removeAll { removeSet.contains($0.id) }
+            rebuildAgentIndexMap()
         }
 
         let oneHourAgo = now.addingTimeInterval(-3600)
@@ -467,7 +473,7 @@ public final class AgentMonitorService: ObservableObject {
     /// Updates an agent's state based on a new activity.
     /// Exposed for testing.
     public func updateAgentState(sessionID: String, activity: AgentActivity) {
-        guard let index = agents.firstIndex(where: { $0.id == sessionID }) else { return }
+        guard let index = agentIndex(for: sessionID) else { return }
 
         // Batch mutations: copy agent locally, apply all changes, write back once
         // to fire only a single @Published notification instead of 5-8 per update.
@@ -564,7 +570,7 @@ public final class AgentMonitorService: ObservableObject {
 
         // After updating a subagent's state, check if its parent should be supervising
         if let parentID = childToParentMap[sessionID],
-           let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+           let parentIndex = agentIndex(for: parentID) {
             var parent = agents[parentIndex]
             var parentChanged = false
             if parent.hasActiveChildren && parent.state != .supervisingAgents {
@@ -582,7 +588,18 @@ public final class AgentMonitorService: ObservableObject {
         if shouldImmediatelyDismiss(activity: activity) {
             cleanupAgent(sessionID: sessionID)
             agents.removeAll { $0.id == sessionID }
+            rebuildAgentIndexMap()
         }
+    }
+
+    // MARK: - Agent Index
+
+    private func agentIndex(for id: String) -> Int? {
+        agentIndexMap[id]
+    }
+
+    private func rebuildAgentIndexMap() {
+        agentIndexMap = Dictionary(uniqueKeysWithValues: agents.enumerated().map { ($1.id, $0) })
     }
 
     // MARK: - Private helpers
@@ -722,6 +739,7 @@ public final class AgentMonitorService: ObservableObject {
             parentSessionID: parentSessionID
         )
         agents.append(agent)
+        agentIndexMap[agent.id] = agents.count - 1
 
         if let parentID = parentSessionID {
             registerParentChild(parentID: parentID, childID: sessionID)
@@ -773,7 +791,7 @@ public final class AgentMonitorService: ObservableObject {
             // On first read, find first user message for name refinement
             if isInitialRead {
                 if let firstUserMsg = activities.first(where: { $0.activityType == .userMessage }) {
-                    if let index = agents.firstIndex(where: { $0.id == sessionID }),
+                    if let index = agentIndex(for: sessionID),
                        !agents[index].nameRefined,
                        let text = firstUserMsg.userMessageText {
                         agents[index].name = Self.shortenPrompt(text)
@@ -797,7 +815,7 @@ public final class AgentMonitorService: ObservableObject {
                 // Fix stale timestamps on initial read: use current time instead of
                 // potentially minutes-old log timestamps to prevent immediate removal
                 if isInitialRead {
-                    if let index = agents.firstIndex(where: { $0.id == sessionID }) {
+                    if let index = agentIndex(for: sessionID) {
                         agents[index].lastUpdatedAt = Date()
                     }
                 }
@@ -821,7 +839,7 @@ public final class AgentMonitorService: ObservableObject {
         // Remove child from parent's tracking
         if let parentID = childToParentMap[sessionID] {
             parentToChildrenMap[parentID]?.remove(sessionID)
-            if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+            if let parentIndex = agentIndex(for: parentID) {
                 agents[parentIndex].activeChildSessionIDs.remove(sessionID)
                 // If parent has no more children and is supervising, transition back
                 if agents[parentIndex].activeChildSessionIDs.isEmpty
@@ -845,11 +863,11 @@ public final class AgentMonitorService: ObservableObject {
         parentToChildrenMap[parentID, default: []].insert(childID)
 
         // Update parent's AgentInfo if it exists
-        if let parentIndex = agents.firstIndex(where: { $0.id == parentID }) {
+        if let parentIndex = agentIndex(for: parentID) {
             agents[parentIndex].activeChildSessionIDs.insert(childID)
         }
         // Update child's AgentInfo if it exists
-        if let childIndex = agents.firstIndex(where: { $0.id == childID }) {
+        if let childIndex = agentIndex(for: childID) {
             agents[childIndex].parentSessionID = parentID
         }
     }
