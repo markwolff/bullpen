@@ -193,8 +193,6 @@ public class AgentSprite: SKSpriteNode {
         let oldRoleTitle = agentInfo.roleTitle
         agentInfo = newInfo
 
-        let stateColor = AgentSprite.colorForState(newInfo.state)
-
         // Update name label if name changed (smart naming refinement)
         if newInfo.name != oldName {
             nameLabel.text = newInfo.name
