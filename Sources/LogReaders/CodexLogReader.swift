@@ -238,7 +238,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
                 sessionID: sessionID,
                 timestamp: timestamp,
                 activityType: .userMessage,
-                summary: truncate(text.isEmpty ? "User message" : text, to: 60),
+                summary: userMessageSummary(from: text.isEmpty ? nil : text),
                 userMessageText: text.isEmpty ? nil : text
             )
         }
@@ -604,12 +604,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         return nil
     }
 
-    private func truncate(_ string: String, to maxLength: Int) -> String {
-        if string.count <= maxLength {
-            return string
-        }
-        return String(string.prefix(maxLength - 1)) + "…"
-    }
+    // truncate(_:to:) is provided by the AgentLogReader extension
 
     private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

@@ -371,7 +371,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
                 sessionID: sessionID,
                 timestamp: timestamp,
                 activityType: .userMessage,
-                summary: "User message",
+                summary: userMessageSummary(from: userText),
                 userMessageText: userText,
                 isPlanMode: isPlanMode,
                 parentSessionID: parentSessionID
@@ -503,12 +503,7 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         }
     }
 
-    private func truncate(_ string: String, to maxLength: Int) -> String {
-        if string.count <= maxLength {
-            return string
-        }
-        return String(string.prefix(maxLength)) + "..."
-    }
+    // truncate(_:to:) is provided by the AgentLogReader extension
 
     private func extractText(from contentArray: [[String: Any]]?) -> String? {
         guard let contentArray else { return nil }
