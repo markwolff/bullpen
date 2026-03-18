@@ -34,7 +34,8 @@ struct BullpenApp: App {
 }
 
 /// App delegate that configures the floating borderless window, manages
-/// frame rate tiering, menu bar status item, and window position persistence.
+/// frame rate tiering, menu bar status item, window position persistence,
+/// and the compact menu bar panel display mode.
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
@@ -44,6 +45,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Reference to the main window for toggle/persistence
     private weak var window: NSWindow?
+
+    /// The compact always-on-top panel for menu bar display mode
+    private var popoverPanel: NSPanel?
+
+    /// The current display mode (window or menu bar panel)
+    private var displayMode: DisplayMode = DisplayModeStore.load()
 
     /// Reference to the monitor service for badge updates (set from BullpenApp)
     weak var monitorService: AgentMonitorService?
@@ -78,7 +85,74 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.setupFrameRateTiering()
             self.restoreWindowPosition()
             self.setupWindowPositionPersistence()
+            self.applyDisplayMode()
         }
+    }
+
+    // MARK: - Display Mode
+
+    /// The window currently being used for display (either the main window or the panel).
+    private var activeDisplayWindow: NSWindow? {
+        displayMode == .menuBarPanel ? popoverPanel : window
+    }
+
+    /// Creates the compact always-on-top panel for menu bar display mode.
+    private func createPopoverPanel() {
+        guard popoverPanel == nil, let monitorService = monitorService else { return }
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .transient]
+        panel.isMovableByWindowBackground = true
+        panel.contentView = NSHostingView(rootView: ContentView(monitorService: monitorService))
+        popoverPanel = panel
+    }
+
+    /// Positions the panel below the menu bar status item.
+    private func positionPanelBelowStatusItem() {
+        guard let panel = popoverPanel,
+              let buttonFrame = statusItem.button?.window?.frame else { return }
+        // Anchor panel's top-right to the status item's bottom-center
+        let panelWidth = panel.frame.width
+        let x = buttonFrame.midX - panelWidth / 2
+        let y = buttonFrame.minY - panel.frame.height
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    /// Applies the current display mode, showing one view and hiding the other.
+    private func applyDisplayMode() {
+        switch displayMode {
+        case .window:
+            popoverPanel?.orderOut(nil)
+            pauseScene(in: popoverPanel)
+            if let window = self.window {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        case .menuBarPanel:
+            window?.orderOut(nil)
+            pauseScene(in: window)
+            createPopoverPanel()
+            positionPanelBelowStatusItem()
+            popoverPanel?.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    /// Switches to a new display mode, persists the choice, and applies it.
+    @objc private func switchDisplayMode(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let newMode = DisplayMode(rawValue: rawValue),
+              newMode != displayMode else { return }
+        displayMode = newMode
+        DisplayModeStore.save(newMode)
+        applyDisplayMode()
     }
 
     // MARK: - 7.1: NSStatusItem
@@ -95,9 +169,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - 7.2: Agent count badge
+    // MARK: - 7.2: Agent count badge + icon tint
 
-    /// Updates the badge count on the status item.
+    /// Updates the badge count and icon tint on the status item.
     /// Call this whenever the agent list changes.
     func updateBadge(agents: [Models.AgentInfo]) {
         let activeAgents = agents.filter {
@@ -115,20 +189,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             statusItem?.button?.title = " \(activeAgents)/\(total)"
         }
+
+        // Tint icon green when any agent is active
+        let hasActiveAgents = agents.contains {
+            $0.state != .idle && $0.state != .finished
+        }
+        statusItem?.button?.contentTintColor = hasActiveAgents ? .systemGreen : nil
     }
 
-    // MARK: - 7.3: Click to toggle window
+    // MARK: - 7.3: Click to toggle display
 
     @objc private func statusItemClicked() {
         if let event = NSApp.currentEvent, event.type == .rightMouseUp {
             showContextMenu()
             return
         }
-        toggleWindow()
+        toggleDisplay()
+    }
+
+    /// Toggles the active display (window or panel) visibility.
+    @objc func toggleDisplay() {
+        switch displayMode {
+        case .window:
+            toggleWindow()
+        case .menuBarPanel:
+            togglePanel()
+        }
     }
 
     /// Toggles the main window visibility.
-    @objc func toggleWindow() {
+    private func toggleWindow() {
         guard let window = self.window ?? NSApplication.shared.windows.first else { return }
         if window.isVisible {
             window.orderOut(nil)
@@ -138,19 +228,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Toggles the menu bar panel visibility.
+    private func togglePanel() {
+        createPopoverPanel()
+        guard let panel = popoverPanel else { return }
+        if panel.isVisible {
+            panel.orderOut(nil)
+            pauseScene(in: panel)
+        } else {
+            positionPanelBelowStatusItem()
+            panel.makeKeyAndOrderFront(nil)
+            resumeScene(in: panel)
+        }
+    }
+
     // MARK: - 7.4: Right-click context menu
 
     /// Shows a context menu from the status item on right-click.
     func showContextMenu() {
         let menu = NSMenu()
-        let isVisible = window?.isVisible ?? false
+
+        // Show/Hide toggle
+        let activeWindow = activeDisplayWindow
+        let isVisible = activeWindow?.isVisible ?? false
         let showHide = NSMenuItem(
             title: isVisible ? "Hide Office" : "Show Office",
-            action: #selector(toggleWindow),
+            action: #selector(toggleDisplay),
             keyEquivalent: ""
         )
         showHide.target = self
         menu.addItem(showHide)
+        menu.addItem(.separator())
+
+        // Display Mode submenu
+        let displayModeMenu = NSMenu()
+        for mode in DisplayMode.allCases {
+            let item = NSMenuItem(
+                title: mode.title,
+                action: #selector(switchDisplayMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = (mode == displayMode) ? .on : .off
+            displayModeMenu.addItem(item)
+        }
+        let displayModeItem = NSMenuItem(title: "Display Mode", action: nil, keyEquivalent: "")
+        displayModeItem.submenu = displayModeMenu
+        menu.addItem(displayModeItem)
+
         menu.addItem(.separator())
         let prefs = NSMenuItem(title: "Preferences...", action: nil, keyEquivalent: ",")
         menu.addItem(prefs)
@@ -251,6 +377,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isMovableByWindowBackground = true
     }
 
+    // MARK: - Frame Rate Tiering
+
     /// Sets up frame rate tiering — task 4.13
     /// - Active: 30 FPS
     /// - Inactive: 10 FPS
@@ -258,13 +386,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupFrameRateTiering() {
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in
-                self?.setFrameRate(30)
+                guard let self, let win = self.activeDisplayWindow else { return }
+                self.setFrameRate(30, in: win)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
             .sink { [weak self] _ in
-                self?.setFrameRate(10)
+                guard let self, let win = self.activeDisplayWindow else { return }
+                self.setFrameRate(10, in: win)
             }
             .store(in: &cancellables)
 
@@ -284,9 +414,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
-    private func setFrameRate(_ fps: Int) {
-        guard let window = self.window ?? NSApplication.shared.windows.first,
-              let contentView = window.contentView,
+    private func setFrameRate(_ fps: Int, in window: NSWindow) {
+        guard let contentView = window.contentView,
               let skView = findSKView(in: contentView) else { return }
         skView.preferredFramesPerSecond = fps
         skView.ignoresSiblingOrder = true
@@ -298,5 +427,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let contentView = window.contentView,
               let skView = findSKView(in: contentView) else { return }
         skView.isPaused = !isVisible
+    }
+
+    /// Pauses the SpriteKit scene in a given window.
+    private func pauseScene(in window: NSWindow?) {
+        guard let contentView = window?.contentView,
+              let skView = findSKView(in: contentView) else { return }
+        skView.isPaused = true
+    }
+
+    /// Resumes the SpriteKit scene in a given window at 30 FPS.
+    private func resumeScene(in window: NSWindow?) {
+        guard let window else { return }
+        setFrameRate(30, in: window)
     }
 }
