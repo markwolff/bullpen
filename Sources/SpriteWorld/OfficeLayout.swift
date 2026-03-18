@@ -1,5 +1,6 @@
 import Foundation
 import SpriteKit
+import Models
 
 /// Defines the layout of the office world: desk positions, rooms,
 /// collision geometry, and pathfinding for agent sprites.
@@ -191,6 +192,24 @@ public struct OfficeLayout: Sendable {
             barriers: barriers
         )
     }()
+
+    /// Returns the layout for a given world preset.
+    public static func layout(for preset: WorldPreset) -> OfficeLayout {
+        switch preset {
+        case .classicBullpen: return .defaultLayout
+        case .zenStudio:      return .zenStudio
+        case .overgrownRuins: return .overgrownRuins
+        }
+    }
+
+    /// Returns the points of interest for a given world preset.
+    public static func pointsOfInterest(for preset: WorldPreset) -> [PointOfInterest] {
+        switch preset {
+        case .classicBullpen: return classicBullpenPOIs()
+        case .zenStudio:      return ZenStudioLayout.zenStudioPOIs()
+        case .overgrownRuins: return overgrownRuinsPOIs()
+        }
+    }
 
     public func nextAvailableDesk(occupiedDeskIDs: Set<Int>) -> DeskPosition? {
         desks.filter { !occupiedDeskIDs.contains($0.id) }.randomElement()

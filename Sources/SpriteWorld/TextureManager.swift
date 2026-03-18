@@ -509,6 +509,45 @@ public final class TextureManager: @unchecked Sendable {
             return gen.dogTailWag(frame: Int(frameStr) ?? 0)
         }
 
+        // Zen Studio textures
+        if name == Self.zenToriiGate { return gen.toriiGate() }
+        if name == Self.zenKoiPond { return gen.koiPond() }
+        if name == Self.zenBonsaiTree { return gen.bonsaiTree() }
+        if name == Self.zenShojiScreen { return gen.shojiScreen() }
+        if name == Self.zenStoneLantern { return gen.stoneLantern() }
+        if name == Self.zenRockGarden { return gen.rockGarden() }
+        if name == Self.zenCherryBlossom { return gen.cherryBlossomBranch() }
+        if name == Self.zenTeaSet { return gen.teaSet() }
+        if name == Self.zenHangingScroll { return gen.hangingScroll() }
+        if name == Self.zenPaperLantern { return gen.paperLantern() }
+        if name == Self.zenBambooFountain { return gen.bambooFountain() }
+        if name == Self.zenWindChimes { return gen.windChimes() }
+        if name == Self.zenIncenseBurner { return gen.incenseBurner() }
+        if name == Self.zenZabutonCushion { return gen.zabutonCushion() }
+        if name == Self.zenChabudaiTable { return gen.chabudaiTable() }
+
+        // Overgrown Ruins textures
+        if name == Self.ruinsBigTreeTrunk { return gen.bigTreeTrunk() }
+        if name == Self.ruinsTreeCanopy { return gen.treeCanopy() }
+        if name == Self.ruinsTreeRoots { return gen.treeRoots() }
+        if name == Self.ruinsVineCurtain { return gen.vineCurtain() }
+        if name == Self.ruinsVineWallClimber { return gen.vineWallClimber() }
+        if name == Self.ruinsGlowingMushroomCluster { return gen.glowingMushroomCluster() }
+        if name == Self.ruinsSmallGlowingMushroom { return gen.smallGlowingMushroom() }
+        if name == Self.ruinsCrackedServerRack { return gen.crackedServerRack() }
+        if name == Self.ruinsBrokenCeilingHole { return gen.brokenCeilingHole() }
+        if name == Self.ruinsMossPatch { return gen.mossPatch() }
+        if name == Self.ruinsPuddle { return gen.ruinsPuddle() }
+        if name == Self.ruinsWildflowerPatch { return gen.wildflowerPatch() }
+        if name == Self.ruinsBirdNest { return gen.ruinsBirdNest() }
+        if name == Self.ruinsRubblePile { return gen.rubblePile() }
+        if name == Self.ruinsBrokenPipeWaterfall { return gen.brokenPipeWaterfall() }
+        if name == Self.ruinsSunbeam { return gen.ruinsSunbeam() }
+        if name == Self.ruinsFlickeringMonitor { return gen.flickeringMonitor() }
+        if name == Self.ruinsBrokenDoorFrame { return gen.brokenDoorFrame() }
+        if name == Self.ruinsOldCrackedWhiteboard { return gen.oldCrackedWhiteboard() }
+        if name == Self.ruinsTiltedDesk { return gen.tiltedDesk() }
+
         // Characters - Claude
         if name.hasPrefix("char_claude_") {
             let state = String(name.dropFirst("char_claude_".count))

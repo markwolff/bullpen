@@ -11,7 +11,7 @@ public class OfficeScene: SKScene {
     }
 
     /// The office layout defining desk positions and walkable areas
-    private let layout: OfficeLayout
+    private var layout: OfficeLayout
 
     /// Active agent sprites, keyed by agent ID
     private var agentSprites: [String: AgentSprite] = [:]
@@ -135,11 +135,11 @@ public class OfficeScene: SKScene {
 
     // MARK: - Initialization
 
-    public init(layout: OfficeLayout = .defaultLayout, worldPreset: WorldPreset = .classicBullpen) {
-        self.layout = layout
+    public init(layout: OfficeLayout? = nil, worldPreset: WorldPreset = .classicBullpen) {
+        self.layout = layout ?? OfficeLayout.layout(for: worldPreset)
         self.worldPreset = worldPreset
         self.activeTheme = WorldTheme.theme(for: worldPreset)
-        super.init(size: layout.sceneSize)
+        super.init(size: self.layout.sceneSize)
         self.scaleMode = .aspectFit
         self.backgroundColor = activeTheme.backgroundColor
     }
@@ -194,18 +194,46 @@ public class OfficeScene: SKScene {
 
     /// Switches the scene to a new world preset.
     ///
-    /// Rebuilds only the themeable environment visuals. Agents, desk assignments,
-    /// pets, and all manager instances are preserved.
+    /// This is a full restart: clears all agents, desk assignments, and pets,
+    /// swaps to the new layout, and rebuilds the entire scene.
     public func applyWorld(_ preset: WorldPreset) {
         worldPreset = preset
+        layout = OfficeLayout.layout(for: preset)
         activeTheme = WorldTheme.theme(for: preset)
         backgroundColor = activeTheme.backgroundColor
 
         // If the scene hasn't been set up yet, didMove(to:) will handle it
         guard isOfficeSetUp else { return }
 
+        // Clear all agents and desk assignments (full restart)
+        for (_, sprite) in agentSprites {
+            sprite.removeFromParent()
+        }
+        agentSprites.removeAll()
+        deskAssignments.removeAll()
+        fadingOutAgentIDs.removeAll()
+        cachedDeskPositions.removeAll()
+        cachedActiveDeskIDs.removeAll()
+
+        // Remove and recreate pets
+        catSprite?.removeFromParent()
+        catSprite = nil
+        dogSprite?.removeFromParent()
+        dogSprite = nil
+
+        // Rebuild collision geometry for new layout
+        if let collisionLayer = childNode(withName: "collision_layer") {
+            collisionLayer.removeAllChildren()
+        }
+        setupCollisionGeometry()
+
+        // Rebuild all environment visuals
         rebuildEnvironment(for: activeTheme)
-        reapplyMonitorVisuals()
+
+        // Respawn pets in new layout
+        setupCat()
+        setupDog()
+
         applyWindowDaylight(hour: currentHour())
     }
 
@@ -358,7 +386,7 @@ public class OfficeScene: SKScene {
     /// Adds area rugs using theme colors.
     private func setupRug(theme: WorldTheme, parent: SKNode) {
         let galleryRunner = SKShapeNode(rectOf: CGSize(width: 520, height: 92), cornerRadius: 18)
-        galleryRunner.fillColor = theme.galleryRunnerColor
+        galleryRunner.fillColor = theme.rugColor(for: "gallery_runner")
         galleryRunner.strokeColor = .clear
         galleryRunner.position = layout.pizzaDropPosition
         galleryRunner.name = "rug_gallery"
@@ -366,7 +394,7 @@ public class OfficeScene: SKScene {
         parent.addChild(galleryRunner)
 
         let loungeRugBorder = SKShapeNode(rectOf: CGSize(width: 184, height: 88), cornerRadius: 18)
-        loungeRugBorder.fillColor = theme.loungeRugBorderColor
+        loungeRugBorder.fillColor = theme.rugColor(for: "lounge_border")
         loungeRugBorder.strokeColor = .clear
         loungeRugBorder.position = CGPoint(x: layout.loungePosition.x, y: layout.loungePosition.y - 18)
         loungeRugBorder.name = "rug_lounge_border"
@@ -374,7 +402,7 @@ public class OfficeScene: SKScene {
         parent.addChild(loungeRugBorder)
 
         let loungeRug = SKShapeNode(rectOf: CGSize(width: 170, height: 74), cornerRadius: 16)
-        loungeRug.fillColor = theme.loungeRugColor
+        loungeRug.fillColor = theme.rugColor(for: "lounge")
         loungeRug.strokeColor = .clear
         loungeRug.position = loungeRugBorder.position
         loungeRug.name = "rug_lounge"
@@ -382,7 +410,7 @@ public class OfficeScene: SKScene {
         parent.addChild(loungeRug)
 
         let focusRug = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 14)
-        focusRug.fillColor = theme.focusRugColor
+        focusRug.fillColor = theme.rugColor(for: "focus")
         focusRug.strokeColor = .clear
         focusRug.position = CGPoint(x: 220, y: 521)
         focusRug.name = "rug_focus"
@@ -390,7 +418,7 @@ public class OfficeScene: SKScene {
         parent.addChild(focusRug)
 
         let buildRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
-        buildRug.fillColor = theme.buildRugColor
+        buildRug.fillColor = theme.rugColor(for: "build")
         buildRug.strokeColor = .clear
         buildRug.position = CGPoint(x: 860, y: 170)
         buildRug.name = "rug_build"
@@ -398,7 +426,7 @@ public class OfficeScene: SKScene {
         parent.addChild(buildRug)
 
         let collabRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
-        collabRug.fillColor = theme.collabRugColor
+        collabRug.fillColor = theme.rugColor(for: "collab")
         collabRug.strokeColor = .clear
         collabRug.position = CGPoint(x: 830, y: 570)
         collabRug.name = "rug_collab"

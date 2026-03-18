@@ -1956,7 +1956,7 @@ public final class PixelArtGenerator: Sendable {
 
     // MARK: - Drawing Helpers
 
-    private func drawTexture(width: Int, height: Int, draw: @escaping (CGContext) -> Void) -> SKTexture {
+    func drawTexture(width: Int, height: Int, draw: @escaping (CGContext) -> Void) -> SKTexture {
         let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.clear(rect)
@@ -1968,11 +1968,11 @@ public final class PixelArtGenerator: Sendable {
         return texture
     }
 
-    private func r(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> CGRect {
+    func r(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> CGRect {
         CGRect(x: x, y: y, width: w, height: h)
     }
 
-    private func fill(_ ctx: CGContext, rect: CGRect, color: NSColor) {
+    func fill(_ ctx: CGContext, rect: CGRect, color: NSColor) {
         ctx.setFillColor(color.cgColor)
         ctx.fill([rect])
     }
