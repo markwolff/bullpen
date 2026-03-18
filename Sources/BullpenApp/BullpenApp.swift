@@ -54,9 +54,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// before SwiftUI had a chance to set this reference.
     weak var monitorService: AgentMonitorService? {
         didSet {
-            if displayMode == .menuBarPanel && popoverPanel == nil {
-                applyDisplayMode()
-            }
+            // Guard: statusItem is set up in applicationDidFinishLaunching via
+            // setupStatusItem(). When launched as a .app bundle, SwiftUI's .onAppear
+            // can fire before that method runs. Calling applyDisplayMode() with a nil
+            // statusItem would crash in positionPanelBelowStatusItem(). The deferred
+            // applyDisplayMode() in applicationDidFinishLaunching handles this case.
+            guard statusItem != nil, displayMode == .menuBarPanel, popoverPanel == nil else { return }
+            applyDisplayMode()
         }
     }
 
