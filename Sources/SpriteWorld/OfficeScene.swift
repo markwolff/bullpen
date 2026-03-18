@@ -27,8 +27,20 @@ public class OfficeScene: SKScene {
     /// Which desks are currently occupied (deskID -> agentID)
     private var deskAssignments: [Int: String] = [:]
 
-    /// Background node for the office floor/walls
-    private var backgroundNode: SKNode?
+    /// The current world preset
+    public private(set) var worldPreset: WorldPreset
+
+    /// The active theme derived from the world preset
+    private var activeTheme: WorldTheme
+
+    /// Root node for all themeable environment visuals (wall, floor, rooms, rugs, furniture, decorations)
+    private var environmentRoot: SKNode?
+
+    /// Root node for persistent actors (agents, cat, dog)
+    private var actorRoot: SKNode?
+
+    /// Whether setupOffice() has been called
+    private var isOfficeSetUp: Bool = false
 
     /// The office cat sprite (8.9-8.13)
     public private(set) var catSprite: CatSprite?
@@ -123,11 +135,13 @@ public class OfficeScene: SKScene {
 
     // MARK: - Initialization
 
-    public init(layout: OfficeLayout = .defaultLayout) {
+    public init(layout: OfficeLayout = .defaultLayout, worldPreset: WorldPreset = .classicBullpen) {
         self.layout = layout
+        self.worldPreset = worldPreset
+        self.activeTheme = WorldTheme.theme(for: worldPreset)
         super.init(size: layout.sceneSize)
         self.scaleMode = .aspectFit
-        self.backgroundColor = SKColor(red: 0.86, green: 0.88, blue: 0.84, alpha: 1.0)
+        self.backgroundColor = activeTheme.backgroundColor
     }
 
     @available(*, unavailable)
@@ -145,131 +159,158 @@ public class OfficeScene: SKScene {
     // MARK: - Office Setup
 
     /// Builds the static office environment (desks, walls, decorations).
-    /// Public for testing purposes.
+    /// Public for testing purposes. Idempotent — safe to call more than once.
     public func setupOffice() {
+        guard !isOfficeSetUp else { return }
+        isOfficeSetUp = true
+
         physicsWorld.gravity = .zero
-        setupTiledBackground()
-        setupRoomArchitecture()
-        setupRug()
-        setupDesks()
-        setupDecorations()
-        setupAmbientAnimations()
+
+        // Create the three stable roots
+        let envRoot = SKNode()
+        envRoot.name = "background_container"
+        envRoot.zPosition = -12
+        addChild(envRoot)
+        environmentRoot = envRoot
+
+        let actors = SKNode()
+        actors.name = "actor_root"
+        actors.zPosition = 5
+        addChild(actors)
+        actorRoot = actors
+
+        // Build collision geometry once (invariant across presets)
+        setupCollisionGeometry()
+
+        // Build the environment visuals for the current theme
+        rebuildEnvironment(for: activeTheme)
+
+        // Spawn persistent actors in actorRoot
         setupCat()
         setupDog()
-        setupFeatureDecorations()
-        setupCollisionGeometry()
+    }
+
+    // MARK: - World Switching
+
+    /// Switches the scene to a new world preset.
+    ///
+    /// Rebuilds only the themeable environment visuals. Agents, desk assignments,
+    /// pets, and all manager instances are preserved.
+    public func applyWorld(_ preset: WorldPreset) {
+        worldPreset = preset
+        activeTheme = WorldTheme.theme(for: preset)
+        backgroundColor = activeTheme.backgroundColor
+
+        // If the scene hasn't been set up yet, didMove(to:) will handle it
+        guard isOfficeSetUp else { return }
+
+        rebuildEnvironment(for: activeTheme)
+        reapplyMonitorVisuals()
+        applyWindowDaylight(hour: currentHour())
+    }
+
+    /// Removes and recreates all themeable visuals under `environmentRoot`.
+    private func rebuildEnvironment(for theme: WorldTheme) {
+        guard let envRoot = environmentRoot else { return }
+        envRoot.removeAllChildren()
+
+        setupTiledBackground(theme: theme, parent: envRoot)
+        setupRoomArchitecture(theme: theme, parent: envRoot)
+        setupRug(theme: theme, parent: envRoot)
+        setupDesks(theme: theme, parent: envRoot)
+        setupDecorations(parent: envRoot)
+        setupFeatureDecorations(parent: envRoot)
+        setupAmbientAnimations(theme: theme, parent: envRoot)
+    }
+
+    /// Reapplies monitor glow/state for all occupied desks after an environment rebuild.
+    private func reapplyMonitorVisuals() {
+        for (deskID, agentID) in deskAssignments {
+            if let sprite = agentSprites[agentID], sprite.hasDockedLaptopAtDesk {
+                applyMonitorState(deskID: deskID, state: sprite.agentInfo.state)
+            }
+        }
     }
 
     // MARK: - 6.4: Tiled Background
 
-    /// Tiles the background with repeating pixel-art tiles, scaled up for chunky look.
-    private func setupTiledBackground() {
-        let bgContainer = SKNode()
-        bgContainer.name = "background_container"
-        bgContainer.zPosition = -12
-        addChild(bgContainer)
-        backgroundNode = bgContainer
-
+    /// Tiles the background with wall, floor, and cornice — using theme colors.
+    private func setupTiledBackground(theme: WorldTheme, parent: SKNode) {
         let wallHeight = layout.sceneSize.height * 0.44
         let wall = SKSpriteNode(
-            color: SKColor(red: 0.92, green: 0.93, blue: 0.90, alpha: 1.0),
+            color: theme.wallColor,
             size: CGSize(width: layout.sceneSize.width, height: wallHeight)
         )
         wall.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height - wallHeight / 2)
         wall.name = "wall"
         wall.zPosition = -11
-        addChild(wall)
+        parent.addChild(wall)
 
         let floorHeight = layout.sceneSize.height - wallHeight
         let floor = SKSpriteNode(
-            color: SKColor(red: 0.75, green: 0.78, blue: 0.72, alpha: 1.0),
+            color: theme.floorColor,
             size: CGSize(width: layout.sceneSize.width, height: floorHeight)
         )
         floor.position = CGPoint(x: layout.sceneSize.width / 2, y: floorHeight / 2)
         floor.name = "floor"
         floor.zPosition = -11
-        addChild(floor)
+        parent.addChild(floor)
 
         let cornice = SKShapeNode(rect: CGRect(x: 0, y: wall.position.y - wallHeight / 2, width: layout.sceneSize.width, height: 8))
-        cornice.fillColor = SKColor(red: 0.46, green: 0.42, blue: 0.36, alpha: 1.0)
+        cornice.fillColor = theme.trimColor
         cornice.strokeColor = .clear
+        cornice.name = "cornice"
         cornice.zPosition = -10
-        bgContainer.addChild(cornice)
-
+        parent.addChild(cornice)
     }
 
-    private func setupRoomArchitecture() {
+    private func setupRoomArchitecture(theme: WorldTheme, parent: SKNode) {
         for room in layout.rooms {
             let shadow = SKShapeNode(rect: room.frame.insetBy(dx: -5, dy: -5), cornerRadius: 18)
             shadow.fillColor = SKColor(white: 0.0, alpha: 0.08)
             shadow.strokeColor = .clear
             shadow.zPosition = -9
-            addChild(shadow)
+            parent.addChild(shadow)
 
             let panel = SKShapeNode(rect: room.frame, cornerRadius: 16)
-            panel.fillColor = roomFillColor(for: room.id)
-            panel.strokeColor = roomBorderColor(for: room.id)
+            panel.fillColor = theme.roomFillColor(for: room.id)
+            panel.strokeColor = theme.roomBorderColor(for: room.id)
             panel.lineWidth = 2
+            panel.name = "room_panel_\(room.id)"
             panel.zPosition = -8
-            addChild(panel)
+            parent.addChild(panel)
 
             let header = SKShapeNode(rect: CGRect(x: room.frame.minX + 12, y: room.frame.maxY - 26, width: room.frame.width - 24, height: 14), cornerRadius: 7)
-            header.fillColor = roomHeaderColor(for: room.id)
+            header.fillColor = theme.roomHeaderColor(for: room.id)
             header.strokeColor = .clear
+            header.name = "room_header_\(room.id)"
             header.zPosition = -7
-            addChild(header)
+            parent.addChild(header)
 
-            let label = SKLabelNode(text: room.name.uppercased())
+            let displayName = theme.roomLabel(for: room)
+            let label = SKLabelNode(text: displayName.uppercased())
             label.fontName = "Menlo-Bold"
             label.fontSize = 10
-            label.fontColor = SKColor(red: 0.24, green: 0.27, blue: 0.24, alpha: 1.0)
+            label.fontColor = theme.labelTextColor
             label.horizontalAlignmentMode = .left
             label.position = CGPoint(x: room.frame.minX + 18, y: room.frame.maxY - 22)
+            label.name = "room_label_\(room.id)"
             label.zPosition = -6
-            addChild(label)
+            parent.addChild(label)
         }
 
         for barrier in layout.solidPartitions {
-            addChild(architectureNode(for: barrier.rect, fillColor: SKColor(red: 0.32, green: 0.35, blue: 0.31, alpha: 1.0), alpha: 1.0))
+            parent.addChild(architectureNode(for: barrier.rect, fillColor: theme.solidWallColor, alpha: 1.0))
         }
 
         for barrier in layout.glassPartitions {
-            let glass = architectureNode(for: barrier.rect, fillColor: SKColor(red: 0.82, green: 0.90, blue: 0.88, alpha: 1.0), alpha: 0.55)
-            glass.strokeColor = SKColor(red: 0.47, green: 0.56, blue: 0.54, alpha: 0.8)
+            let glass = architectureNode(for: barrier.rect, fillColor: theme.glassWallColor, alpha: 0.55)
+            glass.strokeColor = theme.glassStrokeColor
             glass.lineWidth = 1.5
-            addChild(glass)
+            parent.addChild(glass)
         }
 
-        setupRecreationAccents()
-    }
-
-    private func roomFillColor(for roomID: String) -> SKColor {
-        switch roomID {
-        case "focus_studio":
-            return SKColor(red: 0.80, green: 0.84, blue: 0.78, alpha: 1.0)
-        case "recreation_lounge":
-            return SKColor(red: 0.84, green: 0.80, blue: 0.73, alpha: 1.0)
-        case "collaboration_room":
-            return SKColor(red: 0.78, green: 0.82, blue: 0.77, alpha: 1.0)
-        case "build_room":
-            return SKColor(red: 0.76, green: 0.79, blue: 0.73, alpha: 1.0)
-        default:
-            return SKColor(red: 0.72, green: 0.76, blue: 0.70, alpha: 1.0)
-        }
-    }
-
-    private func roomBorderColor(for roomID: String) -> SKColor {
-        if roomID == "recreation_lounge" {
-            return SKColor(red: 0.47, green: 0.40, blue: 0.30, alpha: 1.0)
-        }
-        return SKColor(red: 0.35, green: 0.40, blue: 0.35, alpha: 1.0)
-    }
-
-    private func roomHeaderColor(for roomID: String) -> SKColor {
-        if roomID == "gallery" || roomID == "circulation_spine" {
-            return SKColor(red: 0.55, green: 0.60, blue: 0.54, alpha: 1.0)
-        }
-        return SKColor(red: 0.60, green: 0.64, blue: 0.58, alpha: 1.0)
+        setupRecreationAccents(parent: parent)
     }
 
     private func architectureNode(for rect: CGRect, fillColor: SKColor, alpha: CGFloat) -> SKShapeNode {
@@ -281,13 +322,13 @@ public class OfficeScene: SKScene {
         return node
     }
 
-    private func setupRecreationAccents() {
+    private func setupRecreationAccents(parent: SKNode) {
         let pingPongShadow = SKShapeNode(rectOf: CGSize(width: 132, height: 68), cornerRadius: 10)
         pingPongShadow.fillColor = SKColor(white: 0.0, alpha: 0.15)
         pingPongShadow.strokeColor = .clear
         pingPongShadow.position = CGPoint(x: 200, y: 278)
         pingPongShadow.zPosition = -3
-        addChild(pingPongShadow)
+        parent.addChild(pingPongShadow)
 
         let pingPong = SKShapeNode(rectOf: CGSize(width: 124, height: 60), cornerRadius: 8)
         pingPong.fillColor = SKColor(red: 0.18, green: 0.44, blue: 0.36, alpha: 1.0)
@@ -295,77 +336,80 @@ public class OfficeScene: SKScene {
         pingPong.lineWidth = 2
         pingPong.position = CGPoint(x: 200, y: 280)
         pingPong.zPosition = -2
-        addChild(pingPong)
+        parent.addChild(pingPong)
 
         let centerLine = SKShapeNode(rectOf: CGSize(width: 3, height: 56), cornerRadius: 1.5)
         centerLine.fillColor = SKColor(white: 0.92, alpha: 1.0)
         centerLine.strokeColor = .clear
         centerLine.position = pingPong.position
         centerLine.zPosition = -1
-        addChild(centerLine)
+        parent.addChild(centerLine)
 
         let net = SKShapeNode(rectOf: CGSize(width: 122, height: 2), cornerRadius: 1)
         net.fillColor = SKColor(white: 0.1, alpha: 0.9)
         net.strokeColor = .clear
         net.position = CGPoint(x: pingPong.position.x, y: pingPong.position.y)
         net.zPosition = 0
-        addChild(net)
+        parent.addChild(net)
     }
 
     // MARK: - Cozy Rug
 
-    /// Adds a warm-colored area rug in the center of the office.
-    private func setupRug() {
+    /// Adds area rugs using theme colors.
+    private func setupRug(theme: WorldTheme, parent: SKNode) {
         let galleryRunner = SKShapeNode(rectOf: CGSize(width: 520, height: 92), cornerRadius: 18)
-        galleryRunner.fillColor = SKColor(red: 0.62, green: 0.69, blue: 0.61, alpha: 0.55)
+        galleryRunner.fillColor = theme.galleryRunnerColor
         galleryRunner.strokeColor = .clear
         galleryRunner.position = layout.pizzaDropPosition
+        galleryRunner.name = "rug_gallery"
         galleryRunner.zPosition = -7
-        addChild(galleryRunner)
+        parent.addChild(galleryRunner)
 
         let loungeRugBorder = SKShapeNode(rectOf: CGSize(width: 184, height: 88), cornerRadius: 18)
-        loungeRugBorder.fillColor = SKColor(red: 0.42, green: 0.31, blue: 0.24, alpha: 0.40)
+        loungeRugBorder.fillColor = theme.loungeRugBorderColor
         loungeRugBorder.strokeColor = .clear
         loungeRugBorder.position = CGPoint(x: layout.loungePosition.x, y: layout.loungePosition.y - 18)
+        loungeRugBorder.name = "rug_lounge_border"
         loungeRugBorder.zPosition = -7
-        addChild(loungeRugBorder)
+        parent.addChild(loungeRugBorder)
 
         let loungeRug = SKShapeNode(rectOf: CGSize(width: 170, height: 74), cornerRadius: 16)
-        loungeRug.fillColor = SKColor(red: 0.74, green: 0.61, blue: 0.46, alpha: 0.58)
+        loungeRug.fillColor = theme.loungeRugColor
         loungeRug.strokeColor = .clear
         loungeRug.position = loungeRugBorder.position
+        loungeRug.name = "rug_lounge"
         loungeRug.zPosition = -6
-        addChild(loungeRug)
+        parent.addChild(loungeRug)
 
-        // Focus Studio rug — between the two desk rows
         let focusRug = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 14)
-        focusRug.fillColor = SKColor(red: 0.62, green: 0.56, blue: 0.46, alpha: 0.60)
+        focusRug.fillColor = theme.focusRugColor
         focusRug.strokeColor = .clear
         focusRug.position = CGPoint(x: 220, y: 521)
+        focusRug.name = "rug_focus"
         focusRug.zPosition = -7
-        addChild(focusRug)
+        parent.addChild(focusRug)
 
-        // Build Room rug — between the two desk rows
         let buildRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
-        buildRug.fillColor = SKColor(red: 0.55, green: 0.48, blue: 0.38, alpha: 0.55)
+        buildRug.fillColor = theme.buildRugColor
         buildRug.strokeColor = .clear
         buildRug.position = CGPoint(x: 860, y: 170)
+        buildRug.name = "rug_build"
         buildRug.zPosition = -7
-        addChild(buildRug)
+        parent.addChild(buildRug)
 
-        // Collaboration Room rug
         let collabRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
-        collabRug.fillColor = SKColor(red: 0.50, green: 0.56, blue: 0.62, alpha: 0.42)
+        collabRug.fillColor = theme.collabRugColor
         collabRug.strokeColor = .clear
         collabRug.position = CGPoint(x: 830, y: 570)
+        collabRug.name = "rug_collab"
         collabRug.zPosition = -7
-        addChild(collabRug)
+        parent.addChild(collabRug)
     }
 
     // MARK: - 6.3: Furniture Textures
 
-    /// Sets up long communal tables with per-seat laptops and chairs.
-    private func setupDesks() {
+    /// Sets up long communal tables with per-seat laptops and chairs — using theme colors.
+    private func setupDesks(theme: WorldTheme, parent: SKNode) {
         let tm = TextureManager.shared
 
         for table in layout.tables {
@@ -374,23 +418,25 @@ public class OfficeScene: SKScene {
             tableShadow.fillColor = SKColor(white: 0.0, alpha: 0.12)
             tableShadow.strokeColor = .clear
             tableShadow.position = CGPoint(x: table.centerX, y: table.centerY - 3)
+            tableShadow.name = "table_shadow_\(table.id)"
             tableShadow.zPosition = 0
-            addChild(tableShadow)
+            parent.addChild(tableShadow)
 
             let tableNode = SKShapeNode(rectOf: CGSize(width: tableWidth, height: 34), cornerRadius: 12)
-            tableNode.fillColor = SKColor(red: 0.30, green: 0.31, blue: 0.27, alpha: 1.0)
+            tableNode.fillColor = theme.tableColor
             tableNode.strokeColor = .clear
             tableNode.lineWidth = 0
             tableNode.isAntialiased = false
             tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
             tableNode.name = "table_\(table.id)"
             tableNode.zPosition = 1
-            addChild(tableNode)
+            parent.addChild(tableNode)
 
             let accentStrip = SKShapeNode(rectOf: CGSize(width: tableWidth - 24, height: 6), cornerRadius: 3)
-            accentStrip.fillColor = SKColor(red: 0.72, green: 0.77, blue: 0.72, alpha: 0.85)
+            accentStrip.fillColor = theme.tableAccentColor
             accentStrip.strokeColor = .clear
             accentStrip.position = CGPoint(x: 0, y: 8)
+            accentStrip.name = "table_accent_\(table.id)"
             accentStrip.zPosition = 2
             tableNode.addChild(accentStrip)
         }
@@ -399,7 +445,7 @@ public class OfficeScene: SKScene {
             let seatNode = SKNode()
             seatNode.position = desk.position
             seatNode.name = "desk_\(desk.id)"
-            addChild(seatNode)
+            parent.addChild(seatNode)
 
             let chairTexture = tm.texture(for: TextureManager.furnitureChair)
             let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 24, height: 32))
@@ -429,7 +475,7 @@ public class OfficeScene: SKScene {
     // MARK: - 6.17: Decorations
 
     /// Adds static decoration nodes to the office — scaled up pixel art.
-    private func setupDecorations() {
+    private func setupDecorations(parent: SKNode) {
         let tm = TextureManager.shared
 
         let plantTexture = tm.texture(for: TextureManager.decorationPlant)
@@ -447,7 +493,7 @@ public class OfficeScene: SKScene {
             plant.position = position
             plant.name = "decoration_plant_\(index)"
             plant.zPosition = 2
-            addChild(plant)
+            parent.addChild(plant)
         }
 
         let windowTexture = tm.texture(for: TextureManager.decorationWindow)
@@ -455,113 +501,110 @@ public class OfficeScene: SKScene {
         windowNode.position = CGPoint(x: 246, y: 706)
         windowNode.name = "decoration_window"
         windowNode.zPosition = 2
-        addChild(windowNode)
+        parent.addChild(windowNode)
 
         let windowNode2 = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
         windowNode2.position = CGPoint(x: 898, y: 706)
         windowNode2.name = "decoration_window_2"
         windowNode2.zPosition = 2
-        addChild(windowNode2)
+        parent.addChild(windowNode2)
 
         let whiteboardTexture = tm.texture(for: TextureManager.decorationWhiteboard)
         let whiteboardNode = SKSpriteNode(texture: whiteboardTexture, size: CGSize(width: 120, height: 80))
         whiteboardNode.position = CGPoint(x: layout.whiteboardStandPosition.x, y: layout.whiteboardStandPosition.y + 44)
         whiteboardNode.name = "decoration_whiteboard"
         whiteboardNode.zPosition = 2
-        addChild(whiteboardNode)
+        parent.addChild(whiteboardNode)
 
         let clockTexture = tm.texture(for: TextureManager.decorationClock)
         let clockNode = SKSpriteNode(texture: clockTexture, size: CGSize(width: 40, height: 40))
         clockNode.position = layout.wallClockPosition
         clockNode.name = "decoration_clock"
         clockNode.zPosition = 2
-        addChild(clockNode)
+        parent.addChild(clockNode)
 
         let posterTexture = tm.texture(for: TextureManager.decorationPoster)
         let posterNode = SKSpriteNode(texture: posterTexture, size: CGSize(width: 56, height: 72))
         posterNode.position = CGPoint(x: 306, y: 680)
         posterNode.name = "decoration_poster"
         posterNode.zPosition = 2
-        addChild(posterNode)
+        parent.addChild(posterNode)
 
         let bookshelfTexture = tm.texture(for: TextureManager.decorationBookshelf)
         let bookshelfNode = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 80, height: 64))
         bookshelfNode.position = CGPoint(x: layout.bookshelfStandPosition.x, y: layout.bookshelfStandPosition.y + 36)
         bookshelfNode.name = "decoration_bookshelf"
         bookshelfNode.zPosition = 2
-        addChild(bookshelfNode)
+        parent.addChild(bookshelfNode)
 
         let bulletinTexture = tm.texture(for: TextureManager.decorationBulletinBoard)
         let bulletinNode = SKSpriteNode(texture: bulletinTexture, size: CGSize(width: 80, height: 56))
         bulletinNode.position = CGPoint(x: layout.bulletinBoardStandPosition.x, y: layout.bulletinBoardStandPosition.y + 34)
         bulletinNode.name = "decoration_bulletin_board"
         bulletinNode.zPosition = 2
-        addChild(bulletinNode)
+        parent.addChild(bulletinNode)
 
         let coolerTexture = tm.texture(for: TextureManager.decorationWaterCooler)
         let coolerNode = SKSpriteNode(texture: coolerTexture, size: CGSize(width: 40, height: 80))
         coolerNode.position = CGPoint(x: 720, y: 348)
         coolerNode.name = "decoration_water_cooler"
         coolerNode.zPosition = 2
-        addChild(coolerNode)
+        parent.addChild(coolerNode)
 
         let doorTexture = tm.texture(for: TextureManager.decorationDoor)
         let doorNode = SKSpriteNode(texture: doorTexture, size: CGSize(width: 56, height: 96))
         doorNode.position = layout.doorPosition
         doorNode.name = "decoration_door"
         doorNode.zPosition = 2
-        addChild(doorNode)
+        parent.addChild(doorNode)
 
         let couchTexture = tm.texture(for: TextureManager.decorationCouch)
         let couchNode = SKSpriteNode(texture: couchTexture, size: CGSize(width: 60, height: 36))
         couchNode.position = layout.loungePosition
         couchNode.name = "decoration_couch"
         couchNode.zPosition = 2
-        addChild(couchNode)
+        parent.addChild(couchNode)
 
         let printerTexture = tm.texture(for: TextureManager.decorationPrinter)
         let printerNode = SKSpriteNode(texture: printerTexture, size: CGSize(width: 30, height: 30))
         printerNode.position = CGPoint(x: 580, y: 114)
         printerNode.name = "decoration_printer"
         printerNode.zPosition = 2
-        addChild(printerNode)
+        parent.addChild(printerNode)
 
-        // Collaboration Room potted plant
         let collabPlant = SKSpriteNode(texture: plantTexture, size: CGSize(width: 44, height: 72))
         collabPlant.position = CGPoint(x: 1170, y: 490)
         collabPlant.name = "decoration_plant_collab"
         collabPlant.zPosition = 2
-        addChild(collabPlant)
+        parent.addChild(collabPlant)
 
-        // Recreation Lounge mid-zone decorations (bridge gap between ping pong and couch areas)
         let loungeShelf = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 56, height: 48))
         loungeShelf.position = CGPoint(x: 90, y: 220)
         loungeShelf.name = "decoration_lounge_shelf"
         loungeShelf.zPosition = 2
-        addChild(loungeShelf)
+        parent.addChild(loungeShelf)
 
         let loungePlant = SKSpriteNode(texture: plantTexture, size: CGSize(width: 32, height: 52))
         loungePlant.position = CGPoint(x: 350, y: 220)
         loungePlant.name = "decoration_lounge_plant"
         loungePlant.zPosition = 2
-        addChild(loungePlant)
-
+        parent.addChild(loungePlant)
     }
 
     // MARK: - 8.1-8.5: Ambient Animations
 
     /// Sets up all ambient animations: clock second hand, plant sway, window daylight, dust motes, rain.
-    private func setupAmbientAnimations() {
-        setupClockSecondHand()
-        setupPlantSway()
+    private func setupAmbientAnimations(theme: WorldTheme, parent: SKNode) {
+        setupClockSecondHand(parent: parent)
+        setupPlantSway(parent: parent)
         applyWindowDaylight(hour: currentHour())
-        setupDustMotes()
+        setupDustMotes(theme: theme, parent: parent)
         updateRainState()
     }
 
     /// 8.1: Adds a ticking second hand to the wall clock.
-    private func setupClockSecondHand() {
-        guard let clockNode = childNode(withName: "decoration_clock") else { return }
+    private func setupClockSecondHand(parent: SKNode) {
+        guard let clockNode = parent.childNode(withName: "decoration_clock") else { return }
 
         let secondHand = SKShapeNode()
         let path = CGMutablePath()
@@ -580,9 +623,9 @@ public class OfficeScene: SKScene {
     }
 
     /// 8.2: Adds subtle sway animation to plant decoration nodes.
-    private func setupPlantSway() {
+    private func setupPlantSway(parent: SKNode) {
         for i in 0...1 {
-            guard let plantNode = childNode(withName: "decoration_plant_\(i)") else { continue }
+            guard let plantNode = parent.childNode(withName: "decoration_plant_\(i)") else { continue }
 
             let swayLeft = SKAction.rotate(byAngle: CGFloat.pi / 90, duration: 1.5) // ~2 degrees
             swayLeft.timingMode = .easeInEaseOut
@@ -593,7 +636,7 @@ public class OfficeScene: SKScene {
     }
 
     /// Floating dust motes that drift through sunbeams near the windows.
-    private func setupDustMotes() {
+    private func setupDustMotes(theme: WorldTheme, parent: SKNode) {
         let hour = currentHour()
         // Only show dust motes during daytime (6am-6pm) when sunlight streams in
         guard hour >= 6 && hour < 18 else { return }
@@ -602,7 +645,7 @@ public class OfficeScene: SKScene {
         emitter.particleBirthRate = 0.8
         emitter.particleLifetime = 8.0
         emitter.particleLifetimeRange = 4.0
-        emitter.particleColor = SKColor(white: 1.0, alpha: 0.25)
+        emitter.particleColor = SKColor(white: 1.0, alpha: theme.dustMoteAlpha)
         emitter.particleColorAlphaSpeed = -0.03
         emitter.particleSpeed = 3
         emitter.particleSpeedRange = 2
@@ -611,7 +654,7 @@ public class OfficeScene: SKScene {
         emitter.particleScale = 0.15
         emitter.particleScaleRange = 0.1
         emitter.particleScaleSpeed = 0.01
-        emitter.particleAlpha = 0.25
+        emitter.particleAlpha = theme.dustMoteAlpha
         emitter.particleAlphaRange = 0.15
         emitter.xAcceleration = 0.5
         emitter.yAcceleration = -0.3
@@ -620,7 +663,7 @@ public class OfficeScene: SKScene {
         emitter.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height * 0.75)
         emitter.name = "dust_motes"
         emitter.zPosition = 50
-        addChild(emitter)
+        parent.addChild(emitter)
     }
 
     // MARK: - Rain on Windows at Night
@@ -629,8 +672,9 @@ public class OfficeScene: SKScene {
     private func setupRainOnWindows() {
         guard false else { return }  // Disabled: was hour >= 21 || hour < 6
 
+        let searchRoot: SKNode = environmentRoot ?? self
         for windowName in ["decoration_window", "decoration_window_2"] {
-            guard let windowNode = childNode(withName: windowName) else { continue }
+            guard let windowNode = searchRoot.childNode(withName: windowName) else { continue }
             // Don't add duplicates
             guard windowNode.childNode(withName: "rain_emitter") == nil else { continue }
 
@@ -658,8 +702,9 @@ public class OfficeScene: SKScene {
 
     /// Removes rain emitters from window nodes with a fade-out.
     private func removeRainFromWindows() {
+        let searchRoot: SKNode = environmentRoot ?? self
         for windowName in ["decoration_window", "decoration_window_2"] {
-            guard let windowNode = childNode(withName: windowName) else { continue }
+            guard let windowNode = searchRoot.childNode(withName: windowName) else { continue }
             guard let rain = windowNode.childNode(withName: "rain_emitter") else { continue }
             rain.run(SKAction.sequence([
                 SKAction.fadeOut(withDuration: 1.0),
@@ -677,23 +722,11 @@ public class OfficeScene: SKScene {
         }
     }
 
-    /// 8.4: Returns the daylight color for a given hour (0-23).
+    /// Returns the daylight color for a given hour and world preset.
     /// Public for testing.
-    public static func daylightColor(for hour: Int) -> SKColor {
-        switch hour {
-        case 6..<12:
-            // Morning: warm yellow #F5E6C8
-            return SKColor(red: 0.961, green: 0.902, blue: 0.784, alpha: 1.0)
-        case 12..<18:
-            // Afternoon: bright white #FFFFFF
-            return SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
-        case 18..<21:
-            // Evening: warm orange #E8C090
-            return SKColor(red: 0.910, green: 0.753, blue: 0.565, alpha: 1.0)
-        default:
-            // Night disabled — use afternoon brightness instead
-            return SKColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
-        }
+    public static func daylightColor(for hour: Int, worldPreset: WorldPreset = .classicBullpen) -> SKColor {
+        let theme = WorldTheme.theme(for: worldPreset)
+        return theme.daylightColor(for: hour)
     }
 
     /// Returns the current hour (0-23).
@@ -704,46 +737,51 @@ public class OfficeScene: SKScene {
     /// 8.4: Applies daylight color to all window decoration nodes.
     /// Accepts an hour parameter for testability.
     public func applyWindowDaylight(hour: Int) {
-        let color = Self.daylightColor(for: hour)
+        let color = Self.daylightColor(for: hour, worldPreset: worldPreset)
+        let blendFactor = activeTheme.windowBlendFactor
+        // Search in environmentRoot first, fall back to scene children
+        let searchRoot: SKNode = environmentRoot ?? self
         for windowName in ["decoration_window", "decoration_window_2"] {
-            guard let windowNode = childNode(withName: windowName) as? SKSpriteNode else { continue }
+            guard let windowNode = searchRoot.childNode(withName: windowName) as? SKSpriteNode else { continue }
             windowNode.removeAction(forKey: "daylight")
             windowNode.color = color
-            let colorize = SKAction.colorize(with: color, colorBlendFactor: 0.4, duration: 2.0)
+            let colorize = SKAction.colorize(with: color, colorBlendFactor: blendFactor, duration: 2.0)
             windowNode.run(colorize, withKey: "daylight")
         }
     }
 
     // MARK: - 8.9-8.13: Office Cat
 
-    /// Sets up the office cat sprite.
+    /// Sets up the office cat sprite in the actor root.
     private func setupCat() {
+        guard let actors = actorRoot else { return }
         let cat = CatSprite()
         cat.navigationLayout = layout
-        // Place near a corner initially
         cat.position = CGPoint(x: 80, y: 100)
-        addChild(cat)
+        actors.addChild(cat)
         catSprite = cat
     }
 
     // MARK: - Office Dog - Pancake the Maltipoo
 
-    /// Sets up the office dog sprite and her bowl.
+    /// Sets up the office dog sprite, bowl, and toys in the actor root.
     private func setupDog() {
+        guard let actors = actorRoot else { return }
+
         // Dog bowl
         let bowlTexture = TextureManager.shared.texture(for: TextureManager.dogBowl)
         let bowl = SKSpriteNode(texture: bowlTexture, size: CGSize(width: 40, height: 24))
         bowl.position = layout.dogBowlPosition
         bowl.zPosition = 2
         bowl.name = "dog_bowl"
-        addChild(bowl)
+        actors.addChild(bowl)
 
         // Pancake the dog
         let dog = DogSprite()
         dog.navigationLayout = layout
         dog.position = layout.dogSleepPosition
         dog.bowlPosition = layout.dogBowlPosition
-        addChild(dog)
+        actors.addChild(dog)
         dogSprite = dog
 
         // Scatter some toys around the office for Pancake
@@ -756,30 +794,29 @@ public class OfficeScene: SKScene {
             toy.position = toyPos
             toy.zPosition = 2
             toy.name = "dog_toy_\(index)"
-            addChild(toy)
+            actors.addChild(toy)
         }
 
-        // Tell Pancake where her toys are
         dog.toyPositions = toyPositions
     }
 
     // MARK: - Feature Decorations Setup
 
-    /// Sets up decorations for new features: radio, growing plant, whiteboard overlay, achievement shelf.
-    private func setupFeatureDecorations() {
+    /// Sets up feature decorations and rebinds stored sprite references.
+    private func setupFeatureDecorations(parent: SKNode) {
         let radio = RadioSprite()
         radio.position = layout.radioPosition
         radio.zPosition = 2
-        addChild(radio)
+        parent.addChild(radio)
         radioSprite = radio
 
         let plant = GrowingPlantSprite()
         plant.position = CGPoint(x: 760, y: layout.coffeeStationPosition.y - 8)
         plant.zPosition = 2
-        addChild(plant)
+        parent.addChild(plant)
         growingPlantSprite = plant
 
-        if let whiteboard = childNode(withName: "decoration_whiteboard") {
+        if let whiteboard = parent.childNode(withName: "decoration_whiteboard") {
             let overlay = WhiteboardStatsOverlay()
             overlay.zPosition = 3
             whiteboard.addChild(overlay)
@@ -789,7 +826,7 @@ public class OfficeScene: SKScene {
         let shelf = AchievementShelfSprite()
         shelf.position = layout.achievementShelfPosition
         shelf.zPosition = 2
-        addChild(shelf)
+        parent.addChild(shelf)
         shelf.displayUnlocked(achievementTracker.unlockedAchievements)
         achievementShelf = shelf
 
@@ -798,7 +835,7 @@ public class OfficeScene: SKScene {
         let birdCage = BirdCageSprite()
         birdCage.position = layout.birdCagePosition
         birdCage.zPosition = 2
-        addChild(birdCage)
+        parent.addChild(birdCage)
         birdCageSprite = birdCage
 
         let stationTexture = TextureManager.shared.texture(for: TextureManager.decorationCoffeeStation)
@@ -806,22 +843,20 @@ public class OfficeScene: SKScene {
         station.position = layout.coffeeStationPosition
         station.name = "decoration_coffee_station"
         station.zPosition = 2
-        addChild(station)
+        parent.addChild(station)
 
         let barista = BaristaSprite()
         barista.position = layout.baristaPosition
         barista.zPosition = 2
-        addChild(barista)
+        parent.addChild(barista)
         baristaSprite = barista
 
         let rugTexture = TextureManager.shared.texture(for: TextureManager.decorationSmallRug)
         let rug = SKSpriteNode(texture: rugTexture, size: CGSize(width: 96, height: 48))
         rug.position = layout.coffeeRugPosition
-        rug.name = "decoration_rug"
+        rug.name = "rug_coffee"
         rug.zPosition = -6
-        addChild(rug)
-
-
+        parent.addChild(rug)
     }
 
     private func setupCollisionGeometry() {
@@ -1022,7 +1057,7 @@ public class OfficeScene: SKScene {
 
     /// Shows the claimed laptop on a desk with the "on" texture.
     private func turnOnMonitor(deskID: Int, state: AgentState) {
-        guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        guard let deskNode = envNode(withName: "desk_\(deskID)") else { return }
         let onTexture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOn)
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
             monitor.isHidden = false
@@ -1033,7 +1068,7 @@ public class OfficeScene: SKScene {
 
     /// Shows the claimed laptop on a desk with the "off" texture.
     private func turnOffMonitor(deskID: Int) {
-        guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        guard let deskNode = envNode(withName: "desk_\(deskID)") else { return }
         let offTexture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOff)
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
             monitor.isHidden = false
@@ -1048,7 +1083,7 @@ public class OfficeScene: SKScene {
 
     /// Hides the laptop entirely for an unclaimed desk.
     private func hideDeskLaptop(deskID: Int) {
-        guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        guard let deskNode = envNode(withName: "desk_\(deskID)") else { return }
         if let monitor = deskNode.childNode(withName: "monitor_\(deskID)") as? SKSpriteNode {
             monitor.isHidden = true
             monitor.texture = TextureManager.shared.texture(for: TextureManager.furnitureLaptopOff)
@@ -1062,7 +1097,7 @@ public class OfficeScene: SKScene {
 
     /// Updates monitor glow color/opacity based on agent state — task 4.11
     private func updateMonitorGlow(deskID: Int, state: AgentState) {
-        guard let deskNode = childNode(withName: "desk_\(deskID)") else { return }
+        guard let deskNode = envNode(withName: "desk_\(deskID)") else { return }
         guard let glow = deskNode.childNode(withName: "monitorGlow_\(deskID)") as? SKShapeNode else { return }
 
         glow.removeAllActions()
@@ -1101,6 +1136,13 @@ public class OfficeScene: SKScene {
                 applyMonitorState(deskID: deskID, state: agent.state)
             }
         }
+    }
+
+    // MARK: - Node Lookup Helpers
+
+    /// Finds a named node in the environment root (where desks, decorations etc. live).
+    private func envNode(withName name: String) -> SKNode? {
+        environmentRoot?.childNode(withName: name)
     }
 
     // MARK: - Public Accessors for Testing

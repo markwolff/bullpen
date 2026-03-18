@@ -9,12 +9,11 @@ import Models
 struct ContentView: View {
     @ObservedObject var monitorService: AgentMonitorService
 
-    /// The SpriteKit office scene
-    @State private var officeScene: OfficeScene = {
-        let scene = OfficeScene()
-        scene.scaleMode = .aspectFit
-        return scene
-    }()
+    /// The selected world preset — loaded from persistence at init
+    @State private var selectedWorldPreset: WorldPreset
+
+    /// The SpriteKit office scene — initialized with the persisted preset
+    @State private var officeScene: OfficeScene
 
     /// The agent currently selected for the detail popover (7.6)
     @State private var selectedAgentID: String?
@@ -22,22 +21,64 @@ struct ContentView: View {
     /// Whether the detail popover is shown
     @State private var showingPopover: Bool = false
 
+    /// Whether the world picker menu is shown
+    @State private var showingWorldMenu: Bool = false
+
+    init(monitorService: AgentMonitorService) {
+        self.monitorService = monitorService
+        let preset = WorldPresetStore.load()
+        _selectedWorldPreset = State(initialValue: preset)
+        let scene = OfficeScene(worldPreset: preset)
+        scene.scaleMode = .aspectFit
+        _officeScene = State(initialValue: scene)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
             toolbar
 
-            // SpriteKit scene
-            SpriteView(scene: officeScene)
-                .frame(minWidth: 512, minHeight: 384)
-                .ignoresSafeArea()
-                .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
-                    if let agentID = selectedAgentID,
-                       let agent = monitorService.agents.first(where: { $0.id == agentID }) {
-                        AgentDetailView(agent: agent)
+            // Office area as a ZStack for overlays
+            ZStack(alignment: .top) {
+                // SpriteKit scene
+                SpriteView(scene: officeScene)
+                    .frame(minWidth: 512, minHeight: 384)
+                    .ignoresSafeArea()
+                    .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
+                        if let agentID = selectedAgentID,
+                           let agent = monitorService.agents.first(where: { $0.id == agentID }) {
+                            AgentDetailView(agent: agent)
+                        }
                     }
+
+                // World menu overlay
+                if showingWorldMenu {
+                    // Transparent scrim to close on outside click
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            showingWorldMenu = false
+                        }
+
+                    WorldMenuOverlay(
+                        currentPreset: selectedWorldPreset,
+                        onSelect: { preset in
+                            selectedWorldPreset = preset
+                            WorldPresetStore.save(preset)
+                            officeScene.applyWorld(preset)
+                            showingWorldMenu = false
+                        },
+                        onDismiss: {
+                            showingWorldMenu = false
+                        }
+                    )
+                    .padding(.top, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+            }
+            .animation(.easeInOut(duration: 0.15), value: showingWorldMenu)
         }
+        .background(EscapeKeyMonitor(onEscape: handleEscapeKey))
         .onChange(of: monitorService.agents) { _, newAgents in
             officeScene.updateAgents(newAgents)
         }
@@ -53,6 +94,25 @@ struct ContentView: View {
             }
         }
     }
+
+    // MARK: - ESC Key Handling
+
+    /// Handles ESC with exact priority:
+    /// 1. Close popover first
+    /// 2. Close world menu second
+    /// 3. Open world menu if nothing else is open
+    private func handleEscapeKey() {
+        if showingPopover {
+            showingPopover = false
+            selectedAgentID = nil
+        } else if showingWorldMenu {
+            showingWorldMenu = false
+        } else {
+            showingWorldMenu = true
+        }
+    }
+
+    // MARK: - Toolbar
 
     /// Minimal toolbar showing agent count and status summary
     @ViewBuilder
