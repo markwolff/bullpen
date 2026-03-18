@@ -79,6 +79,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Set up sleep/wake recovery for file monitoring
         setupSleepWakeHandling()
 
+        // Listen for display mode changes from ESC overlay
+        setupDisplayModeListener()
+
         // Configure window after short delay to let SwiftUI create it
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.configureMainWindow()
@@ -153,6 +156,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         displayMode = newMode
         DisplayModeStore.save(newMode)
         applyDisplayMode()
+    }
+
+    // MARK: - Display Mode Listener
+
+    /// Listens for display mode changes posted from the ESC overlay in ContentView.
+    private func setupDisplayModeListener() {
+        NotificationCenter.default.publisher(for: .displayModeChanged)
+            .compactMap { $0.object as? String }
+            .compactMap { DisplayMode(rawValue: $0) }
+            .sink { [weak self] newMode in
+                guard let self, newMode != self.displayMode else { return }
+                self.displayMode = newMode
+                self.applyDisplayMode()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - 7.1: NSStatusItem

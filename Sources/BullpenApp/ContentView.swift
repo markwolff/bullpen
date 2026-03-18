@@ -24,6 +24,9 @@ struct ContentView: View {
     /// Whether the world picker menu is shown
     @State private var showingWorldMenu: Bool = false
 
+    /// The current display mode
+    @State private var displayMode: DisplayMode = DisplayModeStore.load()
+
     init(monitorService: AgentMonitorService) {
         self.monitorService = monitorService
         let preset = WorldPresetStore.load()
@@ -62,11 +65,21 @@ struct ContentView: View {
 
                     WorldMenuOverlay(
                         currentPreset: selectedWorldPreset,
+                        currentDisplayMode: displayMode,
                         onSelect: { preset in
                             selectedWorldPreset = preset
                             WorldPresetStore.save(preset)
                             officeScene.applyWorld(preset)
                             showingWorldMenu = false
+                        },
+                        onDisplayModeChange: { mode in
+                            displayMode = mode
+                            DisplayModeStore.save(mode)
+                            showingWorldMenu = false
+                            NotificationCenter.default.post(
+                                name: .displayModeChanged,
+                                object: mode.rawValue
+                            )
                         },
                         onDismiss: {
                             showingWorldMenu = false
