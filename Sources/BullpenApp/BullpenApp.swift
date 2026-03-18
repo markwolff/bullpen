@@ -21,9 +21,6 @@ struct BullpenApp: App {
                     monitorService.startMonitoring()
                     appDelegate.monitorService = monitorService
                 }
-                .onDisappear {
-                    monitorService.stopMonitoring()
-                }
                 .onChange(of: monitorService.agents) { _, newAgents in
                     appDelegate.updateBadge(agents: newAgents)
                 }
@@ -52,8 +49,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// The current display mode (window or menu bar panel)
     private var displayMode: DisplayMode = DisplayModeStore.load()
 
-    /// Reference to the monitor service for badge updates (set from BullpenApp)
-    weak var monitorService: AgentMonitorService?
+    /// Reference to the monitor service for badge updates (set from BullpenApp).
+    /// When set, retries panel creation if the app launched in menu bar panel mode
+    /// before SwiftUI had a chance to set this reference.
+    weak var monitorService: AgentMonitorService? {
+        didSet {
+            if displayMode == .menuBarPanel && popoverPanel == nil {
+                applyDisplayMode()
+            }
+        }
+    }
 
     /// Tracks window position for parallax delta calculation
     private var lastWindowOrigin: CGPoint?
@@ -70,8 +75,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Set activation policy to regular (visible in Dock and Cmd+Tab)
-        NSApplication.shared.setActivationPolicy(.regular)
+        // Set activation policy based on saved display mode
+        let policy: NSApplication.ActivationPolicy = displayMode == .menuBarPanel ? .accessory : .regular
+        NSApplication.shared.setActivationPolicy(policy)
 
         // Set up menu bar status item (7.1)
         setupStatusItem()
@@ -103,7 +109,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func createPopoverPanel() {
         guard popoverPanel == nil, let monitorService = monitorService else { return }
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 420),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -135,6 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .window:
             popoverPanel?.orderOut(nil)
             pauseScene(in: popoverPanel)
+            NSApplication.shared.setActivationPolicy(.regular)
             if let window = self.window {
                 window.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
@@ -142,6 +149,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .menuBarPanel:
             window?.orderOut(nil)
             pauseScene(in: window)
+            NSApplication.shared.setActivationPolicy(.accessory)
             createPopoverPanel()
             positionPanelBelowStatusItem()
             popoverPanel?.makeKeyAndOrderFront(nil)
@@ -179,11 +187,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "building.2", accessibilityDescription: "Bullpen")
+            if let image = NSImage(systemSymbolName: "building.2", accessibilityDescription: "Bullpen") {
+                button.image = image
+            } else {
+                // Fallback if the SF Symbol is unavailable
+                button.title = "BP"
+            }
             button.action = #selector(statusItemClicked)
             button.target = self
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp]
-            )
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
     }
 
