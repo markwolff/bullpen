@@ -1,5 +1,12 @@
 import Foundation
 
+// MARK: - Notification
+
+public extension Notification.Name {
+    /// Posted when the user changes the display mode from the ESC overlay.
+    static let displayModeChanged = Notification.Name("displayModeChanged")
+}
+
 // MARK: - DisplayMode
 
 /// The display mode for the Bullpen office scene.
