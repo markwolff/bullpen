@@ -323,12 +323,13 @@ public struct CodexLogReader: AgentLogReader, Sendable {
 
         switch msgType {
         case "task_started":
+            let isPlanMode = (payload["collaboration_mode_kind"] as? String) == "plan"
             return AgentActivity(
                 sessionID: sessionID,
                 timestamp: timestamp,
                 activityType: .sessionStart,
                 summary: "Session started",
-
+                isPlanMode: isPlanMode
             )
 
         case "task_complete":
@@ -470,7 +471,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         case "write_stdin":
             return "Sending input to process"
 
-        case "wait":
+        case "wait", "wait_agent":
             if let ids = arguments["ids"] as? [Any], !ids.isEmpty {
                 let suffix = ids.count == 1 ? "" : "s"
                 return "Waiting on \(ids.count) agent\(suffix)"
