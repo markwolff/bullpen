@@ -12,10 +12,12 @@ struct EscapeKeyMonitor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak coordinator = context.coordinator] event in
+        context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak coordinator = context.coordinator, weak view] event in
             guard event.keyCode == 53 else { return event }
-            // Only handle if the event belongs to the app's main window
-            guard event.window == NSApplication.shared.mainWindow else { return event }
+            // Only handle if the event belongs to the window hosting this view.
+            // Uses nsView.window instead of mainWindow so ESC works in both
+            // the regular NSWindow and the always-on-top NSPanel.
+            guard let view, event.window == view.window else { return event }
             coordinator?.onEscape()
             return nil // consume the event
         }
