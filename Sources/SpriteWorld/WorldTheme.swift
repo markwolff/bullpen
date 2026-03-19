@@ -55,6 +55,7 @@ internal struct WorldTheme {
         case .classicBullpen: return classicBullpen()
         case .zenStudio:      return zenStudio()
         case .overgrownRuins: return overgrownRuins()
+        case .procedural:     return procedural()
         }
     }
 
@@ -193,6 +194,57 @@ internal struct WorldTheme {
             windowDaylightNight: SKColor(red: 0.30, green: 0.50, blue: 0.45, alpha: 1.0),  // Bioluminescent glow at night
             dustMoteAlpha: 0.35,
             windowBlendFactor: 0.50
+        )
+    }
+
+    // MARK: - Procedural (dark brass, electric teal, growth-green accents)
+
+    private static func procedural() -> WorldTheme {
+        WorldTheme(
+            backgroundColor: SKColor(red: 0.10, green: 0.12, blue: 0.15, alpha: 1.0),
+            wallColor: SKColor(red: 0.15, green: 0.17, blue: 0.20, alpha: 1.0),
+            floorColor: SKColor(red: 0.12, green: 0.13, blue: 0.16, alpha: 1.0),
+            trimColor: SKColor(red: 0.76, green: 0.54, blue: 0.29, alpha: 1.0),
+            roomFillColors: [
+                "proc_lounge": SKColor(red: 0.22, green: 0.18, blue: 0.17, alpha: 1.0),
+                "proc_spine": SKColor(red: 0.12, green: 0.22, blue: 0.24, alpha: 1.0),
+                "proc_hub": SKColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1.0),
+                "proc_west": SKColor(red: 0.23, green: 0.24, blue: 0.17, alpha: 1.0),
+                "proc_forge": SKColor(red: 0.20, green: 0.16, blue: 0.12, alpha: 1.0),
+                "proc_deck": SKColor(red: 0.15, green: 0.22, blue: 0.25, alpha: 1.0),
+                "proc_sky": SKColor(red: 0.12, green: 0.20, blue: 0.27, alpha: 1.0),
+                "proc_archive": SKColor(red: 0.22, green: 0.19, blue: 0.14, alpha: 1.0),
+            ],
+            roomBorderColors: [
+                "proc_lounge": SKColor(red: 0.78, green: 0.54, blue: 0.29, alpha: 1.0),
+                "proc_hub": SKColor(red: 0.35, green: 0.84, blue: 0.82, alpha: 1.0),
+                "proc_sky": SKColor(red: 0.35, green: 0.84, blue: 0.82, alpha: 1.0),
+            ],
+            roomHeaderColors: [
+                "proc_spine": SKColor(red: 0.30, green: 0.69, blue: 0.68, alpha: 1.0),
+                "proc_hub": SKColor(red: 0.74, green: 0.50, blue: 0.26, alpha: 1.0),
+                "proc_deck": SKColor(red: 0.30, green: 0.69, blue: 0.68, alpha: 1.0),
+            ],
+            labelTextColor: SKColor(red: 0.90, green: 0.94, blue: 0.88, alpha: 1.0),
+            solidWallColor: SKColor(red: 0.30, green: 0.32, blue: 0.36, alpha: 1.0),
+            glassWallColor: SKColor(red: 0.35, green: 0.84, blue: 0.82, alpha: 1.0),
+            glassStrokeColor: SKColor(red: 0.50, green: 0.92, blue: 0.90, alpha: 0.75),
+            rugColors: [
+                "gallery": SKColor(red: 0.12, green: 0.34, blue: 0.34, alpha: 0.35),
+                "loungeBorder": SKColor(red: 0.55, green: 0.34, blue: 0.18, alpha: 0.36),
+                "lounge": SKColor(red: 0.26, green: 0.18, blue: 0.14, alpha: 0.55),
+                "focus": SKColor(red: 0.26, green: 0.28, blue: 0.18, alpha: 0.48),
+                "build": SKColor(red: 0.28, green: 0.22, blue: 0.16, alpha: 0.52),
+                "collab": SKColor(red: 0.14, green: 0.30, blue: 0.32, alpha: 0.46),
+            ],
+            tableColor: SKColor(red: 0.24, green: 0.25, blue: 0.27, alpha: 1.0),
+            tableAccentColor: SKColor(red: 0.48, green: 0.90, blue: 0.82, alpha: 0.90),
+            windowDaylightMorning: SKColor(red: 0.92, green: 0.79, blue: 0.58, alpha: 1.0),
+            windowDaylightAfternoon: SKColor(red: 0.75, green: 0.95, blue: 0.92, alpha: 1.0),
+            windowDaylightEvening: SKColor(red: 0.96, green: 0.58, blue: 0.30, alpha: 1.0),
+            windowDaylightNight: SKColor(red: 0.38, green: 0.94, blue: 0.88, alpha: 1.0),
+            dustMoteAlpha: 0.18,
+            windowBlendFactor: 0.48
         )
     }
 

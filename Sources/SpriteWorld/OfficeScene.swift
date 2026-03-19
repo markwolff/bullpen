@@ -30,6 +30,12 @@ public class OfficeScene: SKScene {
     /// The current world preset
     public private(set) var worldPreset: WorldPreset
 
+    /// Seed for the current procedural world, if active.
+    private var proceduralSeed: UInt64?
+
+    /// Highest headcount observed in the current procedural world.
+    private var proceduralObservedHeadcount: Int = 0
+
     /// The active theme derived from the world preset
     private var activeTheme: WorldTheme
 
@@ -136,8 +142,16 @@ public class OfficeScene: SKScene {
     // MARK: - Initialization
 
     public init(layout: OfficeLayout? = nil, worldPreset: WorldPreset = .classicBullpen) {
-        self.layout = layout ?? OfficeLayout.layout(for: worldPreset)
+        let initialProceduralSeed = worldPreset == .procedural ? Self.makeProceduralSeed() : nil
+        let initialProceduralHeadcount = worldPreset == .procedural ? OfficeLayout.proceduralBaseHeadcount : 0
+        self.layout = layout ?? Self.makeLayout(
+            for: worldPreset,
+            proceduralSeed: initialProceduralSeed,
+            headcount: initialProceduralHeadcount
+        )
         self.worldPreset = worldPreset
+        self.proceduralSeed = worldPreset == .procedural ? (initialProceduralSeed ?? OfficeLayout.proceduralDefaultSeed) : nil
+        self.proceduralObservedHeadcount = initialProceduralHeadcount
         self.activeTheme = WorldTheme.theme(for: worldPreset)
         super.init(size: self.layout.sceneSize)
         self.scaleMode = .aspectFit
@@ -154,6 +168,26 @@ public class OfficeScene: SKScene {
     public override func didMove(to view: SKView) {
         super.didMove(to: view)
         setupOffice()
+    }
+
+    private static func makeProceduralSeed() -> UInt64 {
+        UInt64.random(in: 1...UInt64.max)
+    }
+
+    private static func makeLayout(
+        for preset: WorldPreset,
+        proceduralSeed: UInt64?,
+        headcount: Int
+    ) -> OfficeLayout {
+        switch preset {
+        case .procedural:
+            return OfficeLayout.procedural(
+                headcount: max(headcount, OfficeLayout.proceduralBaseHeadcount),
+                seed: proceduralSeed ?? OfficeLayout.proceduralDefaultSeed
+            )
+        default:
+            return OfficeLayout.layout(for: preset)
+        }
     }
 
     // MARK: - Office Setup
@@ -179,7 +213,7 @@ public class OfficeScene: SKScene {
         addChild(actors)
         actorRoot = actors
 
-        // Build collision geometry once (invariant across presets)
+        // Build collision geometry for the active world
         setupCollisionGeometry()
 
         // Build the environment visuals for the current theme
@@ -198,43 +232,94 @@ public class OfficeScene: SKScene {
     /// swaps to the new layout, and rebuilds the entire scene.
     public func applyWorld(_ preset: WorldPreset) {
         worldPreset = preset
-        layout = OfficeLayout.layout(for: preset)
+        if preset == .procedural {
+            proceduralSeed = Self.makeProceduralSeed()
+            proceduralObservedHeadcount = OfficeLayout.proceduralBaseHeadcount
+        } else {
+            proceduralSeed = nil
+            proceduralObservedHeadcount = 0
+        }
+        layout = Self.makeLayout(for: preset, proceduralSeed: proceduralSeed, headcount: proceduralObservedHeadcount)
         activeTheme = WorldTheme.theme(for: preset)
         backgroundColor = activeTheme.backgroundColor
+        size = layout.sceneSize
 
         // If the scene hasn't been set up yet, didMove(to:) will handle it
         guard isOfficeSetUp else { return }
 
-        // Clear all agents and desk assignments (full restart)
-        for (_, sprite) in agentSprites {
-            sprite.removeFromParent()
-        }
-        agentSprites.removeAll()
-        deskAssignments.removeAll()
-        fadingOutAgentIDs.removeAll()
-        cachedDeskPositions.removeAll()
-        cachedActiveDeskIDs.removeAll()
+        rebuildWorld(clearAgents: true)
+        applyWindowDaylight(hour: currentHour())
+    }
 
-        // Remove and recreate pets
+    private func rebuildWorld(clearAgents: Bool) {
+        if clearAgents {
+            for (_, sprite) in agentSprites {
+                sprite.removeFromParent()
+            }
+            agentSprites.removeAll()
+            deskAssignments.removeAll()
+            fadingOutAgentIDs.removeAll()
+            cachedDeskPositions.removeAll()
+            cachedActiveDeskIDs.removeAll()
+        } else {
+            let invalidDeskIDs = deskAssignments.compactMap { deskID, agentID in
+                (deskID >= layout.desks.count || agentSprites[agentID] == nil) ? deskID : nil
+            }
+            for deskID in invalidDeskIDs {
+                deskAssignments.removeValue(forKey: deskID)
+            }
+            for (_, sprite) in agentSprites {
+                sprite.navigationLayout = layout
+            }
+            for (_, sprite) in agentSprites where (sprite.assignedDeskID ?? -1) >= layout.desks.count {
+                sprite.releaseDeskClaim()
+            }
+        }
+
         catSprite?.removeFromParent()
         catSprite = nil
         dogSprite?.removeFromParent()
         dogSprite = nil
 
-        // Rebuild collision geometry for new layout
-        if let collisionLayer = childNode(withName: "collision_layer") {
-            collisionLayer.removeAllChildren()
-        }
-        setupCollisionGeometry()
-
-        // Rebuild all environment visuals
+        rebuildCollisionGeometry()
         rebuildEnvironment(for: activeTheme)
-
-        // Respawn pets in new layout
         setupCat()
         setupDog()
+        reapplyMonitorVisuals()
+        refreshCachedDeskData()
+    }
 
-        applyWindowDaylight(hour: currentHour())
+    private func rebuildCollisionGeometry() {
+        childNode(withName: "collision_layer")?.removeFromParent()
+        setupCollisionGeometry()
+    }
+
+    private func refreshCachedDeskData() {
+        cachedDeskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
+        cachedActiveDeskIDs = Set(deskAssignments.keys)
+    }
+
+    private func ensureProceduralCapacity(for headcount: Int) {
+        guard worldPreset == .procedural else { return }
+
+        let targetHeadcount = max(headcount, OfficeLayout.proceduralBaseHeadcount)
+        guard targetHeadcount > proceduralObservedHeadcount else { return }
+
+        let seed = proceduralSeed ?? OfficeLayout.proceduralDefaultSeed
+        let nextLayout = OfficeLayout.procedural(headcount: targetHeadcount, seed: seed)
+        let didIncreaseCapacity = nextLayout.desks.count > layout.desks.count
+
+        proceduralObservedHeadcount = targetHeadcount
+        layout = nextLayout
+        size = layout.sceneSize
+
+        guard isOfficeSetUp, didIncreaseCapacity else { return }
+
+        rebuildWorld(clearAgents: false)
+        environmentRoot?.run(SKAction.sequence([
+            SKAction.fadeAlpha(to: 0.92, duration: 0.12),
+            SKAction.fadeAlpha(to: 1.0, duration: 0.22),
+        ]), withKey: "procedural_growth_pulse")
     }
 
     /// Removes and recreates all themeable visuals under `environmentRoot`.
@@ -244,6 +329,7 @@ public class OfficeScene: SKScene {
 
         setupTiledBackground(theme: theme, parent: envRoot)
         setupRoomArchitecture(theme: theme, parent: envRoot)
+        setupProceduralBackplane(parent: envRoot)
         setupRug(theme: theme, parent: envRoot)
         setupDesks(theme: theme, parent: envRoot)
         setupDecorations(parent: envRoot)
@@ -341,6 +427,64 @@ public class OfficeScene: SKScene {
         if layout.preset == .classicBullpen {
             setupRecreationAccents(parent: parent)
         }
+    }
+
+    private func setupProceduralBackplane(parent: SKNode) {
+        guard worldPreset == .procedural else { return }
+
+        let field = SKNode()
+        field.name = "procedural_backplane"
+        field.zPosition = -9.5
+        parent.addChild(field)
+
+        for x in stride(from: 88, through: Int(layout.sceneSize.width) - 88, by: 84) {
+            let line = SKShapeNode(rect: CGRect(
+                x: CGFloat(x),
+                y: 56,
+                width: 2,
+                height: layout.sceneSize.height - 112
+            ))
+            line.fillColor = SKColor(red: 0.30, green: 0.82, blue: 0.80, alpha: 0.08)
+            line.strokeColor = .clear
+            line.zPosition = -9.4
+            field.addChild(line)
+        }
+
+        for y in stride(from: 92, through: Int(layout.sceneSize.height) - 92, by: 76) {
+            let line = SKShapeNode(rect: CGRect(
+                x: 56,
+                y: CGFloat(y),
+                width: layout.sceneSize.width - 112,
+                height: 2
+            ))
+            line.fillColor = SKColor(red: 0.86, green: 0.60, blue: 0.31, alpha: 0.07)
+            line.strokeColor = .clear
+            line.zPosition = -9.4
+            field.addChild(line)
+        }
+
+        let pulseRing = SKShapeNode(circleOfRadius: 82)
+        pulseRing.position = layout.pizzaDropPosition
+        pulseRing.strokeColor = SKColor(red: 0.35, green: 0.90, blue: 0.86, alpha: 0.28)
+        pulseRing.lineWidth = 3
+        pulseRing.glowWidth = 4
+        pulseRing.zPosition = -9.2
+        field.addChild(pulseRing)
+
+        let innerRing = SKShapeNode(circleOfRadius: 38)
+        innerRing.position = layout.pizzaDropPosition
+        innerRing.strokeColor = SKColor(red: 0.92, green: 0.60, blue: 0.32, alpha: 0.26)
+        innerRing.lineWidth = 2
+        innerRing.glowWidth = 3
+        innerRing.zPosition = -9.1
+        field.addChild(innerRing)
+
+        let pulse = SKAction.sequence([
+            SKAction.fadeAlpha(to: 0.55, duration: 1.2),
+            SKAction.fadeAlpha(to: 0.18, duration: 1.2),
+        ])
+        pulseRing.run(SKAction.repeatForever(pulse), withKey: "pulse")
+        innerRing.run(SKAction.repeatForever(pulse.reversed()), withKey: "pulse")
     }
 
     private func architectureNode(for rect: CGRect, fillColor: SKColor, alpha: CGFloat) -> SKShapeNode {
@@ -565,6 +709,7 @@ public class OfficeScene: SKScene {
         setupPlantSway(parent: parent)
         applyWindowDaylight(hour: currentHour())
         setupDustMotes(theme: theme, parent: parent)
+        setupProceduralSignalMotes(parent: parent)
         updateRainState()
     }
 
@@ -627,6 +772,32 @@ public class OfficeScene: SKScene {
         emitter.position = CGPoint(x: layout.sceneSize.width / 2, y: layout.sceneSize.height * 0.75)
         emitter.name = "dust_motes"
         emitter.zPosition = 50
+        parent.addChild(emitter)
+    }
+
+    private func setupProceduralSignalMotes(parent: SKNode) {
+        guard worldPreset == .procedural else { return }
+
+        let emitter = SKEmitterNode()
+        emitter.particleBirthRate = 3.0
+        emitter.particleLifetime = 3.6
+        emitter.particleLifetimeRange = 1.2
+        emitter.particleColor = SKColor(red: 0.42, green: 0.94, blue: 0.90, alpha: 0.42)
+        emitter.particleColorAlphaSpeed = -0.16
+        emitter.particleSpeed = 12
+        emitter.particleSpeedRange = 8
+        emitter.emissionAngle = .pi / 2
+        emitter.emissionAngleRange = .pi / 12
+        emitter.particleScale = 0.16
+        emitter.particleScaleRange = 0.08
+        emitter.particleAlpha = 0.42
+        emitter.particleAlphaRange = 0.12
+        emitter.xAcceleration = 0.6
+        emitter.yAcceleration = 4.0
+        emitter.particlePositionRange = CGVector(dx: layout.sceneSize.width * 0.55, dy: 10)
+        emitter.position = CGPoint(x: layout.sceneSize.width / 2, y: 84)
+        emitter.name = "procedural_signal_motes"
+        emitter.zPosition = 51
         parent.addChild(emitter)
     }
 
@@ -850,6 +1021,8 @@ public class OfficeScene: SKScene {
     /// Synchronizes the scene with the current list of agents.
     /// Call this from the main update loop whenever AgentMonitorService publishes changes.
     public func updateAgents(_ agents: [AgentInfo]) {
+        ensureProceduralCapacity(for: agents.count)
+
         // Resume if scene was auto-paused and agents appear
         if !agents.isEmpty && self.isPaused {
             self.isPaused = false
@@ -867,6 +1040,7 @@ public class OfficeScene: SKScene {
         // Add or update sprites for current agents
         for agent in agents {
             if let existingSprite = agentSprites[agent.id] {
+                existingSprite.navigationLayout = layout
                 existingSprite.update(with: agent)
             } else if !fadingOutAgentIDs.contains(agent.id) {
                 addAgentSprite(for: agent)
@@ -917,8 +1091,7 @@ public class OfficeScene: SKScene {
         // Update cached data for the update loop to avoid per-frame allocations
         cachedAgentInfos = agentSprites.values.map(\.agentInfo)
         cachedActiveAgentCount = cachedAgentInfos.filter { $0.state.isActive }.count
-        cachedDeskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
-        cachedActiveDeskIDs = Set(deskAssignments.keys)
+        refreshCachedDeskData()
     }
 
     /// Creates and adds a new agent sprite to the scene.
@@ -1124,6 +1297,11 @@ public class OfficeScene: SKScene {
         agentSprites.count
     }
 
+    /// Returns the number of desks available in the active layout.
+    public var deskCapacity: Int {
+        layout.desks.count
+    }
+
     /// Returns agent sprite positions (for uniqueness testing)
     public var agentSpritePositions: [CGPoint] {
         agentSprites.values.map(\.position)
@@ -1308,7 +1486,7 @@ public class OfficeScene: SKScene {
 
         if !sprite.isDeepThinkingPacing {
             // Start pacing for the first time
-            sprite.startDeepThinkingPacing(waypoints: waypoints, otherAgentPositions: otherPositions)
+            sprite.startDeepThinkingPacing(waypoints: waypoints, layout: layout, otherAgentPositions: otherPositions)
         } else {
             // Continue pacing — pump the state machine
             if let action = sprite.deepThinkingBehaviorManager.update(
