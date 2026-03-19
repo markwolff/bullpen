@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - WorldPreset
 
-/// One of three selectable world presets, each with a unique layout,
+/// One of four selectable world presets, each with a unique layout,
 /// furniture set, decorations, and color palette.
 ///
 /// Unlike earlier versions which shared geometry and only varied colors,
@@ -12,6 +12,7 @@ public enum WorldPreset: String, CaseIterable, Codable, Sendable, Identifiable {
     case classicBullpen
     case zenStudio
     case overgrownRuins
+    case procedural
 
     // MARK: - Identifiable
 
@@ -25,6 +26,7 @@ public enum WorldPreset: String, CaseIterable, Codable, Sendable, Identifiable {
         case .classicBullpen: return "Classic Bullpen"
         case .zenStudio:      return "Zen Studio"
         case .overgrownRuins: return "Overgrown Ruins"
+        case .procedural:     return "Procedural"
         }
     }
 
@@ -34,6 +36,7 @@ public enum WorldPreset: String, CaseIterable, Codable, Sendable, Identifiable {
         case .classicBullpen: return "The cozy original"
         case .zenStudio:      return "Tatami & tranquility"
         case .overgrownRuins: return "Nature reclaims tech"
+        case .procedural:     return "A self-assembling frontier"
         }
     }
 
@@ -43,6 +46,7 @@ public enum WorldPreset: String, CaseIterable, Codable, Sendable, Identifiable {
         case .classicBullpen: return "building.2"
         case .zenStudio:      return "leaf.circle"
         case .overgrownRuins: return "tree"
+        case .procedural:     return "dice"
         }
     }
 
@@ -55,6 +59,8 @@ public enum WorldPreset: String, CaseIterable, Codable, Sendable, Identifiable {
             return "A serene Japanese workspace with tatami floors, shoji screens, and a koi pond courtyard."
         case .overgrownRuins:
             return "A crumbling research lab consumed by nature. Vines on server racks, mushrooms in dark corners, a tree through the ceiling."
+        case .procedural:
+            return "A self-assembling office organism. New annexes, catwalks, and work clusters materialize as the company hires more agents."
         }
     }
 
