@@ -206,10 +206,16 @@ public struct ZenStudioLayout: WorldLayout {
             // Work Hall decorations
             DecorationSpec(id: "torii_gate", textureName: TextureManager.zenToriiGate,
                            position: CGPoint(x: 478, y: 700), size: CGSize(width: 48, height: 84), zPosition: 3),
+            DecorationSpec(id: "window_shoji_left", textureName: TextureManager.zenShojiScreen,
+                           position: CGPoint(x: 640, y: 704), size: CGSize(width: 60, height: 84)),
+            DecorationSpec(id: "window_shoji_right", textureName: TextureManager.zenShojiScreen,
+                           position: CGPoint(x: 1100, y: 704), size: CGSize(width: 60, height: 84)),
             DecorationSpec(id: "paper_lantern_2", textureName: TextureManager.zenPaperLantern,
                            position: CGPoint(x: 600, y: 700), size: CGSize(width: 24, height: 36)),
             DecorationSpec(id: "paper_lantern_3", textureName: TextureManager.zenPaperLantern,
                            position: CGPoint(x: 1200, y: 700), size: CGSize(width: 24, height: 36)),
+            DecorationSpec(id: "wall_clock", textureName: TextureManager.decorationWallClock,
+                           position: CGPoint(x: 1092, y: 704), size: CGSize(width: 40, height: 40)),
 
             // Scroll Library decorations
             DecorationSpec(id: "hanging_scroll_2", textureName: TextureManager.zenHangingScroll,
@@ -220,6 +226,8 @@ public struct ZenStudioLayout: WorldLayout {
                            position: CGPoint(x: 1200, y: 380), size: CGSize(width: 24, height: 60)),
             DecorationSpec(id: "shoji_screen_1", textureName: TextureManager.zenShojiScreen,
                            position: CGPoint(x: 580, y: 160), size: CGSize(width: 48, height: 72)),
+            DecorationSpec(id: "whiteboard_scroll", textureName: TextureManager.zenHangingScroll,
+                           position: CGPoint(x: 600, y: 396), size: CGSize(width: 28, height: 72)),
             DecorationSpec(id: "incense_2", textureName: TextureManager.zenIncenseBurner,
                            position: CGPoint(x: 1190, y: 80), size: CGSize(width: 24, height: 30)),
         ]
@@ -240,7 +248,7 @@ public struct ZenStudioLayout: WorldLayout {
                     size: CGSize(width: 120, height: 380), cornerRadius: 12, colorSlot: .gallery),
             // Engawa veranda runner
             RugSpec(id: "engawa_runner", position: CGPoint(x: 478, y: 158),
-                    size: CGSize(width: 120, height: 160), cornerRadius: 8, colorSlot: .gallery),
+                    size: CGSize(width: 120, height: 160), cornerRadius: 8, colorSlot: .custom1),
             // Work Hall tatami
             RugSpec(id: "tatami_work", position: CGPoint(x: 895, y: 574),
                     size: CGSize(width: 580, height: 220), cornerRadius: 8, colorSlot: .collab),
@@ -423,6 +431,7 @@ extension OfficeLayout {
     public static let zenStudio: OfficeLayout = {
         let zen = ZenStudioLayout.shared
         return OfficeLayout(
+            preset: .zenStudio,
             sceneSize: zen.sceneSize,
             desks: zen.desks,
             tables: zen.tables,

@@ -67,6 +67,9 @@ public class AgentSprite: SKSpriteNode {
     /// Manages idle roaming behavior when the agent is not working
     public lazy var idleBehaviorManager = IdleBehaviorManager(isSubagent: agentInfo.isSubagent)
 
+    /// The active office layout used for desk returns and pacing paths.
+    public var navigationLayout: OfficeLayout = .defaultLayout
+
     /// The current destination while pacing without a desk.
     private var desklessPacingDestination: CGPoint?
 
@@ -243,7 +246,7 @@ public class AgentSprite: SKSpriteNode {
 
             // Move back to desk when state changes — use proper walk for long distances
             if let deskID = assignedDeskID {
-                let layout = OfficeLayout.defaultLayout
+                let layout = navigationLayout
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let isWorking = [.thinking, .writingCode, .readingFiles, .runningCommand, .searching, .supervisingAgents].contains(newInfo.state)
                     let targetY = isWorking ? desk.chairPosition.y + 15 : desk.chairPosition.y
@@ -709,7 +712,7 @@ public class AgentSprite: SKSpriteNode {
             // Walk back to desk chair if we still have one assigned
             // Hustle (1.5x) if in an active working state
             if let deskID = assignedDeskID {
-                let layout = OfficeLayout.defaultLayout
+                let layout = navigationLayout
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let path = layout.findPath(from: position, to: desk.chairPosition)
                     let hustle: CGFloat = agentInfo.state.isActive ? 1.5 : 1.0
@@ -840,7 +843,7 @@ public class AgentSprite: SKSpriteNode {
     public func startDeepThinkingPacing(waypoints: [CGPoint], otherAgentPositions: [CGPoint] = []) {
         let action = deepThinkingBehaviorManager.startPacing(waypoints: waypoints, otherAgentPositions: otherAgentPositions)
         showDeepThinkingEmoji()
-        handleDeepThinkingAction(action, layout: OfficeLayout.defaultLayout)
+        handleDeepThinkingAction(action, layout: navigationLayout)
     }
 
     /// Cancels deep thinking pacing and walks back to desk at 1.5x speed.
@@ -854,7 +857,7 @@ public class AgentSprite: SKSpriteNode {
 
             // Walk back to desk if assigned
             if let deskID = assignedDeskID {
-                let layout = OfficeLayout.defaultLayout
+                let layout = navigationLayout
                 if let desk = layout.desks.first(where: { $0.id == deskID }) {
                     let path = layout.findPath(from: position, to: desk.chairPosition)
                     walk(to: desk.chairPosition, via: path, speedMultiplier: 1.5)

@@ -338,7 +338,9 @@ public class OfficeScene: SKScene {
             parent.addChild(glass)
         }
 
-        setupRecreationAccents(parent: parent)
+        if layout.preset == .classicBullpen {
+            setupRecreationAccents(parent: parent)
+        }
     }
 
     private func architectureNode(for rect: CGRect, fillColor: SKColor, alpha: CGFloat) -> SKShapeNode {
@@ -385,53 +387,15 @@ public class OfficeScene: SKScene {
 
     /// Adds area rugs using theme colors.
     private func setupRug(theme: WorldTheme, parent: SKNode) {
-        let galleryRunner = SKShapeNode(rectOf: CGSize(width: 520, height: 92), cornerRadius: 18)
-        galleryRunner.fillColor = theme.rugColor(for: "gallery_runner")
-        galleryRunner.strokeColor = .clear
-        galleryRunner.position = layout.pizzaDropPosition
-        galleryRunner.name = "rug_gallery"
-        galleryRunner.zPosition = -7
-        parent.addChild(galleryRunner)
-
-        let loungeRugBorder = SKShapeNode(rectOf: CGSize(width: 184, height: 88), cornerRadius: 18)
-        loungeRugBorder.fillColor = theme.rugColor(for: "lounge_border")
-        loungeRugBorder.strokeColor = .clear
-        loungeRugBorder.position = CGPoint(x: layout.loungePosition.x, y: layout.loungePosition.y - 18)
-        loungeRugBorder.name = "rug_lounge_border"
-        loungeRugBorder.zPosition = -7
-        parent.addChild(loungeRugBorder)
-
-        let loungeRug = SKShapeNode(rectOf: CGSize(width: 170, height: 74), cornerRadius: 16)
-        loungeRug.fillColor = theme.rugColor(for: "lounge")
-        loungeRug.strokeColor = .clear
-        loungeRug.position = loungeRugBorder.position
-        loungeRug.name = "rug_lounge"
-        loungeRug.zPosition = -6
-        parent.addChild(loungeRug)
-
-        let focusRug = SKShapeNode(rectOf: CGSize(width: 200, height: 60), cornerRadius: 14)
-        focusRug.fillColor = theme.rugColor(for: "focus")
-        focusRug.strokeColor = .clear
-        focusRug.position = CGPoint(x: 220, y: 521)
-        focusRug.name = "rug_focus"
-        focusRug.zPosition = -7
-        parent.addChild(focusRug)
-
-        let buildRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
-        buildRug.fillColor = theme.rugColor(for: "build")
-        buildRug.strokeColor = .clear
-        buildRug.position = CGPoint(x: 860, y: 170)
-        buildRug.name = "rug_build"
-        buildRug.zPosition = -7
-        parent.addChild(buildRug)
-
-        let collabRug = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 12)
-        collabRug.fillColor = theme.rugColor(for: "collab")
-        collabRug.strokeColor = .clear
-        collabRug.position = CGPoint(x: 830, y: 570)
-        collabRug.name = "rug_collab"
-        collabRug.zPosition = -7
-        parent.addChild(collabRug)
+        for rug in layout.rugs {
+            let rugNode = SKShapeNode(rectOf: rug.size, cornerRadius: rug.cornerRadius)
+            rugNode.fillColor = theme.rugColor(for: rug.colorSlot.rawValue)
+            rugNode.strokeColor = .clear
+            rugNode.position = rug.position
+            rugNode.name = "rug_\(rug.id)"
+            rugNode.zPosition = -7
+            parent.addChild(rugNode)
+        }
     }
 
     // MARK: - 6.3: Furniture Textures
@@ -442,31 +406,84 @@ public class OfficeScene: SKScene {
 
         for table in layout.tables {
             let tableWidth = table.width
-            let tableShadow = SKShapeNode(rectOf: CGSize(width: tableWidth + 10, height: 42), cornerRadius: 14)
-            tableShadow.fillColor = SKColor(white: 0.0, alpha: 0.12)
-            tableShadow.strokeColor = .clear
-            tableShadow.position = CGPoint(x: table.centerX, y: table.centerY - 3)
-            tableShadow.name = "table_shadow_\(table.id)"
-            tableShadow.zPosition = 0
-            parent.addChild(tableShadow)
+            switch layout.deskRenderStyle {
+            case .classicBench:
+                let tableShadow = SKShapeNode(rectOf: CGSize(width: tableWidth + 10, height: 42), cornerRadius: 14)
+                tableShadow.fillColor = SKColor(white: 0.0, alpha: 0.12)
+                tableShadow.strokeColor = .clear
+                tableShadow.position = CGPoint(x: table.centerX, y: table.centerY - 3)
+                tableShadow.name = "table_shadow_\(table.id)"
+                tableShadow.zPosition = 0
+                parent.addChild(tableShadow)
 
-            let tableNode = SKShapeNode(rectOf: CGSize(width: tableWidth, height: 34), cornerRadius: 12)
-            tableNode.fillColor = theme.tableColor
-            tableNode.strokeColor = .clear
-            tableNode.lineWidth = 0
-            tableNode.isAntialiased = false
-            tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
-            tableNode.name = "table_\(table.id)"
-            tableNode.zPosition = 1
-            parent.addChild(tableNode)
+                let tableNode = SKShapeNode(rectOf: CGSize(width: tableWidth, height: 34), cornerRadius: 12)
+                tableNode.fillColor = theme.tableColor
+                tableNode.strokeColor = .clear
+                tableNode.lineWidth = 0
+                tableNode.isAntialiased = false
+                tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
+                tableNode.name = "table_\(table.id)"
+                tableNode.zPosition = 1
+                parent.addChild(tableNode)
 
-            let accentStrip = SKShapeNode(rectOf: CGSize(width: tableWidth - 24, height: 6), cornerRadius: 3)
-            accentStrip.fillColor = theme.tableAccentColor
-            accentStrip.strokeColor = .clear
-            accentStrip.position = CGPoint(x: 0, y: 8)
-            accentStrip.name = "table_accent_\(table.id)"
-            accentStrip.zPosition = 2
-            tableNode.addChild(accentStrip)
+                let accentStrip = SKShapeNode(rectOf: CGSize(width: tableWidth - 24, height: 6), cornerRadius: 3)
+                accentStrip.fillColor = theme.tableAccentColor
+                accentStrip.strokeColor = .clear
+                accentStrip.position = CGPoint(x: 0, y: 8)
+                accentStrip.name = "table_accent_\(table.id)"
+                accentStrip.zPosition = 2
+                tableNode.addChild(accentStrip)
+
+            case .zenChabudai:
+                let tableShadow = SKShapeNode(rectOf: CGSize(width: tableWidth + 20, height: 50), cornerRadius: 18)
+                tableShadow.fillColor = SKColor(white: 0.0, alpha: 0.10)
+                tableShadow.strokeColor = .clear
+                tableShadow.position = CGPoint(x: table.centerX, y: table.centerY - 5)
+                tableShadow.name = "table_shadow_\(table.id)"
+                tableShadow.zPosition = 0
+                parent.addChild(tableShadow)
+
+                let tableNode = SKSpriteNode(
+                    texture: tm.texture(for: TextureManager.zenChabudaiTable),
+                    size: CGSize(width: tableWidth + 24, height: 40)
+                )
+                tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
+                tableNode.name = "table_\(table.id)"
+                tableNode.zPosition = 1
+                parent.addChild(tableNode)
+
+            case .ruinsWorkbench:
+                let tableShadow = SKShapeNode(rectOf: CGSize(width: tableWidth + 12, height: 44), cornerRadius: 10)
+                tableShadow.fillColor = SKColor(white: 0.0, alpha: 0.18)
+                tableShadow.strokeColor = .clear
+                tableShadow.position = CGPoint(x: table.centerX, y: table.centerY - 2)
+                tableShadow.name = "table_shadow_\(table.id)"
+                tableShadow.zPosition = 0
+                parent.addChild(tableShadow)
+
+                let tableNode = SKShapeNode(rectOf: CGSize(width: tableWidth, height: 36), cornerRadius: 8)
+                tableNode.fillColor = theme.tableColor
+                tableNode.strokeColor = theme.tableAccentColor
+                tableNode.lineWidth = 2
+                tableNode.position = CGPoint(x: table.centerX, y: table.centerY)
+                tableNode.name = "table_\(table.id)"
+                tableNode.zPosition = 1
+                parent.addChild(tableNode)
+
+                let mossStrip = SKShapeNode(rectOf: CGSize(width: max(28, tableWidth * 0.28), height: 8), cornerRadius: 4)
+                mossStrip.fillColor = theme.tableAccentColor.withAlphaComponent(0.9)
+                mossStrip.strokeColor = .clear
+                mossStrip.position = CGPoint(x: -tableWidth * 0.18, y: 8)
+                mossStrip.zPosition = 2
+                tableNode.addChild(mossStrip)
+
+                let crackStrip = SKShapeNode(rectOf: CGSize(width: tableWidth - 30, height: 2), cornerRadius: 1)
+                crackStrip.fillColor = SKColor(red: 0.18, green: 0.20, blue: 0.18, alpha: 0.9)
+                crackStrip.strokeColor = .clear
+                crackStrip.position = CGPoint(x: 0, y: -4)
+                crackStrip.zPosition = 2
+                tableNode.addChild(crackStrip)
+            }
         }
 
         for desk in layout.desks {
@@ -475,15 +492,40 @@ public class OfficeScene: SKScene {
             seatNode.name = "desk_\(desk.id)"
             parent.addChild(seatNode)
 
-            let chairTexture = tm.texture(for: TextureManager.furnitureChair)
-            let chairNode = SKSpriteNode(texture: chairTexture, size: CGSize(width: 24, height: 32))
-            chairNode.position = CGPoint(x: 0, y: -30)
+            let seatOffsetY = desk.chairPosition.y - desk.position.y
+            let chairNode: SKSpriteNode
+            let chairPosition: CGPoint
+            switch layout.deskRenderStyle {
+            case .classicBench:
+                chairNode = SKSpriteNode(
+                    texture: tm.texture(for: TextureManager.furnitureChair),
+                    size: CGSize(width: 24, height: 32)
+                )
+                chairPosition = CGPoint(x: 0, y: seatOffsetY)
+
+            case .zenChabudai:
+                chairNode = SKSpriteNode(
+                    texture: tm.texture(for: TextureManager.zenZabutonCushion),
+                    size: CGSize(width: 28, height: 28)
+                )
+                chairPosition = CGPoint(x: 0, y: seatOffsetY + 4)
+
+            case .ruinsWorkbench:
+                chairNode = SKSpriteNode(
+                    texture: tm.texture(for: TextureManager.ruinsTiltedDesk),
+                    size: CGSize(width: 34, height: 26)
+                )
+                chairNode.zRotation = desk.id.isMultiple(of: 2) ? -.pi / 48 : .pi / 48
+                chairPosition = CGPoint(x: 0, y: seatOffsetY + 8)
+            }
+
+            chairNode.position = chairPosition
             chairNode.name = "chair_\(desk.id)"
             seatNode.addChild(chairNode)
 
             let laptopTexture = tm.texture(for: TextureManager.furnitureLaptopOff)
             let laptopNode = SKSpriteNode(texture: laptopTexture, size: CGSize(width: 30, height: 24))
-            laptopNode.position = CGPoint(x: 0, y: 10)
+            laptopNode.position = CGPoint(x: 0, y: layout.deskRenderStyle == .zenChabudai ? 8 : 10)
             laptopNode.name = "monitor_\(desk.id)"
             laptopNode.zPosition = 2
             laptopNode.isHidden = true
@@ -492,7 +534,7 @@ public class OfficeScene: SKScene {
             let glowNode = SKShapeNode(rectOf: CGSize(width: 30, height: 24), cornerRadius: 3)
             glowNode.fillColor = .clear
             glowNode.strokeColor = .clear
-            glowNode.position = CGPoint(x: 0, y: 10)
+            glowNode.position = laptopNode.position
             glowNode.name = "monitorGlow_\(desk.id)"
             glowNode.zPosition = 3
             glowNode.alpha = 0
@@ -506,117 +548,13 @@ public class OfficeScene: SKScene {
     private func setupDecorations(parent: SKNode) {
         let tm = TextureManager.shared
 
-        let plantTexture = tm.texture(for: TextureManager.decorationPlant)
-        let plantPositions = [
-            CGPoint(x: layout.plantStandPositions[0].x, y: layout.plantStandPositions[0].y + 40),
-            CGPoint(x: layout.plantStandPositions[1].x, y: layout.plantStandPositions[1].y + 40),
-            CGPoint(x: layout.plantStandPositions[2].x, y: layout.plantStandPositions[2].y),
-            CGPoint(x: layout.plantStandPositions[3].x, y: layout.plantStandPositions[3].y),
-        ]
-        for (index, position) in plantPositions.enumerated() {
-            let plant = SKSpriteNode(
-                texture: plantTexture,
-                size: index < 2 ? CGSize(width: 48, height: 80) : CGSize(width: 40, height: 68)
-            )
-            plant.position = position
-            plant.name = "decoration_plant_\(index)"
-            plant.zPosition = 2
-            parent.addChild(plant)
+        for spec in layout.decorations {
+            let node = SKSpriteNode(texture: tm.texture(for: spec.textureName), size: spec.size)
+            node.position = spec.position
+            node.name = "decoration_\(spec.id)"
+            node.zPosition = spec.zPosition
+            parent.addChild(node)
         }
-
-        let windowTexture = tm.texture(for: TextureManager.decorationWindow)
-        let windowNode = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
-        windowNode.position = CGPoint(x: 246, y: 706)
-        windowNode.name = "decoration_window"
-        windowNode.zPosition = 2
-        parent.addChild(windowNode)
-
-        let windowNode2 = SKSpriteNode(texture: windowTexture, size: CGSize(width: 100, height: 80))
-        windowNode2.position = CGPoint(x: 898, y: 706)
-        windowNode2.name = "decoration_window_2"
-        windowNode2.zPosition = 2
-        parent.addChild(windowNode2)
-
-        let whiteboardTexture = tm.texture(for: TextureManager.decorationWhiteboard)
-        let whiteboardNode = SKSpriteNode(texture: whiteboardTexture, size: CGSize(width: 120, height: 80))
-        whiteboardNode.position = CGPoint(x: layout.whiteboardStandPosition.x, y: layout.whiteboardStandPosition.y + 44)
-        whiteboardNode.name = "decoration_whiteboard"
-        whiteboardNode.zPosition = 2
-        parent.addChild(whiteboardNode)
-
-        let clockTexture = tm.texture(for: TextureManager.decorationClock)
-        let clockNode = SKSpriteNode(texture: clockTexture, size: CGSize(width: 40, height: 40))
-        clockNode.position = layout.wallClockPosition
-        clockNode.name = "decoration_clock"
-        clockNode.zPosition = 2
-        parent.addChild(clockNode)
-
-        let posterTexture = tm.texture(for: TextureManager.decorationPoster)
-        let posterNode = SKSpriteNode(texture: posterTexture, size: CGSize(width: 56, height: 72))
-        posterNode.position = CGPoint(x: 306, y: 680)
-        posterNode.name = "decoration_poster"
-        posterNode.zPosition = 2
-        parent.addChild(posterNode)
-
-        let bookshelfTexture = tm.texture(for: TextureManager.decorationBookshelf)
-        let bookshelfNode = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 80, height: 64))
-        bookshelfNode.position = CGPoint(x: layout.bookshelfStandPosition.x, y: layout.bookshelfStandPosition.y + 36)
-        bookshelfNode.name = "decoration_bookshelf"
-        bookshelfNode.zPosition = 2
-        parent.addChild(bookshelfNode)
-
-        let bulletinTexture = tm.texture(for: TextureManager.decorationBulletinBoard)
-        let bulletinNode = SKSpriteNode(texture: bulletinTexture, size: CGSize(width: 80, height: 56))
-        bulletinNode.position = CGPoint(x: layout.bulletinBoardStandPosition.x, y: layout.bulletinBoardStandPosition.y + 34)
-        bulletinNode.name = "decoration_bulletin_board"
-        bulletinNode.zPosition = 2
-        parent.addChild(bulletinNode)
-
-        let coolerTexture = tm.texture(for: TextureManager.decorationWaterCooler)
-        let coolerNode = SKSpriteNode(texture: coolerTexture, size: CGSize(width: 40, height: 80))
-        coolerNode.position = CGPoint(x: 720, y: 348)
-        coolerNode.name = "decoration_water_cooler"
-        coolerNode.zPosition = 2
-        parent.addChild(coolerNode)
-
-        let doorTexture = tm.texture(for: TextureManager.decorationDoor)
-        let doorNode = SKSpriteNode(texture: doorTexture, size: CGSize(width: 56, height: 96))
-        doorNode.position = layout.doorPosition
-        doorNode.name = "decoration_door"
-        doorNode.zPosition = 2
-        parent.addChild(doorNode)
-
-        let couchTexture = tm.texture(for: TextureManager.decorationCouch)
-        let couchNode = SKSpriteNode(texture: couchTexture, size: CGSize(width: 60, height: 36))
-        couchNode.position = layout.loungePosition
-        couchNode.name = "decoration_couch"
-        couchNode.zPosition = 2
-        parent.addChild(couchNode)
-
-        let printerTexture = tm.texture(for: TextureManager.decorationPrinter)
-        let printerNode = SKSpriteNode(texture: printerTexture, size: CGSize(width: 30, height: 30))
-        printerNode.position = CGPoint(x: 580, y: 114)
-        printerNode.name = "decoration_printer"
-        printerNode.zPosition = 2
-        parent.addChild(printerNode)
-
-        let collabPlant = SKSpriteNode(texture: plantTexture, size: CGSize(width: 44, height: 72))
-        collabPlant.position = CGPoint(x: 1170, y: 490)
-        collabPlant.name = "decoration_plant_collab"
-        collabPlant.zPosition = 2
-        parent.addChild(collabPlant)
-
-        let loungeShelf = SKSpriteNode(texture: bookshelfTexture, size: CGSize(width: 56, height: 48))
-        loungeShelf.position = CGPoint(x: 90, y: 220)
-        loungeShelf.name = "decoration_lounge_shelf"
-        loungeShelf.zPosition = 2
-        parent.addChild(loungeShelf)
-
-        let loungePlant = SKSpriteNode(texture: plantTexture, size: CGSize(width: 32, height: 52))
-        loungePlant.position = CGPoint(x: 350, y: 220)
-        loungePlant.name = "decoration_lounge_plant"
-        loungePlant.zPosition = 2
-        parent.addChild(loungePlant)
     }
 
     // MARK: - 8.1-8.5: Ambient Animations
@@ -632,7 +570,7 @@ public class OfficeScene: SKScene {
 
     /// 8.1: Adds a ticking second hand to the wall clock.
     private func setupClockSecondHand(parent: SKNode) {
-        guard let clockNode = parent.childNode(withName: "decoration_clock") else { return }
+        guard let clockNode = matchingEnvironmentNodes(for: ["clock"]).first else { return }
 
         let secondHand = SKShapeNode()
         let path = CGMutablePath()
@@ -652,9 +590,7 @@ public class OfficeScene: SKScene {
 
     /// 8.2: Adds subtle sway animation to plant decoration nodes.
     private func setupPlantSway(parent: SKNode) {
-        for i in 0...1 {
-            guard let plantNode = parent.childNode(withName: "decoration_plant_\(i)") else { continue }
-
+        for plantNode in matchingEnvironmentNodes(for: ["plant", "bonsai", "cherry_blossom", "wildflower"]) {
             let swayLeft = SKAction.rotate(byAngle: CGFloat.pi / 90, duration: 1.5) // ~2 degrees
             swayLeft.timingMode = .easeInEaseOut
             let swayRight = swayLeft.reversed()
@@ -700,9 +636,7 @@ public class OfficeScene: SKScene {
     private func setupRainOnWindows() {
         guard false else { return }  // Disabled: was hour >= 21 || hour < 6
 
-        let searchRoot: SKNode = environmentRoot ?? self
-        for windowName in ["decoration_window", "decoration_window_2"] {
-            guard let windowNode = searchRoot.childNode(withName: windowName) else { continue }
+        for windowNode in matchingEnvironmentNodes(for: ["window"]) {
             // Don't add duplicates
             guard windowNode.childNode(withName: "rain_emitter") == nil else { continue }
 
@@ -730,9 +664,7 @@ public class OfficeScene: SKScene {
 
     /// Removes rain emitters from window nodes with a fade-out.
     private func removeRainFromWindows() {
-        let searchRoot: SKNode = environmentRoot ?? self
-        for windowName in ["decoration_window", "decoration_window_2"] {
-            guard let windowNode = searchRoot.childNode(withName: windowName) else { continue }
+        for windowNode in matchingEnvironmentNodes(for: ["window"]) {
             guard let rain = windowNode.childNode(withName: "rain_emitter") else { continue }
             rain.run(SKAction.sequence([
                 SKAction.fadeOut(withDuration: 1.0),
@@ -767,10 +699,7 @@ public class OfficeScene: SKScene {
     public func applyWindowDaylight(hour: Int) {
         let color = Self.daylightColor(for: hour, worldPreset: worldPreset)
         let blendFactor = activeTheme.windowBlendFactor
-        // Search in environmentRoot first, fall back to scene children
-        let searchRoot: SKNode = environmentRoot ?? self
-        for windowName in ["decoration_window", "decoration_window_2"] {
-            guard let windowNode = searchRoot.childNode(withName: windowName) as? SKSpriteNode else { continue }
+        for windowNode in matchingEnvironmentNodes(for: ["window"]).compactMap({ $0 as? SKSpriteNode }) {
             windowNode.removeAction(forKey: "daylight")
             windowNode.color = color
             let colorize = SKAction.colorize(with: color, colorBlendFactor: blendFactor, duration: 2.0)
@@ -785,7 +714,7 @@ public class OfficeScene: SKScene {
         guard let actors = actorRoot else { return }
         let cat = CatSprite()
         cat.navigationLayout = layout
-        cat.position = CGPoint(x: 80, y: 100)
+        cat.position = layout.catStartPosition
         actors.addChild(cat)
         catSprite = cat
     }
@@ -839,12 +768,12 @@ public class OfficeScene: SKScene {
         radioSprite = radio
 
         let plant = GrowingPlantSprite()
-        plant.position = CGPoint(x: 760, y: layout.coffeeStationPosition.y - 8)
+        plant.position = layout.growingPlantPosition
         plant.zPosition = 2
         parent.addChild(plant)
         growingPlantSprite = plant
 
-        if let whiteboard = parent.childNode(withName: "decoration_whiteboard") {
+        if let whiteboard = matchingEnvironmentNodes(for: ["whiteboard"]).first {
             let overlay = WhiteboardStatsOverlay()
             overlay.zPosition = 3
             whiteboard.addChild(overlay)
@@ -995,6 +924,7 @@ public class OfficeScene: SKScene {
     /// Creates and adds a new agent sprite to the scene.
     private func addAgentSprite(for agent: AgentInfo) {
         let sprite = AgentSprite(agentInfo: agent)
+        sprite.navigationLayout = layout
         let occupiedDeskIDs = Set(deskAssignments.keys)
         let assignedDesk = layout.nextAvailableDesk(occupiedDeskIDs: occupiedDeskIDs)
 
@@ -1171,6 +1101,20 @@ public class OfficeScene: SKScene {
     /// Finds a named node in the environment root (where desks, decorations etc. live).
     private func envNode(withName name: String) -> SKNode? {
         environmentRoot?.childNode(withName: name)
+    }
+
+    /// Returns environment nodes whose names contain any of the provided tokens.
+    private func matchingEnvironmentNodes(for tokens: [String]) -> [SKNode] {
+        guard let environmentRoot else { return [] }
+
+        var matches: [SKNode] = []
+        environmentRoot.enumerateChildNodes(withName: "//*") { node, _ in
+            guard let name = node.name else { return }
+            if tokens.contains(where: { name.contains($0) }) {
+                matches.append(node)
+            }
+        }
+        return matches
     }
 
     // MARK: - Public Accessors for Testing
@@ -1496,7 +1440,8 @@ public class OfficeScene: SKScene {
             if let pairRequest = pairProgrammingManager.update(
                 deltaTime: 2.0,
                 agents: agents,
-                deskAssignments: deskAssignments
+                deskAssignments: deskAssignments,
+                layout: layout
             ) {
                 if let visitor = agentSprites[pairRequest.visitorID] {
                     let path = layout.findPath(from: visitor.position, to: pairRequest.observePosition)
