@@ -123,6 +123,7 @@ extension OfficeLayout {
         ]
 
         return OfficeLayout(
+            preset: .overgrownRuins,
             sceneSize: sceneSize,
             desks: desks,
             tables: tableDefinitions,
@@ -231,5 +232,101 @@ public func overgrownRuinsPOIs() -> [PointOfInterest] {
             emoji: "\u{1F50D}",                // 🔍
             animationHint: .interact
         ),
+    ]
+}
+
+public func overgrownRuinsRugs() -> [RugSpec] {
+    [
+        RugSpec(
+            id: "wildflower_patch",
+            position: CGPoint(x: 220, y: 560),
+            size: CGSize(width: 240, height: 160),
+            cornerRadius: 28,
+            colorSlot: .focus
+        ),
+        RugSpec(
+            id: "collapsed_moss",
+            position: CGPoint(x: 220, y: 138),
+            size: CGSize(width: 280, height: 180),
+            cornerRadius: 20,
+            colorSlot: .lounge
+        ),
+        RugSpec(
+            id: "atrium_moss",
+            position: CGPoint(x: 481, y: 450),
+            size: CGSize(width: 180, height: 320),
+            cornerRadius: 36,
+            colorSlot: .gallery
+        ),
+        RugSpec(
+            id: "mushroom_glow",
+            position: CGPoint(x: 481, y: 116),
+            size: CGSize(width: 148, height: 104),
+            cornerRadius: 24,
+            colorSlot: .custom1
+        ),
+        RugSpec(
+            id: "rooftop_growth",
+            position: CGPoint(x: 894, y: 566),
+            size: CGSize(width: 560, height: 220),
+            cornerRadius: 26,
+            colorSlot: .collab
+        ),
+        RugSpec(
+            id: "server_runner",
+            position: CGPoint(x: 894, y: 160),
+            size: CGSize(width: 560, height: 180),
+            cornerRadius: 18,
+            colorSlot: .build
+        ),
+    ]
+}
+
+public func overgrownRuinsDecorations() -> [DecorationSpec] {
+    [
+        DecorationSpec(id: "big_tree_trunk", textureName: TextureManager.ruinsBigTreeTrunk,
+                       position: CGPoint(x: 481, y: 452), size: CGSize(width: 96, height: 164), zPosition: 2),
+        DecorationSpec(id: "tree_canopy", textureName: TextureManager.ruinsTreeCanopy,
+                       position: CGPoint(x: 482, y: 660), size: CGSize(width: 240, height: 140), zPosition: 3),
+        DecorationSpec(id: "tree_roots", textureName: TextureManager.ruinsTreeRoots,
+                       position: CGPoint(x: 481, y: 316), size: CGSize(width: 156, height: 88), zPosition: 1),
+        DecorationSpec(id: "vine_curtain_left", textureName: TextureManager.ruinsVineCurtain,
+                       position: CGPoint(x: 402, y: 610), size: CGSize(width: 52, height: 176)),
+        DecorationSpec(id: "vine_curtain_right", textureName: TextureManager.ruinsVineCurtain,
+                       position: CGPoint(x: 560, y: 610), size: CGSize(width: 52, height: 176)),
+        DecorationSpec(id: "vine_wall_east", textureName: TextureManager.ruinsVineWallClimber,
+                       position: CGPoint(x: 1188, y: 650), size: CGSize(width: 48, height: 160)),
+        DecorationSpec(id: "mushroom_cluster", textureName: TextureManager.ruinsGlowingMushroomCluster,
+                       position: CGPoint(x: 482, y: 108), size: CGSize(width: 88, height: 56), zPosition: 2),
+        DecorationSpec(id: "mushroom_cluster_small", textureName: TextureManager.ruinsSmallGlowingMushroom,
+                       position: CGPoint(x: 432, y: 100), size: CGSize(width: 40, height: 40), zPosition: 2),
+        DecorationSpec(id: "server_rack_left", textureName: TextureManager.ruinsCrackedServerRack,
+                       position: CGPoint(x: 600, y: 340), size: CGSize(width: 64, height: 120), zPosition: 2),
+        DecorationSpec(id: "server_rack_right", textureName: TextureManager.ruinsCrackedServerRack,
+                       position: CGPoint(x: 1180, y: 132), size: CGSize(width: 64, height: 120), zPosition: 2),
+        DecorationSpec(id: "window_roof_opening", textureName: TextureManager.ruinsBrokenCeilingHole,
+                       position: CGPoint(x: 780, y: 704), size: CGSize(width: 120, height: 52), zPosition: 2),
+        DecorationSpec(id: "window_roof_opening_2", textureName: TextureManager.ruinsBrokenCeilingHole,
+                       position: CGPoint(x: 1040, y: 704), size: CGSize(width: 120, height: 52), zPosition: 2),
+        DecorationSpec(id: "puddle", textureName: TextureManager.ruinsPuddle,
+                       position: CGPoint(x: 192, y: 480), size: CGSize(width: 96, height: 36), zPosition: 1),
+        DecorationSpec(id: "wildflower_patch", textureName: TextureManager.ruinsWildflowerPatch,
+                       position: CGPoint(x: 200, y: 584), size: CGSize(width: 104, height: 52), zPosition: 2),
+        DecorationSpec(id: "bird_nest", textureName: TextureManager.ruinsBirdNest,
+                       position: CGPoint(x: 780, y: 690), size: CGSize(width: 54, height: 32), zPosition: 3),
+        DecorationSpec(id: "rubble_pile", textureName: TextureManager.ruinsRubblePile,
+                       position: CGPoint(x: 140, y: 260), size: CGSize(width: 100, height: 50), zPosition: 2),
+        DecorationSpec(id: "waterfall_pipe", textureName: TextureManager.ruinsBrokenPipeWaterfall,
+                       position: CGPoint(x: 350, y: 560), size: CGSize(width: 78, height: 164), zPosition: 2),
+        DecorationSpec(id: "sunbeam_window", textureName: TextureManager.ruinsSunbeam,
+                       position: CGPoint(x: 900, y: 620), size: CGSize(width: 120, height: 170), zPosition: 1),
+        DecorationSpec(id: "flickering_monitor", textureName: TextureManager.ruinsFlickeringMonitor,
+                       position: CGPoint(x: 620, y: 330), size: CGSize(width: 40, height: 28), zPosition: 3),
+        DecorationSpec(id: "door_frame", textureName: TextureManager.ruinsBrokenDoorFrame,
+                       position: CGPoint(x: 1238, y: 352), size: CGSize(width: 72, height: 108), zPosition: 2),
+        DecorationSpec(id: "old_whiteboard", textureName: TextureManager.ruinsOldCrackedWhiteboard,
+                       position: CGPoint(x: 1080, y: 374), size: CGSize(width: 120, height: 80), zPosition: 2),
+        DecorationSpec(id: "tilted_desk", textureName: TextureManager.ruinsTiltedDesk,
+                       position: CGPoint(x: 970, y: 610), size: CGSize(width: 96, height: 62), zPosition: 2),
     ]
 }

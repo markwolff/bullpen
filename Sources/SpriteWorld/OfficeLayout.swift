@@ -5,6 +5,12 @@ import Models
 /// Defines the layout of the office world: desk positions, rooms,
 /// collision geometry, and pathfinding for agent sprites.
 public struct OfficeLayout: Sendable {
+    public enum DeskRenderStyle: Sendable, Equatable {
+        case classicBench
+        case zenChabudai
+        case ruinsWorkbench
+    }
+
     public struct DeskPosition: Sendable, Identifiable {
         public let id: Int
         public let position: CGPoint
@@ -65,6 +71,7 @@ public struct OfficeLayout: Sendable {
         let y: Int
     }
 
+    public let preset: WorldPreset
     public let sceneSize: CGSize
     public let desks: [DeskPosition]
     public let tables: [TableDefinition]
@@ -82,6 +89,7 @@ public struct OfficeLayout: Sendable {
     public let furnitureObstacles: [CGRect]
 
     public init(
+        preset: WorldPreset,
         sceneSize: CGSize,
         desks: [DeskPosition],
         tables: [TableDefinition],
@@ -89,6 +97,7 @@ public struct OfficeLayout: Sendable {
         walkableArea: CGRect,
         barriers: [Barrier]
     ) {
+        self.preset = preset
         self.sceneSize = sceneSize
         self.desks = desks
         self.tables = tables
@@ -184,6 +193,7 @@ public struct OfficeLayout: Sendable {
         ]
 
         return OfficeLayout(
+            preset: .classicBullpen,
             sceneSize: sceneSize,
             desks: desks,
             tables: tableDefinitions,
@@ -239,6 +249,39 @@ public struct OfficeLayout: Sendable {
 
     // MARK: - Door Position
 
+    public var deskRenderStyle: DeskRenderStyle {
+        switch preset {
+        case .classicBullpen:
+            return .classicBench
+        case .zenStudio:
+            return .zenChabudai
+        case .overgrownRuins:
+            return .ruinsWorkbench
+        }
+    }
+
+    public var rugs: [RugSpec] {
+        switch preset {
+        case .classicBullpen:
+            return classicBullpenRugs()
+        case .zenStudio:
+            return ZenStudioLayout.shared.rugs
+        case .overgrownRuins:
+            return overgrownRuinsRugs()
+        }
+    }
+
+    public var decorations: [DecorationSpec] {
+        switch preset {
+        case .classicBullpen:
+            return classicBullpenDecorations()
+        case .zenStudio:
+            return ZenStudioLayout.shared.decorations
+        case .overgrownRuins:
+            return overgrownRuinsDecorations()
+        }
+    }
+
     public var doorPosition: CGPoint {
         CGPoint(x: 1238, y: 352)
     }
@@ -250,60 +293,162 @@ public struct OfficeLayout: Sendable {
     // MARK: - Points of Interest
 
     public var waterCoolerStandPosition: CGPoint {
-        CGPoint(x: 700, y: 340)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 700, y: 340)
+        case .zenStudio:
+            return CGPoint(x: 460, y: 560)
+        case .overgrownRuins:
+            return CGPoint(x: 350, y: 550)
+        }
     }
 
     public var bookshelfStandPosition: CGPoint {
-        CGPoint(x: 130, y: 674)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 130, y: 674)
+        case .zenStudio:
+            return CGPoint(x: 1040, y: 176)
+        case .overgrownRuins:
+            return CGPoint(x: 140, y: 290)
+        }
     }
 
     public var bulletinBoardStandPosition: CGPoint {
-        CGPoint(x: 900, y: 386)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 900, y: 386)
+        case .zenStudio:
+            return CGPoint(x: 80, y: 290)
+        case .overgrownRuins:
+            return CGPoint(x: 1080, y: 340)
+        }
     }
 
     public var windowStandPosition: CGPoint {
-        CGPoint(x: 904, y: 672)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 904, y: 672)
+        case .zenStudio:
+            return CGPoint(x: 478, y: 660)
+        case .overgrownRuins:
+            return CGPoint(x: 900, y: 620)
+        }
     }
 
     public var whiteboardStandPosition: CGPoint {
-        CGPoint(x: 592, y: 352)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 592, y: 352)
+        case .zenStudio:
+            return CGPoint(x: 600, y: 356)
+        case .overgrownRuins:
+            return CGPoint(x: 1080, y: 340)
+        }
     }
 
     public var plantStandPositions: [CGPoint] {
-        [
-            CGPoint(x: 86, y: 674),
-            CGPoint(x: 1152, y: 674),
-            CGPoint(x: 92, y: 96),
-            CGPoint(x: 1140, y: 96),
-        ]
+        switch preset {
+        case .classicBullpen:
+            return [
+                CGPoint(x: 86, y: 674),
+                CGPoint(x: 1152, y: 674),
+                CGPoint(x: 92, y: 96),
+                CGPoint(x: 1140, y: 96),
+            ]
+        case .zenStudio:
+            return [
+                CGPoint(x: 86, y: 680),
+                CGPoint(x: 360, y: 680),
+                CGPoint(x: 420, y: 690),
+                CGPoint(x: 530, y: 690),
+            ]
+        case .overgrownRuins:
+            return [
+                CGPoint(x: 200, y: 580),
+                CGPoint(x: 481, y: 280),
+                CGPoint(x: 780, y: 680),
+                CGPoint(x: 350, y: 550),
+            ]
+        }
     }
 
     public var loungePosition: CGPoint {
-        CGPoint(x: 280, y: 140)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 280, y: 140)
+        case .zenStudio:
+            return CGPoint(x: 478, y: 160)
+        case .overgrownRuins:
+            return CGPoint(x: 900, y: 600)
+        }
     }
 
     public var dogBowlPosition: CGPoint {
-        CGPoint(x: 160, y: 100)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 160, y: 100)
+        case .zenStudio:
+            return CGPoint(x: 250, y: 88)
+        case .overgrownRuins:
+            return CGPoint(x: 230, y: 96)
+        }
     }
 
     public var dogSleepPosition: CGPoint {
-        CGPoint(x: 200, y: 90)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 200, y: 90)
+        case .zenStudio:
+            return CGPoint(x: 300, y: 80)
+        case .overgrownRuins:
+            return CGPoint(x: 280, y: 88)
+        }
     }
 
     public var dogToyPositions: [CGPoint] {
-        [
-            CGPoint(x: 120, y: 80),
-            CGPoint(x: 170, y: 100),
-            CGPoint(x: 220, y: 80),
-        ]
+        switch preset {
+        case .classicBullpen:
+            return [
+                CGPoint(x: 120, y: 80),
+                CGPoint(x: 170, y: 100),
+                CGPoint(x: 220, y: 80),
+            ]
+        case .zenStudio:
+            return [
+                CGPoint(x: 210, y: 88),
+                CGPoint(x: 265, y: 110),
+                CGPoint(x: 320, y: 92),
+            ]
+        case .overgrownRuins:
+            return [
+                CGPoint(x: 200, y: 84),
+                CGPoint(x: 250, y: 110),
+                CGPoint(x: 305, y: 88),
+            ]
+        }
     }
 
     public var radioStandPosition: CGPoint {
-        CGPoint(x: 116, y: 218)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 116, y: 218)
+        case .zenStudio:
+            return CGPoint(x: 430, y: 230)
+        case .overgrownRuins:
+            return CGPoint(x: 620, y: 330)
+        }
     }
 
     public var printerStandPosition: CGPoint {
-        CGPoint(x: 580, y: 110)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 580, y: 110)
+        case .zenStudio:
+            return CGPoint(x: 1190, y: 94)
+        case .overgrownRuins:
+            return CGPoint(x: 1040, y: 112)
+        }
     }
 
     public var coffeeMachinePosition: CGPoint {
@@ -319,7 +464,14 @@ public struct OfficeLayout: Sendable {
     }
 
     public var pizzaDropPosition: CGPoint {
-        CGPoint(x: 868, y: 352)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 868, y: 352)
+        case .zenStudio:
+            return CGPoint(x: 895, y: 574)
+        case .overgrownRuins:
+            return CGPoint(x: 900, y: 530)
+        }
     }
 
     public var standupHuddlePositions: [CGPoint] {
@@ -335,31 +487,95 @@ public struct OfficeLayout: Sendable {
     }
 
     public var achievementShelfPosition: CGPoint {
-        CGPoint(x: 1060, y: 680)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 1060, y: 680)
+        case .zenStudio:
+            return CGPoint(x: 1192, y: 376)
+        case .overgrownRuins:
+            return CGPoint(x: 1168, y: 388)
+        }
     }
 
     public var radioPosition: CGPoint {
-        CGPoint(x: 100, y: 216)
+        radioStandPosition
     }
 
     public var birdCagePosition: CGPoint {
-        CGPoint(x: 1172, y: 690)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 1172, y: 690)
+        case .zenStudio:
+            return CGPoint(x: 1188, y: 700)
+        case .overgrownRuins:
+            return CGPoint(x: 782, y: 684)
+        }
     }
 
     public var coffeeStationPosition: CGPoint {
-        CGPoint(x: 1060, y: 324)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 1060, y: 324)
+        case .zenStudio:
+            return CGPoint(x: 240, y: 258)
+        case .overgrownRuins:
+            return CGPoint(x: 812, y: 560)
+        }
     }
 
     public var baristaPosition: CGPoint {
-        CGPoint(x: 1108, y: 324)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 1108, y: 324)
+        case .zenStudio:
+            return CGPoint(x: 286, y: 258)
+        case .overgrownRuins:
+            return CGPoint(x: 860, y: 560)
+        }
     }
 
     public var baristaCustomerPosition: CGPoint {
-        CGPoint(x: 1012, y: 324)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 1012, y: 324)
+        case .zenStudio:
+            return CGPoint(x: 196, y: 258)
+        case .overgrownRuins:
+            return CGPoint(x: 764, y: 560)
+        }
     }
 
     public var coffeeRugPosition: CGPoint {
-        CGPoint(x: 1060, y: 304)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 1060, y: 304)
+        case .zenStudio:
+            return CGPoint(x: 240, y: 240)
+        case .overgrownRuins:
+            return CGPoint(x: 812, y: 542)
+        }
+    }
+
+    public var catStartPosition: CGPoint {
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 80, y: 100)
+        case .zenStudio:
+            return CGPoint(x: 280, y: 500)
+        case .overgrownRuins:
+            return CGPoint(x: 440, y: 360)
+        }
+    }
+
+    public var growingPlantPosition: CGPoint {
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 760, y: coffeeStationPosition.y - 8)
+        case .zenStudio:
+            return CGPoint(x: 332, y: 248)
+        case .overgrownRuins:
+            return CGPoint(x: 720, y: 548)
+        }
     }
 
     public var desklessPacingPositions: [CGPoint] {
@@ -386,7 +602,14 @@ public struct OfficeLayout: Sendable {
     }
 
     public var wallClockPosition: CGPoint {
-        CGPoint(x: 988, y: 720)
+        switch preset {
+        case .classicBullpen:
+            return CGPoint(x: 988, y: 720)
+        case .zenStudio:
+            return CGPoint(x: 1092, y: 704)
+        case .overgrownRuins:
+            return CGPoint(x: 1096, y: 700)
+        }
     }
 
     // MARK: - Pathfinding
