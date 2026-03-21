@@ -209,7 +209,6 @@ public struct OfficeLayout: Sendable {
         case .classicBullpen: return .defaultLayout
         case .zenStudio:      return .zenStudio
         case .overgrownRuins: return .overgrownRuins
-        case .procedural:     return .procedural(headcount: proceduralBaseHeadcount, seed: proceduralDefaultSeed)
         }
     }
 
@@ -219,7 +218,6 @@ public struct OfficeLayout: Sendable {
         case .classicBullpen: return classicBullpenPOIs()
         case .zenStudio:      return ZenStudioLayout.zenStudioPOIs()
         case .overgrownRuins: return overgrownRuinsPOIs()
-        case .procedural:     return proceduralPOIs()
         }
     }
 
@@ -259,8 +257,6 @@ public struct OfficeLayout: Sendable {
             return .zenChabudai
         case .overgrownRuins:
             return .ruinsWorkbench
-        case .procedural:
-            return .classicBench
         }
     }
 
@@ -272,8 +268,6 @@ public struct OfficeLayout: Sendable {
             return ZenStudioLayout.shared.rugs
         case .overgrownRuins:
             return overgrownRuinsRugs()
-        case .procedural:
-            return proceduralRugs()
         }
     }
 
@@ -285,8 +279,6 @@ public struct OfficeLayout: Sendable {
             return ZenStudioLayout.shared.decorations
         case .overgrownRuins:
             return overgrownRuinsDecorations()
-        case .procedural:
-            return proceduralDecorations()
         }
     }
 
@@ -308,8 +300,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 460, y: 560)
         case .overgrownRuins:
             return CGPoint(x: 350, y: 550)
-        case .procedural:
-            return CGPoint(x: 700, y: 340)
         }
     }
 
@@ -321,8 +311,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 1040, y: 176)
         case .overgrownRuins:
             return CGPoint(x: 140, y: 290)
-        case .procedural:
-            return CGPoint(x: 130, y: 674)
         }
     }
 
@@ -334,8 +322,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 80, y: 290)
         case .overgrownRuins:
             return CGPoint(x: 1080, y: 340)
-        case .procedural:
-            return CGPoint(x: 820, y: 386)
         }
     }
 
@@ -347,8 +333,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 478, y: 660)
         case .overgrownRuins:
             return CGPoint(x: 900, y: 620)
-        case .procedural:
-            return CGPoint(x: 904, y: 672)
         }
     }
 
@@ -360,8 +344,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 600, y: 356)
         case .overgrownRuins:
             return CGPoint(x: 1080, y: 340)
-        case .procedural:
-            return CGPoint(x: 592, y: 352)
         }
     }
 
@@ -388,13 +370,6 @@ public struct OfficeLayout: Sendable {
                 CGPoint(x: 780, y: 680),
                 CGPoint(x: 350, y: 550),
             ]
-        case .procedural:
-            return [
-                CGPoint(x: 96, y: 674),
-                CGPoint(x: 1160, y: 674),
-                CGPoint(x: 92, y: 96),
-                CGPoint(x: 1140, y: 96),
-            ]
         }
     }
 
@@ -406,8 +381,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 478, y: 160)
         case .overgrownRuins:
             return CGPoint(x: 900, y: 600)
-        case .procedural:
-            return CGPoint(x: 280, y: 140)
         }
     }
 
@@ -419,8 +392,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 250, y: 88)
         case .overgrownRuins:
             return CGPoint(x: 230, y: 96)
-        case .procedural:
-            return CGPoint(x: 180, y: 100)
         }
     }
 
@@ -432,8 +403,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 300, y: 80)
         case .overgrownRuins:
             return CGPoint(x: 280, y: 88)
-        case .procedural:
-            return CGPoint(x: 220, y: 92)
         }
     }
 
@@ -457,12 +426,6 @@ public struct OfficeLayout: Sendable {
                 CGPoint(x: 250, y: 110),
                 CGPoint(x: 305, y: 88),
             ]
-        case .procedural:
-            return [
-                CGPoint(x: 140, y: 84),
-                CGPoint(x: 190, y: 106),
-                CGPoint(x: 248, y: 88),
-            ]
         }
     }
 
@@ -474,8 +437,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 430, y: 230)
         case .overgrownRuins:
             return CGPoint(x: 620, y: 330)
-        case .procedural:
-            return CGPoint(x: 116, y: 218)
         }
     }
 
@@ -487,8 +448,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 1190, y: 94)
         case .overgrownRuins:
             return CGPoint(x: 1040, y: 112)
-        case .procedural:
-            return CGPoint(x: 580, y: 110)
         }
     }
 
@@ -512,8 +471,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 895, y: 574)
         case .overgrownRuins:
             return CGPoint(x: 900, y: 530)
-        case .procedural:
-            return CGPoint(x: 726, y: 352)
         }
     }
 
@@ -537,8 +494,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 1192, y: 376)
         case .overgrownRuins:
             return CGPoint(x: 1168, y: 388)
-        case .procedural:
-            return CGPoint(x: 1170, y: 680)
         }
     }
 
@@ -554,8 +509,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 1188, y: 700)
         case .overgrownRuins:
             return CGPoint(x: 782, y: 684)
-        case .procedural:
-            return CGPoint(x: 1176, y: 690)
         }
     }
 
@@ -567,8 +520,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 240, y: 258)
         case .overgrownRuins:
             return CGPoint(x: 812, y: 560)
-        case .procedural:
-            return CGPoint(x: 1060, y: 324)
         }
     }
 
@@ -580,8 +531,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 286, y: 258)
         case .overgrownRuins:
             return CGPoint(x: 860, y: 560)
-        case .procedural:
-            return CGPoint(x: 1108, y: 324)
         }
     }
 
@@ -593,8 +542,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 196, y: 258)
         case .overgrownRuins:
             return CGPoint(x: 764, y: 560)
-        case .procedural:
-            return CGPoint(x: 1012, y: 324)
         }
     }
 
@@ -606,8 +553,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 240, y: 240)
         case .overgrownRuins:
             return CGPoint(x: 812, y: 542)
-        case .procedural:
-            return CGPoint(x: 1060, y: 304)
         }
     }
 
@@ -619,8 +564,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 280, y: 500)
         case .overgrownRuins:
             return CGPoint(x: 440, y: 360)
-        case .procedural:
-            return CGPoint(x: 230, y: 150)
         }
     }
 
@@ -632,8 +575,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 332, y: 248)
         case .overgrownRuins:
             return CGPoint(x: 720, y: 548)
-        case .procedural:
-            return CGPoint(x: 760, y: coffeeStationPosition.y - 8)
         }
     }
 
@@ -668,8 +609,6 @@ public struct OfficeLayout: Sendable {
             return CGPoint(x: 1092, y: 704)
         case .overgrownRuins:
             return CGPoint(x: 1096, y: 700)
-        case .procedural:
-            return CGPoint(x: 1020, y: 720)
         }
     }
 

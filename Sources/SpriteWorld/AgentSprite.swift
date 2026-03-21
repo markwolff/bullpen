@@ -840,14 +840,10 @@ public class AgentSprite: SKSpriteNode {
     }
 
     /// Starts the deep thinking pacing cycle and shows the 🤔 emoji.
-    public func startDeepThinkingPacing(
-        waypoints: [CGPoint],
-        layout: OfficeLayout,
-        otherAgentPositions: [CGPoint] = []
-    ) {
+    public func startDeepThinkingPacing(waypoints: [CGPoint], otherAgentPositions: [CGPoint] = []) {
         let action = deepThinkingBehaviorManager.startPacing(waypoints: waypoints, otherAgentPositions: otherAgentPositions)
         showDeepThinkingEmoji()
-        handleDeepThinkingAction(action, layout: layout)
+        handleDeepThinkingAction(action, layout: navigationLayout)
     }
 
     /// Cancels deep thinking pacing and walks back to desk at 1.5x speed.

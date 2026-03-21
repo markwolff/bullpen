@@ -109,10 +109,9 @@ public class EmptyOfficeManager {
         let texture = TextureManager.shared.texture(
             for: on ? TextureManager.furnitureLaptopScreensaver : TextureManager.furnitureLaptopOff
         )
-        scene.enumerateChildNodes(withName: "//*") { node, _ in
-            guard let name = node.name, name.hasPrefix("monitor_"),
-                  let monitor = node as? SKSpriteNode else { return }
-            if !monitor.isHidden {
+        for i in 0..<16 {
+            if let desk = scene.childNode(withName: "desk_\(i)"),
+               let monitor = desk.childNode(withName: "monitor_\(i)") as? SKSpriteNode {
                 monitor.texture = texture
             }
         }
