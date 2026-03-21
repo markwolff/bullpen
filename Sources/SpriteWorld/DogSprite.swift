@@ -90,26 +90,12 @@ public class DogSprite: SKSpriteNode {
         super.init(texture: texture, color: .clear, size: CGSize(width: 56, height: 48))
         self.name = "office_dog"
         self.zPosition = 100
-        setupNameLabel()
         startSleeping()
     }
 
     @available(*, unavailable)
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) is not supported")
-    }
-
-    // MARK: - Name Label
-
-    private func setupNameLabel() {
-        let label = SKLabelNode(text: "Pancake")
-        label.fontName = "Menlo-Bold"
-        label.fontSize = 8
-        label.fontColor = SKColor(red: 0.91, green: 0.75, blue: 0.56, alpha: 0.9)
-        label.position = CGPoint(x: 0, y: size.height / 2 + 6)
-        label.zPosition = 101
-        label.name = "dog_name_label"
-        addChild(label)
     }
 
     // MARK: - Update Loop
