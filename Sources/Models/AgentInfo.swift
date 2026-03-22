@@ -18,7 +18,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// Unique identifier for this agent session (derived from log file or session ID)
     public let id: String
 
-    /// Human-readable name for this agent — starts as project name, refined to task name
+    /// Human-readable name for this agent — starts as project/worktree name, refined to task name from first user prompt
     public var name: String
 
     /// Whether the name has been refined from the first user prompt

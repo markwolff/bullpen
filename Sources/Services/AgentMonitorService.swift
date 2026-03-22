@@ -701,7 +701,7 @@ public final class AgentMonitorService: ObservableObject {
         reader: any AgentLogReader
     ) {
         let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
-        let name = Self.generateAgentName(from: sessionID)
+        let name = Self.generateAgentName(from: sessionID, fileURL: fileURL)
         var isSubagent = fileURL.path.contains("/subagents/")
         var parentSessionID: String?
         var roleTitle: String = "Developer"
@@ -875,9 +875,76 @@ public final class AgentMonitorService: ObservableObject {
 
     // MARK: - Smart Naming
 
-    /// Generates a deterministic unique display name from a session ID.
-    /// Uses adjective+animal pairs (like Docker container names) for memorable identification.
-    static func generateAgentName(from sessionID: String) -> String {
+    /// Generates an initial display name from the log file path.
+    ///
+    /// For Claude Code, extracts the project or worktree name from the encoded
+    /// project directory path (e.g., `~/.claude/projects/-Users-me-projects-myapp/`
+    /// → "myapp"). Falls back to a deterministic adjective+animal pair from the
+    /// session ID when no project name can be extracted (e.g., Codex CLI sessions).
+    static func generateAgentName(from sessionID: String, fileURL: URL? = nil) -> String {
+        if let fileURL = fileURL, let projectName = extractProjectName(from: fileURL) {
+            return projectName
+        }
+        return fallbackName(from: sessionID)
+    }
+
+    /// Extracts the project or worktree name from a Claude Code log file URL.
+    ///
+    /// Claude Code stores logs at `~/.claude/projects/<encoded-path>/...` where
+    /// `<encoded-path>` is the workspace's absolute path with `/` replaced by `-`.
+    /// This method finds that component and extracts the last meaningful directory
+    /// name — typically the project root or git worktree name.
+    static func extractProjectName(from fileURL: URL) -> String? {
+        let components = fileURL.pathComponents
+        guard let projectsIdx = components.firstIndex(of: "projects"),
+              projectsIdx + 1 < components.count else {
+            return nil
+        }
+
+        let encodedDir = components[projectsIdx + 1]
+        // Skip bare home directories like "-Users-mark" (only 2-3 segments)
+        guard encodedDir.hasPrefix("-") else { return nil }
+
+        // Drop the leading "-" and split on "-"
+        let segments = encodedDir.dropFirst().split(separator: "-")
+        guard segments.count > 2 else { return nil }
+
+        // The first two segments are always "Users" and <username>.
+        // Everything after is the project path. We want the last directory name,
+        // which may be multi-word (e.g., "new-york" from two segments "new", "york").
+        //
+        // Heuristic: take trailing segments that look like a single directory name —
+        // stop scanning backwards when we hit a "known path word" that's likely a
+        // parent directory (common developer paths, or the project name itself
+        // repeating). Cap at 3 trailing segments to avoid grabbing too much.
+        let pathSegments = Array(segments.dropFirst(2)) // drop "Users", username
+        guard !pathSegments.isEmpty else { return nil }
+
+        // Simple approach: take the last segment. If it looks like a version suffix
+        // (e.g., "v1"), include the preceding segment too.
+        let last = String(pathSegments.last!)
+        if pathSegments.count >= 2 && looksLikeVersionSuffix(last) {
+            let prev = String(pathSegments[pathSegments.count - 2])
+            return titleCase("\(prev)-\(last)")
+        }
+
+        return titleCase(last)
+    }
+
+    /// Whether a string looks like a version suffix (e.g., "v1", "v2").
+    private static func looksLikeVersionSuffix(_ s: String) -> Bool {
+        s.count <= 3 && s.hasPrefix("v") && s.dropFirst().allSatisfy(\.isNumber)
+    }
+
+    /// Title-cases a hyphenated name: "new-york" → "New York", "bullpen" → "Bullpen".
+    private static func titleCase(_ name: String) -> String {
+        name.split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    /// Deterministic adjective+animal fallback name from session ID.
+    static func fallbackName(from sessionID: String) -> String {
         let adjectives = [
             "Swift", "Bold", "Calm", "Keen", "Sage",
             "Warm", "Cool", "Deft", "Fair", "Glad",
@@ -891,7 +958,6 @@ public final class AgentMonitorService: ObservableObject {
             "Cod", "Eel", "Gnu", "Koi", "Pug",
         ]
 
-        // Use a simple hash of the session ID for deterministic selection
         var hash: UInt64 = 5381
         for byte in sessionID.utf8 {
             hash = hash &* 33 &+ UInt64(byte)
