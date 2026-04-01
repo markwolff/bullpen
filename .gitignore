@@ -9,6 +9,7 @@ DerivedData/
 .env
 .context/
 .superpowers/
+.omx/
 
 # Assetgen tool
 tools/assetgen/node_modules/
