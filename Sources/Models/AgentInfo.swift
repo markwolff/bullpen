@@ -9,7 +9,6 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
             && lhs.currentTaskDescription == rhs.currentTaskDescription
             && lhs.isPlanMode == rhs.isPlanMode
             && lhs.isSubagent == rhs.isSubagent
-            && lhs.nameRefined == rhs.nameRefined
             && lhs.name == rhs.name
             && lhs.roleTitle == rhs.roleTitle
             && lhs.currentContextTokens == rhs.currentContextTokens
@@ -18,11 +17,8 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
     /// Unique identifier for this agent session (derived from log file or session ID)
     public let id: String
 
-    /// Human-readable name for this agent — starts as project/worktree name, refined to task name from first user prompt
+    /// Human-readable name for this agent.
     public var name: String
-
-    /// Whether the name has been refined from the first user prompt
-    public var nameRefined: Bool = false
 
     /// What kind of agent this is
     public let agentType: AgentType
@@ -67,9 +63,9 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
 
     /// Display role shown as subtitle beneath the agent's name.
     /// For subagents, derived from the meta.json `agentType` field that Claude Code
-    /// writes alongside each subagent log (e.g., "Explore" → "Explorer", "test-runner" → "Test Runner").
-    /// For main agents, inferred from state: "Planner" if in plan mode,
-    /// "Lead" if supervising subagents, "Developer" otherwise.
+    /// writes alongside each subagent log (e.g., "Explore" → "Researcher", "worker" → "Engineer").
+    /// For main agents, inferred from state: "Planning Lead" if in plan mode,
+    /// "Team Lead" if supervising subagents, "Software Engineer" otherwise.
     public var roleTitle: String?
 
     /// Whether this agent is currently in plan mode

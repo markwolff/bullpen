@@ -2,6 +2,13 @@ import Foundation
 import Models
 import LogReaders
 
+private struct CodexSessionMetadata {
+    let parentSessionID: String?
+    let roleTitle: String?
+    let preferredName: String?
+    let workspacePath: String?
+}
+
 /// Central service that monitors all agent log sources and publishes
 /// a live list of agent states. This is the bridge between log readers
 /// and the sprite world.
@@ -486,13 +493,6 @@ public final class AgentMonitorService: ObservableObject {
         agent.currentTaskDescription = activity.summary
         agent.lastUpdatedAt = activity.timestamp
 
-        // Refine name from first user message prompt
-        if !agent.nameRefined && activity.activityType == .userMessage,
-           let text = activity.userMessageText {
-            agent.name = Self.shortenPrompt(text)
-            agent.nameRefined = true
-        }
-
         // 7.10: Only update stateEnteredAt when the state actually transitions
         if oldState != newState {
             agent.stateEnteredAt = activity.timestamp
@@ -503,8 +503,8 @@ public final class AgentMonitorService: ObservableObject {
             agent.isSubagent = true
             if let rawRole = activity.codexRoleTitle {
                 agent.roleTitle = Self.mapAgentTypeToTitle(rawRole)
-            } else if agent.roleTitle == "Developer" || agent.roleTitle == nil {
-                agent.roleTitle = "Subagent"
+            } else if agent.roleTitle == Self.defaultMainRoleTitle || agent.roleTitle == nil {
+                agent.roleTitle = Self.defaultSubagentRoleTitle
             }
         }
 
@@ -518,11 +518,11 @@ public final class AgentMonitorService: ObservableObject {
         // Dynamically update role title for main agents based on current state.
         if !agent.isSubagent {
             if agent.isPlanMode {
-                agent.roleTitle = "Planner"
+                agent.roleTitle = Self.planModeRoleTitle
             } else if agent.hasActiveChildren {
-                agent.roleTitle = "Lead"
+                agent.roleTitle = Self.supervisingRoleTitle
             } else {
-                agent.roleTitle = "Developer"
+                agent.roleTitle = Self.defaultMainRoleTitle
             }
         }
 
@@ -701,10 +701,17 @@ public final class AgentMonitorService: ObservableObject {
         reader: any AgentLogReader
     ) {
         let traits = CharacterTraits.from(sessionID: sessionID, agentType: reader.agentType)
-        let name = Self.generateAgentName(from: sessionID, fileURL: fileURL)
+        let codexMetadata = reader.agentType == .codexCLI
+            ? Self.readCodexSessionMetadata(from: fileURL)
+            : nil
+        let name = Self.generateAgentName(
+            from: sessionID,
+            fileURL: fileURL,
+            preferredNickname: codexMetadata?.preferredName
+        )
         var isSubagent = fileURL.path.contains("/subagents/")
         var parentSessionID: String?
-        var roleTitle: String = "Developer"
+        var roleTitle: String = Self.defaultMainRoleTitle
 
         if isSubagent {
             let subagentsDir = fileURL.deletingLastPathComponent()
@@ -712,11 +719,10 @@ public final class AgentMonitorService: ObservableObject {
                 let parentDir = subagentsDir.deletingLastPathComponent()
                 parentSessionID = parentDir.lastPathComponent
             }
-            roleTitle = Self.readSubagentRole(from: fileURL) ?? "Subagent"
+            roleTitle = Self.readSubagentRole(from: fileURL) ?? Self.defaultSubagentRoleTitle
         }
 
-        if reader.agentType == .codexCLI,
-           let codexMetadata = Self.readCodexSessionMetadata(from: fileURL) {
+        if let codexMetadata {
             if let parentID = codexMetadata.parentSessionID {
                 parentSessionID = parentID
                 isSubagent = true
@@ -724,7 +730,7 @@ public final class AgentMonitorService: ObservableObject {
             if let codexRoleTitle = codexMetadata.roleTitle {
                 roleTitle = codexRoleTitle
             } else if isSubagent {
-                roleTitle = "Subagent"
+                roleTitle = Self.defaultSubagentRoleTitle
             }
         }
 
@@ -735,6 +741,7 @@ public final class AgentMonitorService: ObservableObject {
             traits: traits,
             state: .idle,
             currentTaskDescription: "Starting up...",
+            workspacePath: codexMetadata?.workspacePath,
             isSubagent: isSubagent,
             roleTitle: roleTitle,
             parentSessionID: parentSessionID
@@ -789,17 +796,7 @@ public final class AgentMonitorService: ObservableObject {
                 createAgentForSession(sessionID: sessionID, fileURL: fileURL, reader: reader)
             }
 
-            // On first read, find first user message for name refinement
             if isInitialRead {
-                if let firstUserMsg = activities.first(where: { $0.activityType == .userMessage }) {
-                    if let index = agentIndex(for: sessionID),
-                       !agents[index].nameRefined,
-                       let text = firstUserMsg.userMessageText {
-                        agents[index].name = Self.shortenPrompt(text)
-                        agents[index].nameRefined = true
-                    }
-                }
-
                 // Register parent-child from any activity's metadata
                 for activity in activities {
                     if let parentID = activity.parentSessionID {
@@ -875,87 +872,65 @@ public final class AgentMonitorService: ObservableObject {
 
     // MARK: - Smart Naming
 
-    /// Generates an initial display name from the log file path.
+    private static let defaultMainRoleTitle = "Software Engineer"
+    private static let planModeRoleTitle = "Planning Lead"
+    private static let supervisingRoleTitle = "Team Lead"
+    private static let defaultSubagentRoleTitle = "Specialist"
+
+    /// Generates a stable, person-like display name for an agent session.
     ///
-    /// For Claude Code, extracts the project or worktree name from the encoded
-    /// project directory path (e.g., `~/.claude/projects/-Users-me-projects-myapp/`
-    /// → "myapp"). Falls back to a deterministic adjective+animal pair from the
-    /// session ID when no project name can be extracted (e.g., Codex CLI sessions).
-    static func generateAgentName(from sessionID: String, fileURL: URL? = nil) -> String {
-        if let fileURL = fileURL, let projectName = extractProjectName(from: fileURL) {
-            return projectName
+    /// When the runtime exposes an explicit nickname, that wins. Otherwise we
+    /// fall back to a deterministic full name derived from the session ID so the
+    /// same session always renders with the same identity across app refreshes.
+    static func generateAgentName(
+        from sessionID: String,
+        fileURL: URL? = nil,
+        preferredNickname: String? = nil
+    ) -> String {
+        if let preferredNickname = normalizeProvidedAgentName(preferredNickname) {
+            return preferredNickname
         }
         return fallbackName(from: sessionID)
     }
 
-    /// Extracts the project or worktree name from a Claude Code log file URL.
-    ///
-    /// Claude Code stores logs at `~/.claude/projects/<encoded-path>/...` where
-    /// `<encoded-path>` is the workspace's absolute path with `/` replaced by `-`.
-    /// This method finds that component and extracts the last meaningful directory
-    /// name — typically the project root or git worktree name.
-    static func extractProjectName(from fileURL: URL) -> String? {
-        let components = fileURL.pathComponents
-        guard let projectsIdx = components.firstIndex(of: "projects"),
-              projectsIdx + 1 < components.count else {
-            return nil
-        }
+    private static func normalizeProvidedAgentName(_ rawName: String?) -> String? {
+        guard let rawName else { return nil }
 
-        let encodedDir = components[projectsIdx + 1]
-        // Skip bare home directories like "-Users-mark" (only 2-3 segments)
-        guard encodedDir.hasPrefix("-") else { return nil }
+        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
 
-        // Drop the leading "-" and split on "-"
-        let segments = encodedDir.dropFirst().split(separator: "-")
-        guard segments.count > 2 else { return nil }
+        let sanitized = trimmed
+            .replacingOccurrences(of: #"[_-]+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"[^A-Za-z0-9 ]"#, with: "", options: .regularExpression)
+        let words = sanitized.split(whereSeparator: \.isWhitespace).prefix(2)
+        guard !words.isEmpty else { return nil }
 
-        // The first two segments are always "Users" and <username>.
-        // Everything after is the project path. We want the last directory name,
-        // which may be multi-word (e.g., "new-york" from two segments "new", "york").
-        //
-        // Heuristic: take trailing segments that look like a single directory name —
-        // stop scanning backwards when we hit a "known path word" that's likely a
-        // parent directory (common developer paths, or the project name itself
-        // repeating). Cap at 3 trailing segments to avoid grabbing too much.
-        let pathSegments = Array(segments.dropFirst(2)) // drop "Users", username
-        guard !pathSegments.isEmpty else { return nil }
-
-        // Simple approach: take the last segment. If it looks like a version suffix
-        // (e.g., "v1"), include the preceding segment too.
-        let last = String(pathSegments.last!)
-        if pathSegments.count >= 2 && looksLikeVersionSuffix(last) {
-            let prev = String(pathSegments[pathSegments.count - 2])
-            return titleCase("\(prev)-\(last)")
-        }
-
-        return titleCase(last)
-    }
-
-    /// Whether a string looks like a version suffix (e.g., "v1", "v2").
-    private static func looksLikeVersionSuffix(_ s: String) -> Bool {
-        s.count <= 3 && s.hasPrefix("v") && s.dropFirst().allSatisfy(\.isNumber)
-    }
-
-    /// Title-cases a hyphenated name: "new-york" → "New York", "bullpen" → "Bullpen".
-    private static func titleCase(_ name: String) -> String {
-        name.split(separator: "-")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+        let name = words
+            .map { word in
+                let lower = word.lowercased()
+                return lower.prefix(1).uppercased() + lower.dropFirst()
+            }
             .joined(separator: " ")
+
+        return name.rangeOfCharacter(from: .letters) == nil ? nil : name
     }
 
-    /// Deterministic adjective+animal fallback name from session ID.
+    /// Deterministic full-name fallback from session ID.
     static func fallbackName(from sessionID: String) -> String {
-        let adjectives = [
-            "Swift", "Bold", "Calm", "Keen", "Sage",
-            "Warm", "Cool", "Deft", "Fair", "Glad",
-            "Hale", "Just", "Kind", "Live", "Neat",
-            "Pure", "Rare", "Safe", "True", "Wise",
+        let givenNames = [
+            "Ada", "Aria", "Avery", "Bennett", "Calla",
+            "Dorian", "Emery", "Felix", "Hazel", "Idris",
+            "Iris", "Jules", "Kai", "Lena", "Maya",
+            "Milo", "Nina", "Noah", "Nova", "Owen",
+            "Remy", "Sage", "Theo", "Tova", "Vera",
+            "Wes", "Zara", "Ansel", "Etta", "Rowan",
         ]
-        let animals = [
-            "Fox", "Owl", "Elk", "Jay", "Ram",
-            "Bee", "Ant", "Cat", "Dog", "Bat",
-            "Hen", "Cow", "Emu", "Yak", "Asp",
-            "Cod", "Eel", "Gnu", "Koi", "Pug",
+        let familyNames = [
+            "Ashford", "Bellamy", "Brooks", "Carver", "Ellis",
+            "Foster", "Harper", "Hayes", "Hollis", "Keaton",
+            "Lang", "Mercer", "Monroe", "Morrow", "Quill",
+            "Reeves", "Sawyer", "Shaw", "Sloane", "Tanner",
+            "Vale", "Wilder", "Winslow", "Rowe", "Hart",
         ]
 
         var hash: UInt64 = 5381
@@ -963,10 +938,10 @@ public final class AgentMonitorService: ObservableObject {
             hash = hash &* 33 &+ UInt64(byte)
         }
 
-        let adjIndex = Int(hash % UInt64(adjectives.count))
-        let animalIndex = Int((hash / UInt64(adjectives.count)) % UInt64(animals.count))
+        let givenNameIndex = Int(hash % UInt64(givenNames.count))
+        let familyNameIndex = Int((hash / UInt64(givenNames.count)) % UInt64(familyNames.count))
 
-        return "\(adjectives[adjIndex]) \(animals[animalIndex])"
+        return "\(givenNames[givenNameIndex]) \(familyNames[familyNameIndex])"
     }
 
     // MARK: - Subagent Role Detection
@@ -995,7 +970,7 @@ public final class AgentMonitorService: ObservableObject {
 
     /// Reads Codex session metadata directly from the JSONL file so subagents
     /// created as top-level session files still get correct parent/role data.
-    static func readCodexSessionMetadata(from logFileURL: URL) -> (parentSessionID: String?, roleTitle: String?)? {
+    private static func readCodexSessionMetadata(from logFileURL: URL) -> CodexSessionMetadata? {
         guard let handle = FileHandle(forReadingAtPath: logFileURL.path) else { return nil }
         defer { try? handle.close() }
 
@@ -1019,7 +994,14 @@ public final class AgentMonitorService: ObservableObject {
 
             let parentSessionID = extractCodexParentSessionID(from: payload)
             let roleTitle = extractCodexRoleTitle(from: payload)
-            return (parentSessionID: parentSessionID, roleTitle: roleTitle)
+            let preferredName = extractCodexPreferredName(from: payload)
+            let workspacePath = payload["cwd"] as? String
+            return CodexSessionMetadata(
+                parentSessionID: parentSessionID,
+                roleTitle: roleTitle,
+                preferredName: preferredName,
+                workspacePath: workspacePath
+            )
         }
 
         return nil
@@ -1053,6 +1035,23 @@ public final class AgentMonitorService: ObservableObject {
         return mapAgentTypeToTitle(role)
     }
 
+    private static func extractCodexPreferredName(from payload: [String: Any]) -> String? {
+        if let nickname = payload["agent_nickname"] as? String, !nickname.isEmpty {
+            return nickname
+        }
+
+        guard let source = payload["source"] as? [String: Any],
+              let subagent = source["subagent"] as? [String: Any],
+              let threadSpawn = subagent["thread_spawn"] as? [String: Any],
+              let nickname = threadSpawn["agent_nickname"] as? String,
+              !nickname.isEmpty
+        else {
+            return nil
+        }
+
+        return nickname
+    }
+
     /// Maps a raw Claude Code subagent type string to a clean display title.
     ///
     /// Known agentType values observed in real logs include:
@@ -1066,28 +1065,39 @@ public final class AgentMonitorService: ObservableObject {
     static func mapAgentTypeToTitle(_ agentType: String) -> String {
         // Well-known types with curated display names
         switch agentType.lowercased() {
-        case "explore":
-            return "Explorer"
-        case "plan":
+        case "explore", "explorer", "feature-dev:code-explorer",
+            "codebase-investigator", "investigator", "researcher":
+            return "Researcher"
+        case "plan", "planner":
             return "Planner"
-        case "general-purpose":
-            return "Generalist"
-        case "code-reviewer", "code-quality-advocate":
-            return "Code Reviewer"
-        case "test-runner":
-            return "Test Runner"
-        case "validator":
-            return "Validator"
-        case "feature-dev:code-architect":
+        case "general-purpose", "worker", "executor", "team-executor":
+            return "Engineer"
+        case "code-reviewer", "code-quality-advocate", "quality-reviewer", "critic":
+            return "Reviewer"
+        case "test-runner", "test-engineer", "qa-tester", "validator", "verifier":
+            return "QA Engineer"
+        case "feature-dev:code-architect", "architect":
             return "Architect"
-        case "feature-dev:code-explorer", "codebase-investigator", "investigator":
-            return "Investigator"
-        case "simplicity-champion":
-            return "Simplifier"
-        case "product-thinker":
-            return "Product Thinker"
+        case "simplicity-champion", "code-simplifier":
+            return "Staff Engineer"
+        case "product-thinker", "product-manager", "product-analyst", "ux-researcher":
+            return "Strategist"
         case "sentry:issue-summarizer":
-            return "Issue Analyst"
+            return "Incident Analyst"
+        case "security-reviewer":
+            return "Security Engineer"
+        case "dependency-expert":
+            return "Integration Engineer"
+        case "build-fixer":
+            return "Build Engineer"
+        case "git-master":
+            return "Release Engineer"
+        case "writer":
+            return "Technical Writer"
+        case "designer":
+            return "Designer"
+        case "analyst":
+            return "Analyst"
         default:
             // Fall back to cleaning up the raw type string:
             // "edge-runtime-expert" → "Edge Runtime Expert"
@@ -1097,54 +1107,5 @@ public final class AgentMonitorService: ObservableObject {
                 .map { $0.prefix(1).uppercased() + $0.dropFirst() }
                 .joined(separator: " ")
         }
-    }
-
-    /// Distills a user prompt into a short display name (max 28 chars).
-    ///
-    /// Strips filler prefixes, title-cases the first few words, and truncates
-    /// at word boundaries to avoid ugly mid-word cuts like "Authenticati…".
-    /// Also filters out system/meta content (e.g., "[request Interrupted")
-    /// that can leak into user message payloads.
-    static func shortenPrompt(_ text: String) -> String {
-        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Filter out system/meta content that isn't a real user prompt.
-        // Claude Code sometimes includes "[request Interrupted..." or similar
-        // metadata strings in the message content array.
-        if cleaned.hasPrefix("[") || cleaned.hasPrefix("<") {
-            return "Task"
-        }
-
-        // Strip common filler prefixes so the name leads with the action verb
-        let prefixes = [
-            "please ", "can you ", "could you ", "i want you to ",
-            "i need you to ", "help me ", "let's ", "let's ",
-            "i'd like you to ", "go ahead and ", "we need to ", "you should ",
-            "i want to ", "we should ", "now ", "ok ", "okay ",
-        ]
-        let lower = cleaned.lowercased()
-        for prefix in prefixes {
-            if lower.hasPrefix(prefix) {
-                cleaned = String(cleaned.dropFirst(prefix.count))
-                break
-            }
-        }
-
-        // Split into words, filter out noise
-        let words = cleaned.split(separator: " ", maxSplits: 6, omittingEmptySubsequences: true)
-        guard !words.isEmpty else { return "Task" }
-
-        // Build name from words that fit within the character budget.
-        // Truncate at word boundaries to avoid mid-word cuts.
-        let maxLength = 28
-        var result = ""
-        for word in words.prefix(5) {
-            let titleWord = word.prefix(1).uppercased() + word.dropFirst().lowercased()
-            let candidate = result.isEmpty ? titleWord : "\(result) \(titleWord)"
-            if candidate.count > maxLength { break }
-            result = candidate
-        }
-
-        return result.isEmpty ? "Task" : result
     }
 }
