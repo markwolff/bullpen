@@ -2,6 +2,20 @@ import Foundation
 import UserNotifications
 import Models
 
+public struct NotificationMessage: Sendable, Equatable {
+    public let identifier: String
+    public let title: String
+    public let body: String
+    public let usesDefaultSound: Bool
+
+    public init(identifier: String, title: String, body: String, usesDefaultSound: Bool) {
+        self.identifier = identifier
+        self.title = title
+        self.body = body
+        self.usesDefaultSound = usesDefaultSound
+    }
+}
+
 /// Manages macOS notifications for agent state changes.
 /// Sends notifications when the window is not visible, such as when an agent
 /// finishes a task or encounters an error.
@@ -15,16 +29,47 @@ public class NotificationService {
     /// Minimum interval between error notifications for the same agent (seconds)
     private let errorDebounceInterval: TimeInterval = 30.0
 
-    public init() {}
+    private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
+    private let authorizationRequester: @Sendable (UNAuthorizationOptions) async throws -> Bool
+    private let notificationPoster: @Sendable (NotificationMessage) async throws -> Void
+    private let nowProvider: @Sendable () -> Date
+
+    public init(
+        authorizationStatusProvider: @escaping @Sendable () async -> UNAuthorizationStatus = {
+            await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        },
+        authorizationRequester: @escaping @Sendable (UNAuthorizationOptions) async throws -> Bool = { options in
+            try await UNUserNotificationCenter.current().requestAuthorization(options: options)
+        },
+        notificationPoster: @escaping @Sendable (NotificationMessage) async throws -> Void = { message in
+            let content = UNMutableNotificationContent()
+            content.title = message.title
+            content.body = message.body
+            if message.usesDefaultSound {
+                content.sound = .default
+            }
+
+            let request = UNNotificationRequest(
+                identifier: message.identifier,
+                content: content,
+                trigger: nil
+            )
+            try await UNUserNotificationCenter.current().add(request)
+        },
+        nowProvider: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        self.authorizationStatusProvider = authorizationStatusProvider
+        self.authorizationRequester = authorizationRequester
+        self.notificationPoster = notificationPoster
+        self.nowProvider = nowProvider
+    }
 
     /// Ensures notification permission has been requested.
     public func ensurePermission() async {
         guard !permissionRequested else { return }
         permissionRequested = true
-        let center = UNUserNotificationCenter.current()
-        let settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        if await authorizationStatusProvider() == .notDetermined {
+            _ = try? await authorizationRequester([.alert, .sound])
         }
     }
 
@@ -33,12 +78,14 @@ public class NotificationService {
     public func notifyAgentFinished(agent: AgentInfo, windowVisible: Bool) async {
         guard !windowVisible else { return }
         await ensurePermission()
-        let content = UNMutableNotificationContent()
-        content.title = "Agent finished"
         let dir = agent.workspacePath.flatMap { URL(fileURLWithPath: $0).lastPathComponent } ?? "session"
-        content.body = "\(agent.name) completed in \(dir)"
-        let request = UNNotificationRequest(identifier: "finished-\(agent.id)", content: content, trigger: nil)
-        try? await UNUserNotificationCenter.current().add(request)
+        let message = NotificationMessage(
+            identifier: "finished-\(agent.id)",
+            title: "Agent finished",
+            body: "\(agent.name) completed in \(dir)",
+            usesDefaultSound: false
+        )
+        try? await notificationPoster(message)
     }
 
     /// Sends a notification when an agent encounters an error.
@@ -52,7 +99,7 @@ public class NotificationService {
         guard !windowVisible else { return }
 
         // Debounce: don't send more than one error notification per agent within the interval
-        let now = Date()
+        let now = nowProvider()
         if let lastTime = lastErrorNotificationTime[agent.id],
            now.timeIntervalSince(lastTime) < errorDebounceInterval {
             return
@@ -60,13 +107,14 @@ public class NotificationService {
         lastErrorNotificationTime[agent.id] = now
 
         await ensurePermission()
-        let content = UNMutableNotificationContent()
-        content.title = "Agent error"
         let errorSummary = String(agent.currentTaskDescription.prefix(100))
         let dir = agent.workspacePath.flatMap { URL(fileURLWithPath: $0).lastPathComponent } ?? "session"
-        content.body = "\(agent.name) in \(dir): \(errorSummary)"
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: "error-\(agent.id)", content: content, trigger: nil)
-        try? await UNUserNotificationCenter.current().add(request)
+        let message = NotificationMessage(
+            identifier: "error-\(agent.id)",
+            title: "Agent error",
+            body: "\(agent.name) in \(dir): \(errorSummary)",
+            usesDefaultSound: true
+        )
+        try? await notificationPoster(message)
     }
 }
