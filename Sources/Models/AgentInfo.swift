@@ -7,6 +7,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         lhs.id == rhs.id
             && lhs.state == rhs.state
             && lhs.currentTaskDescription == rhs.currentTaskDescription
+            && lhs.lastActivityType == rhs.lastActivityType
             && lhs.isPlanMode == rhs.isPlanMode
             && lhs.isSubagent == rhs.isSubagent
             && lhs.name == rhs.name
@@ -31,6 +32,9 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
 
     /// Short description of what the agent is currently doing (e.g., "Editing ContentView.swift")
     public var currentTaskDescription: String
+
+    /// The activity category that produced the current visible task description.
+    public var lastActivityType: ActivityType?
 
     /// When this agent session started
     public var startedAt: Date
@@ -92,6 +96,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         traits: CharacterTraits? = nil,
         state: AgentState = .idle,
         currentTaskDescription: String = "",
+        lastActivityType: ActivityType? = nil,
         startedAt: Date = .now,
         lastUpdatedAt: Date = .now,
         workspacePath: String? = nil,
@@ -106,6 +111,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
         self.traits = traits ?? CharacterTraits.from(sessionID: id, agentType: agentType)
         self.state = state
         self.currentTaskDescription = currentTaskDescription
+        self.lastActivityType = lastActivityType
         self.startedAt = startedAt
         self.lastUpdatedAt = lastUpdatedAt
         self.workspacePath = workspacePath

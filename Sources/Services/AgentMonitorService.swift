@@ -491,6 +491,7 @@ public final class AgentMonitorService: ObservableObject {
 
         agent.state = newState
         agent.currentTaskDescription = activity.summary
+        agent.lastActivityType = activity.activityType
         agent.lastUpdatedAt = activity.timestamp
 
         // 7.10: Only update stateEnteredAt when the state actually transitions

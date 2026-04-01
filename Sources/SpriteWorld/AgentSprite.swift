@@ -228,17 +228,9 @@ public class AgentSprite: SKSpriteNode {
         updatePlanModeOverlay(isPlanMode: newInfo.isPlanMode)
         updateDesklessLaptopVisibility()
 
-        // Update thought bubble — determine best text once, call bubble once
-        let desc = newInfo.currentTaskDescription
-        let bubbleText: String
-        if shouldPreferRecentToolBubble(for: newInfo) {
-            bubbleText = newInfo.recentTools.first!.summary
-        } else if newInfo.isPlanMode && !desc.isEmpty {
-            bubbleText = "Planning: \(desc)"
-        } else {
-            bubbleText = desc
-        }
-        thoughtBubble.update(text: bubbleText, for: newInfo.state)
+        // Update thought bubble — choose both text and visual treatment from activity context
+        let bubbleContent = bubbleContent(for: newInfo)
+        thoughtBubble.update(text: bubbleContent.text, for: newInfo.state, style: bubbleContent.style)
 
         // Trigger animation change if state changed
         if oldState != newInfo.state {
@@ -382,13 +374,89 @@ public class AgentSprite: SKSpriteNode {
         let genericDescriptions: Set<String> = [
             "",
             "Thinking...",
+            "Writing code",
             "Tool result received",
             "Supervising...",
             "Starting up...",
             "Waiting for input",
+            "Running command",
+            "Reading files",
+            "Searching",
         ]
 
         return genericDescriptions.contains(info.currentTaskDescription)
+    }
+
+    private func bubbleContent(for info: AgentInfo) -> (text: String, style: ThoughtBubble.Style) {
+        let description = info.currentTaskDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if info.state == .error {
+            return (description.isEmpty ? "Something broke" : description, .error)
+        }
+
+        if info.isPlanMode || info.state == .supervisingAgents {
+            let text = description.isEmpty ? "Planning next steps" : description
+            let normalized = text.hasPrefix("Planning:") ? text : "Planning: \(text)"
+            return (normalized, .plan)
+        }
+
+        if info.state == .waitingForInput {
+            let text = description.isEmpty ? AgentState.waitingForInput.displayLabel : description
+            return (text, .waiting)
+        }
+
+        if info.state == .thinking || info.state == .deepThinking {
+            let text = description.isEmpty ? AgentState.thinking.displayLabel : description
+            return (text, .thought)
+        }
+
+        if shouldPreferRecentToolBubble(for: info), let recentTool = info.recentTools.first {
+            return (recentTool.summary, style(for: recentTool.activityType, state: info.state))
+        }
+
+        if description.isEmpty {
+            return ("", style(for: info.lastActivityType, state: info.state))
+        }
+
+        return (description, style(for: info.lastActivityType, state: info.state))
+    }
+
+    private func style(for activityType: ActivityType?, state: AgentState) -> ThoughtBubble.Style {
+        if let activityType {
+            switch activityType {
+            case .toolUse:
+                return .toolUse
+            case .toolResult:
+                return .report
+            case .assistantMessage:
+                return .response
+            case .userMessage:
+                return .waiting
+            case .thinking:
+                return .thought
+            case .error:
+                return .error
+            case .sessionStart, .sessionEnd:
+                break
+            }
+        }
+
+        switch state {
+        case .thinking, .deepThinking:
+            return .thought
+        case .readingFiles:
+            return .report
+        case .runningCommand, .searching:
+            return .toolUse
+        case .waitingForInput:
+            return .waiting
+        case .error:
+            return .error
+        case .supervisingAgents:
+            return .plan
+        case .idle, .writingCode, .finished:
+            return .response
+        }
     }
 
     // MARK: - Animations (6.5–6.13)
