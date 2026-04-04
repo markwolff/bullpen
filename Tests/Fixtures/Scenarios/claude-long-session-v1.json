@@ -1,0 +1,27 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 31,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Claude long-session replay derived from the long fixture.",
+  "id" : "claude-long-session-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+    {
+      "activities" : [
+        {
+          "activityType" : "toolUse",
+          "inputTokens" : 24600,
+          "isPlanMode" : false,
+          "outputTokens" : 52,
+          "summary" : "Running cd \/project && npx tsc --noEmit",
+          "timestamp" : "2026-03-15T17:01:37Z"
+        }
+      ],
+      "agentType" : "claude_code",
+      "filePath" : "\/Users\/test\/.claude\/projects\/hash\/sessions\/claude-long-1.jsonl",
+      "sessionID" : "claude-long-1"
+    }
+  ]
+}

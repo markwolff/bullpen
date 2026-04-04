@@ -1,0 +1,82 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 42,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Mixed busy office combining Codex and Claude real-ish fixtures.",
+  "id" : "busy-mixed-office-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+    {
+      "activities" : [
+        {
+          "activityType" : "toolUse",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Running npm test -- --grep login",
+          "timestamp" : "2026-03-15T14:30:08Z"
+        }
+      ],
+      "agentType" : "codex_cli",
+      "filePath" : "\/Users\/test\/.codex\/sessions\/2026\/04\/03\/codex-main-1.jsonl",
+      "sessionID" : "codex-main-1"
+    },
+    {
+      "activities" : [
+        {
+          "activityType" : "sessionStart",
+          "codexRoleTitle" : "explorer",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "parentSessionID" : "parent-session-abc123",
+          "summary" : "Subagent Gauss started (explorer)",
+          "timestamp" : "2026-03-15T14:30:00Z"
+        },
+        {
+          "activityType" : "sessionEnd",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Explored the test directory and found 15 test files.",
+          "timestamp" : "2026-03-15T14:30:04Z"
+        }
+      ],
+      "agentType" : "codex_cli",
+      "filePath" : "\/Users\/test\/.codex\/sessions\/2026\/04\/03\/codex-subagent-1.jsonl",
+      "sessionID" : "codex-subagent-1"
+    },
+    {
+      "activities" : [
+        {
+          "activityType" : "toolUse",
+          "inputTokens" : 24600,
+          "isPlanMode" : false,
+          "outputTokens" : 52,
+          "summary" : "Running cd \/project && npx tsc --noEmit",
+          "timestamp" : "2026-03-15T17:01:37Z"
+        }
+      ],
+      "agentType" : "claude_code",
+      "filePath" : "\/Users\/test\/.claude\/projects\/hash\/sessions\/claude-long-1.jsonl",
+      "sessionID" : "claude-long-1"
+    },
+    {
+      "activities" : [
+        {
+          "activityType" : "toolUse",
+          "inputTokens" : 10700,
+          "isPlanMode" : false,
+          "outputTokens" : 110,
+          "summary" : "Writing \/src\/auth\/__tests__\/login.test.ts",
+          "timestamp" : "2026-03-15T15:00:28Z"
+        }
+      ],
+      "agentType" : "claude_code",
+      "filePath" : "\/Users\/test\/.claude\/projects\/hash\/sessions\/claude-tool-1.jsonl",
+      "sessionID" : "claude-tool-1"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 271,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Synthetic office with several long-thinking agents.",
+  "id" : "deep-thinking-heavy-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+    {
+      "activities" : [
+        {
+          "activityType" : "thinking",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Thinking...",
+          "timestamp" : "2024-03-09T16:00:00Z"
+        }
+      ],
+      "agentType" : "claude_code",
+      "filePath" : "\/Users\/test\/.claude\/projects\/hash\/sessions\/think-1.jsonl",
+      "sessionID" : "think-1"
+    },
+    {
+      "activities" : [
+        {
+          "activityType" : "thinking",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Thinking...",
+          "timestamp" : "2024-03-09T16:00:01Z"
+        }
+      ],
+      "agentType" : "codex_cli",
+      "filePath" : "\/Users\/test\/.codex\/sessions\/2026\/04\/03\/think-2.jsonl",
+      "sessionID" : "think-2"
+    },
+    {
+      "activities" : [
+        {
+          "activityType" : "toolUse",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Writing architecture notes",
+          "timestamp" : "2024-03-09T16:00:02Z"
+        }
+      ],
+      "agentType" : "claude_code",
+      "filePath" : "\/Users\/test\/.claude\/projects\/hash\/sessions\/think-3.jsonl",
+      "sessionID" : "think-3"
+    }
+  ]
+}

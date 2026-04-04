@@ -7,6 +7,8 @@ import Models
 /// area waypoints with a 🤔 emoji floating above them.
 @MainActor
 public class DeepThinkingBehaviorManager {
+    private let pauseDurationProvider: @Sendable () -> TimeInterval
+    private let waypointChooser: @Sendable ([CGPoint]) -> CGPoint?
 
     /// Current phase of the deep thinking pacing cycle.
     public enum Phase {
@@ -34,6 +36,14 @@ public class DeepThinkingBehaviorManager {
     /// The previous waypoint (to avoid picking it again)
     private var lastWaypoint: CGPoint?
 
+    public init(
+        pauseDurationProvider: @escaping @Sendable () -> TimeInterval = { TimeInterval.random(in: 2...4) },
+        waypointChooser: @escaping @Sendable ([CGPoint]) -> CGPoint? = { $0.randomElement() }
+    ) {
+        self.pauseDurationProvider = pauseDurationProvider
+        self.waypointChooser = waypointChooser
+    }
+
     // MARK: - Public API
 
     /// Starts the pacing cycle. Returns the first action to perform.
@@ -51,7 +61,7 @@ public class DeepThinkingBehaviorManager {
         lastWaypoint = targetDestination
         phase = .pausing
         pauseTimer = 0
-        pauseDuration = TimeInterval.random(in: 2...4)
+        pauseDuration = pauseDurationProvider()
     }
 
     /// Called each frame while pacing. Returns an action if the agent needs to do something.
@@ -105,6 +115,6 @@ public class DeepThinkingBehaviorManager {
             return true
         }
 
-        return candidates.randomElement() ?? waypoints.randomElement() ?? CGPoint(x: 400, y: 300)
+        return waypointChooser(candidates) ?? waypointChooser(waypoints) ?? CGPoint(x: 400, y: 300)
     }
 }

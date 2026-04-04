@@ -5,6 +5,8 @@ import Models
 /// and both are working, there's a chance the "visitor" walks to stand diagonally beside the "host".
 @MainActor
 public class PairProgrammingManager {
+    private let chanceRollProvider: @Sendable () -> Double
+    private let sessionDurationProvider: @Sendable () -> TimeInterval
 
     /// Whether a pair session is currently happening
     public private(set) var isPairing: Bool = false
@@ -20,7 +22,13 @@ public class PairProgrammingManager {
     private var sessionTimer: TimeInterval = 0
     private var sessionDuration: TimeInterval = 0
 
-    public init() {}
+    public init(
+        chanceRollProvider: @escaping @Sendable () -> Double = { Double.random(in: 0...1) },
+        sessionDurationProvider: @escaping @Sendable () -> TimeInterval = { TimeInterval.random(in: 15...25) }
+    ) {
+        self.chanceRollProvider = chanceRollProvider
+        self.sessionDurationProvider = sessionDurationProvider
+    }
 
     /// Call each frame. Returns a pair request if a new session should start.
     public func update(
@@ -53,7 +61,7 @@ public class PairProgrammingManager {
 
         for (_, group) in grouped where group.count >= 2 {
             // 20% chance per eligible group
-            guard Double.random(in: 0...1) < 0.2 else { continue }
+            guard chanceRollProvider() < 0.2 else { continue }
 
             let host = group[0]
             let visitor = group[1]
@@ -72,7 +80,7 @@ public class PairProgrammingManager {
             isPairing = true
             currentSession = (visitorID: visitor.id, hostID: host.id)
             sessionTimer = 0
-            sessionDuration = TimeInterval.random(in: 15...25)
+            sessionDuration = sessionDurationProvider()
 
             return (visitorID: visitor.id, hostDeskID: hostDeskID, observePosition: observePos)
         }

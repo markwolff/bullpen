@@ -15,6 +15,12 @@ public final class TextureManager: @unchecked Sendable {
     /// Cached textures keyed by name
     private var cache: [String: SKTexture] = [:]
 
+    /// Loaded SpriteKit atlases that actually exist on disk.
+    private var atlases: [String: SKTextureAtlas] = [:]
+
+    /// Atlas names checked and found missing, so we avoid repeated warning spam.
+    private var missingAtlasNames: Set<String> = []
+
     /// Lock for thread safety
     private let lock = NSLock()
 
@@ -568,12 +574,42 @@ public final class TextureManager: @unchecked Sendable {
     /// Attempts to load a texture from a SpriteKit texture atlas.
     private func loadFromAtlas(name: String) -> SKTexture? {
         for atlasName in Self.atlasNames {
-            let atlas = SKTextureAtlas(named: atlasName)
+            if missingAtlasNames.contains(atlasName) {
+                continue
+            }
+
+            let atlas: SKTextureAtlas
+            if let cachedAtlas = atlases[atlasName] {
+                atlas = cachedAtlas
+            } else {
+                guard Self.hasAtlasResource(named: atlasName) else {
+                    missingAtlasNames.insert(atlasName)
+                    continue
+                }
+                atlas = SKTextureAtlas(named: atlasName)
+                atlases[atlasName] = atlas
+            }
+
             if atlas.textureNames.contains(name) {
                 return atlas.textureNamed(name)
             }
         }
         return nil
+    }
+
+    private static func hasAtlasResource(named atlasName: String) -> Bool {
+        let atlasDirectory = "\(atlasName).atlas"
+        let fileManager = FileManager.default
+
+        for bundle in [Bundle.main] + Bundle.allBundles + Bundle.allFrameworks {
+            guard let resourceURL = bundle.resourceURL else { continue }
+            let atlasURL = resourceURL.appendingPathComponent(atlasDirectory)
+            if fileManager.fileExists(atPath: atlasURL.path) {
+                return true
+            }
+        }
+
+        return false
     }
 
     /// Generates a placeholder texture with a color derived from the texture name.

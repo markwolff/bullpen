@@ -18,6 +18,32 @@ public enum IdleBehavior: CaseIterable, Sendable {
     case fetchWithDog
 }
 
+public struct IdleBehaviorRandomizer: Sendable {
+    public let timeInterval: @Sendable (ClosedRange<Double>) -> TimeInterval
+    public let roll: @Sendable () -> Double
+    public let chooseBehavior: @Sendable ([IdleBehavior]) -> IdleBehavior?
+    public let choosePoint: @Sendable ([CGPoint]) -> CGPoint?
+
+    public init(
+        timeInterval: @escaping @Sendable (ClosedRange<Double>) -> TimeInterval,
+        roll: @escaping @Sendable () -> Double,
+        chooseBehavior: @escaping @Sendable ([IdleBehavior]) -> IdleBehavior?,
+        choosePoint: @escaping @Sendable ([CGPoint]) -> CGPoint?
+    ) {
+        self.timeInterval = timeInterval
+        self.roll = roll
+        self.chooseBehavior = chooseBehavior
+        self.choosePoint = choosePoint
+    }
+
+    public static let live = IdleBehaviorRandomizer(
+        timeInterval: { range in TimeInterval.random(in: range) },
+        roll: { Double.random(in: 0...1) },
+        chooseBehavior: { $0.randomElement() },
+        choosePoint: { $0.randomElement() }
+    )
+}
+
 /// Manages idle behavior state machine for a single agent sprite.
 /// When the agent goes idle, this manager picks random activities and
 /// drives the agent through walk → perform → next decision cycles.
@@ -56,13 +82,19 @@ public class IdleBehaviorManager {
     /// Delay before first roam — shorter for subagents
     private var deskIdleThreshold: TimeInterval
 
+    private let randomizer: IdleBehaviorRandomizer
+
     // MARK: - Initialization
 
-    public init(isSubagent: Bool = false) {
+    public init(
+        isSubagent: Bool = false,
+        randomizer: IdleBehaviorRandomizer = .live
+    ) {
         self.isSubagent = isSubagent
+        self.randomizer = randomizer
         self.deskIdleThreshold = isSubagent
-            ? TimeInterval.random(in: 2...4)
-            : TimeInterval.random(in: 5...15)
+            ? randomizer.timeInterval(2...4)
+            : randomizer.timeInterval(5...15)
     }
 
     /// How long the agent has been performing the current activity
@@ -89,8 +121,8 @@ public class IdleBehaviorManager {
         currentBehavior = nil
         deskIdleTimer = 0
         deskIdleThreshold = isSubagent
-            ? TimeInterval.random(in: 2...4)
-            : TimeInterval.random(in: 5...15)
+            ? randomizer.timeInterval(2...4)
+            : randomizer.timeInterval(5...15)
         performTimer = 0
         performDuration = 0
         totalIdleTime = 0
@@ -146,7 +178,7 @@ public class IdleBehaviorManager {
         case .walkingToActivity:
             phase = .performing
             performTimer = 0
-            performDuration = TimeInterval.random(in: 10...25)
+            performDuration = randomizer.timeInterval(10...25)
             effectShown = false
             // Keep targetDestination set — agent is performing at this spot
 
@@ -154,8 +186,8 @@ public class IdleBehaviorManager {
             phase = .atDesk
             deskIdleTimer = 0
             deskIdleThreshold = isSubagent
-                ? TimeInterval.random(in: 2...4)
-                : TimeInterval.random(in: 8...20)
+                ? randomizer.timeInterval(2...4)
+                : randomizer.timeInterval(8...20)
             currentBehavior = nil
             targetDestination = nil
             actionBubble?.removeFromParent()
@@ -175,7 +207,7 @@ public class IdleBehaviorManager {
         guard let destination = destinationForBehavior(behavior, context: context) else {
             // Can't find a valid destination, try again later
             deskIdleTimer = 0
-            deskIdleThreshold = TimeInterval.random(in: 2...4)
+            deskIdleThreshold = randomizer.timeInterval(2...4)
             return nil
         }
 
@@ -195,7 +227,7 @@ public class IdleBehaviorManager {
         }
 
         // 60% chance to do another activity, 40% chance to return to desk
-        if Double.random(in: 0...1) < 0.6 {
+        if randomizer.roll() < 0.6 {
             return startActivity(context: context)
         } else {
             phase = .walkingBack
@@ -248,7 +280,7 @@ public class IdleBehaviorManager {
             return true
         }
 
-        return candidates.randomElement() ?? .waterCooler
+        return randomizer.chooseBehavior(candidates) ?? .waterCooler
     }
 
     private func destinationForBehavior(_ behavior: IdleBehavior, context: IdleContext) -> CGPoint? {
@@ -269,7 +301,7 @@ public class IdleBehaviorManager {
         case .whiteboard:
             base = context.whiteboardStandPosition
         case .waterPlant:
-            base = context.plantPositions.randomElement()
+            base = randomizer.choosePoint(context.plantPositions)
         case .getCoffee:
             base = context.waterCoolerStandPosition
         case .loungeCouch:

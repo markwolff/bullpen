@@ -123,7 +123,7 @@ public struct AgentInfo: Identifiable, Sendable, Equatable {
 }
 
 /// The type of AI coding agent being monitored.
-public enum AgentType: String, Sendable, CaseIterable {
+public enum AgentType: String, Sendable, CaseIterable, Codable {
     case claudeCode = "claude_code"
     case codexCLI = "codex_cli"
     // Add more agent types here as needed

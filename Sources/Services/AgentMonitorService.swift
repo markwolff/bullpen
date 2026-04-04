@@ -30,6 +30,9 @@ public final class AgentMonitorService: ObservableObject {
     /// Known session log file paths (sessionID -> URL)
     private var sessionFiles: [String: URL] = [:]
 
+    /// Reader used for each discovered session. Needed for deterministic replay helpers.
+    private var sessionReaders: [String: any AgentLogReader] = [:]
+
     /// Sessions that have been removed — skip during re-discovery unless log file modified after dismissal
     private var dismissedSessionTimestamps: [String: Date] = [:]
 
@@ -163,6 +166,7 @@ public final class AgentMonitorService: ObservableObject {
         agentIndexMap.removeAll()
         readOffsets.removeAll()
         sessionFiles.removeAll()
+        sessionReaders.removeAll()
         dismissedSessionTimestamps.removeAll()
         childToParentMap.removeAll()
         parentToChildrenMap.removeAll()
@@ -255,6 +259,7 @@ public final class AgentMonitorService: ObservableObject {
 
                 for session in newSessions {
                     sessionFiles[session.id] = session.url
+                    sessionReaders[session.id] = reader
 
                     if shouldDefer {
                         // First discovery pass via startMonitoring(): defer agent creation
@@ -269,7 +274,12 @@ public final class AgentMonitorService: ObservableObject {
                         // Normal discovery: create agent immediately
                         readOffsets[session.id] = 0
                         createAgentForSession(sessionID: session.id, fileURL: session.url, reader: reader)
-                        setupWatcher(for: session.id, fileURL: session.url, reader: reader)
+                        setupWatcher(
+                            for: session.id,
+                            fileURL: session.url,
+                            reader: reader,
+                            skipInitialRead: reader is any DeterministicReplayLogReader
+                        )
                     }
                 }
             } catch {
@@ -329,6 +339,16 @@ public final class AgentMonitorService: ObservableObject {
                 }
                 agents[i] = updated
             }
+        }
+    }
+
+    /// Deterministically replays all currently discovered sessions.
+    /// Used by fixture-backed screenshot/test flows that cannot rely on
+    /// background watcher startup ordering.
+    public func replayAllDiscoveredSessions() async {
+        for (sessionID, fileURL) in sessionFiles {
+            guard let reader = sessionReaders[sessionID] else { continue }
+            await processNewEntries(sessionID: sessionID, fileURL: fileURL, reader: reader)
         }
     }
 
@@ -833,6 +853,7 @@ public final class AgentMonitorService: ObservableObject {
         watchers[sessionID]?.stopWatching()
         watchers.removeValue(forKey: sessionID)
         readOffsets.removeValue(forKey: sessionID)
+        sessionReaders.removeValue(forKey: sessionID)
         notificationService.cleanup(agentID: sessionID)
 
         // Remove child from parent's tracking

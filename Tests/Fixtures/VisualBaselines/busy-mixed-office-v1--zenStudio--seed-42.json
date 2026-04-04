@@ -1,0 +1,53 @@
+{
+  "featureFlags" : {
+    "featureUpdatesEnabled" : false,
+    "hasActiveAgents" : true,
+    "hasCatSprite" : true,
+    "hasDogSprite" : true,
+    "hasErrors" : false,
+    "hasFinishedAgents" : true,
+    "hasSubagents" : false
+  },
+  "occupiedDeskAssignments" : [
+    {
+      "agentID" : "claude-long-1",
+      "deskID" : 0
+    },
+    {
+      "agentID" : "claude-tool-1",
+      "deskID" : 1
+    },
+    {
+      "agentID" : "codex-main-1",
+      "deskID" : 2
+    },
+    {
+      "agentID" : "codex-subagent-1",
+      "deskID" : 3
+    }
+  ],
+  "scenarioID" : "busy-mixed-office-v1",
+  "schemaVersion" : "scene-manifest-v1",
+  "seed" : 42,
+  "stateCounts" : {
+    "deepThinking" : 0,
+    "error" : 0,
+    "finished" : 1,
+    "idle" : 0,
+    "readingFiles" : 0,
+    "runningCommand" : 2,
+    "searching" : 0,
+    "supervisingAgents" : 0,
+    "thinking" : 0,
+    "waitingForInput" : 0,
+    "writingCode" : 1
+  },
+  "tickCount" : 120,
+  "visibleAgentIDs" : [
+    "claude-long-1",
+    "claude-tool-1",
+    "codex-main-1",
+    "codex-subagent-1"
+  ],
+  "worldPreset" : "zenStudio"
+}

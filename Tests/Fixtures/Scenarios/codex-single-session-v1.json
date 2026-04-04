@@ -1,0 +1,27 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 11,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Single Codex replay derived from the simple fixture.",
+  "id" : "codex-single-session-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+    {
+      "activities" : [
+        {
+          "activityType" : "toolUse",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Running npm test -- --grep login",
+          "timestamp" : "2026-03-15T14:30:08Z"
+        }
+      ],
+      "agentType" : "codex_cli",
+      "filePath" : "\/Users\/test\/.codex\/sessions\/2026\/04\/03\/codex-main-1.jsonl",
+      "sessionID" : "codex-main-1"
+    }
+  ]
+}

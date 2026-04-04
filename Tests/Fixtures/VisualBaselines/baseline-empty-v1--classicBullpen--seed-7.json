@@ -1,0 +1,35 @@
+{
+  "featureFlags" : {
+    "featureUpdatesEnabled" : false,
+    "hasActiveAgents" : false,
+    "hasCatSprite" : true,
+    "hasDogSprite" : true,
+    "hasErrors" : false,
+    "hasFinishedAgents" : false,
+    "hasSubagents" : false
+  },
+  "occupiedDeskAssignments" : [
+
+  ],
+  "scenarioID" : "baseline-empty-v1",
+  "schemaVersion" : "scene-manifest-v1",
+  "seed" : 7,
+  "stateCounts" : {
+    "deepThinking" : 0,
+    "error" : 0,
+    "finished" : 0,
+    "idle" : 0,
+    "readingFiles" : 0,
+    "runningCommand" : 0,
+    "searching" : 0,
+    "supervisingAgents" : 0,
+    "thinking" : 0,
+    "waitingForInput" : 0,
+    "writingCode" : 0
+  },
+  "tickCount" : 120,
+  "visibleAgentIDs" : [
+
+  ],
+  "worldPreset" : "classicBullpen"
+}

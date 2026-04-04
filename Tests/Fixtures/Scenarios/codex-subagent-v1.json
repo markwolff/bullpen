@@ -1,0 +1,37 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 23,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Codex subagent replay derived from the subagent fixture.",
+  "id" : "codex-subagent-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+    {
+      "activities" : [
+        {
+          "activityType" : "sessionStart",
+          "codexRoleTitle" : "explorer",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "parentSessionID" : "parent-session-abc123",
+          "summary" : "Subagent Gauss started (explorer)",
+          "timestamp" : "2026-03-15T14:30:00Z"
+        },
+        {
+          "activityType" : "sessionEnd",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Explored the test directory and found 15 test files.",
+          "timestamp" : "2026-03-15T14:30:04Z"
+        }
+      ],
+      "agentType" : "codex_cli",
+      "filePath" : "\/Users\/test\/.codex\/sessions\/2026\/04\/03\/codex-subagent-1.jsonl",
+      "sessionID" : "codex-subagent-1"
+    }
+  ]
+}

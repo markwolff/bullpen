@@ -59,7 +59,7 @@ public struct AgentActivity: Sendable {
 }
 
 /// Categorized activity types parsed from log entries.
-public enum ActivityType: String, Sendable {
+public enum ActivityType: String, Sendable, Codable {
     case toolUse          // Agent used a tool (read, write, bash, etc.)
     case toolResult       // Result came back from a tool
     case assistantMessage // Agent produced a text response

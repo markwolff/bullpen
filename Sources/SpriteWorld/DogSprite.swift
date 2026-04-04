@@ -1,6 +1,42 @@
 import SpriteKit
 import Models
 
+public struct DogBehaviorRandomizer: Sendable {
+    public let double: @Sendable (ClosedRange<Double>) -> Double
+    public let int: @Sendable (ClosedRange<Int>) -> Int
+    public let bool: @Sendable () -> Bool
+
+    public init(
+        double: @escaping @Sendable (ClosedRange<Double>) -> Double,
+        int: @escaping @Sendable (ClosedRange<Int>) -> Int,
+        bool: @escaping @Sendable () -> Bool
+    ) {
+        self.double = double
+        self.int = int
+        self.bool = bool
+    }
+
+    public static let live = DogBehaviorRandomizer(
+        double: { Double.random(in: $0) },
+        int: { Int.random(in: $0) },
+        bool: { Bool.random() }
+    )
+
+    public func pick<T>(_ values: [T]) -> T? {
+        guard !values.isEmpty else { return nil }
+        let index = int(0...(values.count - 1))
+        return values[index]
+    }
+
+    public func timeInterval(_ range: ClosedRange<Double>) -> TimeInterval {
+        double(range)
+    }
+
+    public func cgFloat(_ range: ClosedRange<Double>) -> CGFloat {
+        CGFloat(double(range))
+    }
+}
+
 /// Pancake the apricot Maltipoo - the office dog that wanders around, eats from her bowl,
 /// wags her tail when agents visit, plays with toys, gets the zoomies, and occasionally barks.
 public class DogSprite: SKSpriteNode {
@@ -82,9 +118,12 @@ public class DogSprite: SKSpriteNode {
     /// Accumulated time for energy oscillation.
     private var energyTimer: TimeInterval = 0
 
+    private let randomizer: DogBehaviorRandomizer
+
     // MARK: - Initialization
 
-    public init() {
+    public init(randomizer: DogBehaviorRandomizer = .live) {
+        self.randomizer = randomizer
         let texture = TextureManager.shared.texture(for: "dog_sleep")
         // 14x12 pixel art scaled 4x = 56x48
         super.init(texture: texture, color: .clear, size: CGSize(width: 56, height: 48))
@@ -196,7 +235,7 @@ public class DogSprite: SKSpriteNode {
         deskPositions: [(id: Int, position: CGPoint)],
         activeDeskIDs: Set<Int>
     ) {
-        let roll = Double.random(in: 0...1)
+        let roll = randomizer.double(0...1)
 
         if energyLevel > 0.7 {
             // High energy: 30% zoomies, 15% play, 15% bark, 20% bowl, 20% wander to desk
@@ -204,7 +243,7 @@ public class DogSprite: SKSpriteNode {
                 startZoomies()
                 return
             } else if roll < 0.45 && !toyPositions.isEmpty {
-                let toy = toyPositions.randomElement()!
+                let toy = randomizer.pick(toyPositions)!
                 startWalking(to: toy, deskID: -1, isActiveDeskID: false, goingToToy: true)
                 return
             } else if roll < 0.60 && barkCooldown <= 0 {
@@ -224,7 +263,7 @@ public class DogSprite: SKSpriteNode {
                 startZoomies()
                 return
             } else if roll < 0.30 && !toyPositions.isEmpty {
-                let toy = toyPositions.randomElement()!
+                let toy = randomizer.pick(toyPositions)!
                 startWalking(to: toy, deskID: -1, isActiveDeskID: false, goingToToy: true)
                 return
             } else if roll < 0.40 && barkCooldown <= 0 {
@@ -241,7 +280,7 @@ public class DogSprite: SKSpriteNode {
         } else {
             // Low energy: 0% zoomies, 10% play, 5% bark, 20% bowl (more likely to eat/sleep), 65% wander
             if roll < 0.10 && !toyPositions.isEmpty {
-                let toy = toyPositions.randomElement()!
+                let toy = randomizer.pick(toyPositions)!
                 startWalking(to: toy, deskID: -1, isActiveDeskID: false, goingToToy: true)
                 return
             } else if roll < 0.15 && barkCooldown <= 0 {
@@ -285,7 +324,7 @@ public class DogSprite: SKSpriteNode {
         noAgentTimer = 0
         wanderTimer = 0
         idleTimer = 0
-        baseEnergy = Double.random(in: 0.4...0.9)
+        baseEnergy = randomizer.double(0.4...0.9)
         energyLevel = baseEnergy
         energyTimer = 0
     }
@@ -294,11 +333,11 @@ public class DogSprite: SKSpriteNode {
     private func scheduleNextWander() {
         wanderTimer = 0
         if energyLevel > 0.7 {
-            nextWanderTime = TimeInterval.random(in: 10...40)
+            nextWanderTime = randomizer.timeInterval(10...40)
         } else if energyLevel < 0.3 {
-            nextWanderTime = TimeInterval.random(in: 40...120)
+            nextWanderTime = randomizer.timeInterval(40...120)
         } else {
-            nextWanderTime = TimeInterval.random(in: 20...80)
+            nextWanderTime = randomizer.timeInterval(20...80)
         }
     }
 
@@ -386,7 +425,7 @@ public class DogSprite: SKSpriteNode {
         let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
         self.texture = idleTexture
         idleTimer = 0
-        idleDuration = TimeInterval.random(in: 8...25)
+        idleDuration = randomizer.timeInterval(8...25)
 
         // Wag tail and show heart if arriving at active desk
         if isActive && !wagShown {
@@ -455,7 +494,7 @@ public class DogSprite: SKSpriteNode {
     private func beginPlayingAtCurrentPosition() {
         dogState = .playing
         playTimer = 0
-        playDuration = TimeInterval.random(in: 6...12)
+        playDuration = randomizer.timeInterval(6...12)
         removeAction(forKey: "walkAnimation")
 
         let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
@@ -497,7 +536,7 @@ public class DogSprite: SKSpriteNode {
     public func startZoomies() {
         dogState = .zoomies
         zoomiesTimer = 0
-        zoomiesLapsRemaining = Int.random(in: 3...5)
+        zoomiesLapsRemaining = randomizer.int(3...5)
 
         // Pick first random target and start running
         let target = randomZoomiePoint()
@@ -537,8 +576,8 @@ public class DogSprite: SKSpriteNode {
     /// Returns a random point within the scene bounds for zoomie laps.
     private func randomZoomiePoint() -> CGPoint {
         CGPoint(
-            x: CGFloat.random(in: 80...500),
-            y: CGFloat.random(in: 60...120)
+            x: randomizer.cgFloat(80...500),
+            y: randomizer.cgFloat(60...120)
         )
     }
 
@@ -548,14 +587,14 @@ public class DogSprite: SKSpriteNode {
     public func startBarking() {
         dogState = .barking
         barkTimer = 0
-        barkCooldown = TimeInterval.random(in: 30...60)
+        barkCooldown = randomizer.timeInterval(30...60)
 
         removeAction(forKey: "walkAnimation")
         let idleTexture = TextureManager.shared.texture(for: TextureManager.dogIdle)
         self.texture = idleTexture
 
         // 30% chance of "Arf!" instead of "Woof!"
-        let barkText = Double.random(in: 0...1) < 0.3 ? "Arf!" : "Woof!"
+        let barkText = randomizer.double(0...1) < 0.3 ? "Arf!" : "Woof!"
 
         let label = SKLabelNode(text: barkText)
         label.fontName = "Menlo-Bold"
@@ -595,8 +634,8 @@ public class DogSprite: SKSpriteNode {
 
         // Pick a random spot for the "ball" to land — offset from the thrower
         let intendedLanding = CGPoint(
-            x: throwerPosition.x + CGFloat.random(in: 80...180) * (Bool.random() ? 1 : -1),
-            y: CGFloat.random(in: 65...115)
+            x: throwerPosition.x + randomizer.cgFloat(80...180) * (randomizer.bool() ? 1 : -1),
+            y: randomizer.cgFloat(65...115)
         )
         let ballLanding = navigationLayout.nearestWalkablePoint(to: intendedLanding)
 
@@ -688,11 +727,11 @@ public class DogSprite: SKSpriteNode {
 
         let activeDesks = deskPositions.filter { activeDeskIDs.contains($0.id) }
 
-        if !activeDesks.isEmpty && Double.random(in: 0...1) < 0.75 {
-            let desk = activeDesks.randomElement()!
+        if !activeDesks.isEmpty && randomizer.double(0...1) < 0.75 {
+            let desk = randomizer.pick(activeDesks)!
             return desk
         } else {
-            let desk = deskPositions.randomElement()!
+            let desk = randomizer.pick(deskPositions)!
             return desk
         }
     }
@@ -717,10 +756,10 @@ public class DogSprite: SKSpriteNode {
             z.fontName = "Menlo-Bold"
             z.fontSize = 10
             z.fontColor = SKColor(white: 1.0, alpha: 0.7)
-            z.position = CGPoint(x: CGFloat.random(in: -2...2), y: 0)
+            z.position = CGPoint(x: self.randomizer.cgFloat(-2...2), y: 0)
             zzz.addChild(z)
 
-            let drift = SKAction.moveBy(x: CGFloat.random(in: 4...10), y: 20, duration: 2.5)
+            let drift = SKAction.moveBy(x: self.randomizer.cgFloat(4...10), y: 20, duration: 2.5)
             let grow = SKAction.scale(to: 1.4, duration: 2.5)
             let fade = SKAction.fadeOut(withDuration: 2.5)
             let group = SKAction.group([drift, grow, fade])

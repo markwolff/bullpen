@@ -1,0 +1,42 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 19,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Synthetic mostly-idle office for deterministic invariants.",
+  "id" : "idle-heavy-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+    {
+      "activities" : [
+        {
+          "activityType" : "sessionStart",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Started session",
+          "timestamp" : "2024-03-09T16:00:00Z"
+        }
+      ],
+      "agentType" : "claude_code",
+      "filePath" : "\/Users\/test\/.claude\/projects\/hash\/sessions\/idle-1.jsonl",
+      "sessionID" : "idle-1"
+    },
+    {
+      "activities" : [
+        {
+          "activityType" : "sessionStart",
+          "inputTokens" : 0,
+          "isPlanMode" : false,
+          "outputTokens" : 0,
+          "summary" : "Started session",
+          "timestamp" : "2024-03-09T16:00:01Z"
+        }
+      ],
+      "agentType" : "codex_cli",
+      "filePath" : "\/Users\/test\/.codex\/sessions\/2026\/04\/03\/idle-2.jsonl",
+      "sessionID" : "idle-2"
+    }
+  ]
+}

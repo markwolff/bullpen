@@ -1,0 +1,13 @@
+{
+  "captureHour" : 10,
+  "captureMinute" : 0,
+  "captureTickCount" : 120,
+  "defaultSeed" : 7,
+  "defaultWorldPreset" : "classicBullpen",
+  "description" : "Empty office baseline render with no active sessions.",
+  "id" : "baseline-empty-v1",
+  "schemaVersion" : "scenario-snapshot-v1",
+  "sessions" : [
+
+  ]
+}

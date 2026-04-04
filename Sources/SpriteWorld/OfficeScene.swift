@@ -2,6 +2,50 @@ import SpriteKit
 import Models
 import Services
 
+public struct OfficeSceneManifest: Codable, Equatable, Sendable {
+    public struct DeskAssignment: Codable, Equatable, Sendable {
+        public let deskID: Int
+        public let agentID: String
+
+        public init(deskID: Int, agentID: String) {
+            self.deskID = deskID
+            self.agentID = agentID
+        }
+    }
+
+    public let schemaVersion: String
+    public let scenarioID: String
+    public let worldPreset: String
+    public let seed: UInt64
+    public let tickCount: Int
+    public let visibleAgentIDs: [String]
+    public let stateCounts: [String: Int]
+    public let occupiedDeskAssignments: [DeskAssignment]
+    public let featureFlags: [String: Bool]
+
+    public init(
+        schemaVersion: String = "scene-manifest-v1",
+        scenarioID: String,
+        worldPreset: String,
+        seed: UInt64,
+        tickCount: Int,
+        visibleAgentIDs: [String],
+        stateCounts: [String: Int],
+        occupiedDeskAssignments: [DeskAssignment],
+        featureFlags: [String: Bool]
+    ) {
+        self.schemaVersion = schemaVersion
+        self.scenarioID = scenarioID
+        self.worldPreset = worldPreset
+        self.seed = seed
+        self.tickCount = tickCount
+        self.visibleAgentIDs = visibleAgentIDs.sorted()
+        self.stateCounts = stateCounts
+        self.occupiedDeskAssignments = occupiedDeskAssignments
+        self.featureFlags = featureFlags
+    }
+}
+
 /// The main SpriteKit scene that renders the office world.
 /// Agent sprites move around, sit at desks, and animate based on their current state.
 public class OfficeScene: SKScene {
@@ -32,6 +76,13 @@ public class OfficeScene: SKScene {
 
     /// The active theme derived from the world preset
     private var activeTheme: WorldTheme
+
+    /// Allows deterministic tests and screenshot capture to override wall-clock time.
+    public var dateProvider: @Sendable () -> Date = { Date() }
+
+    /// Disables custom scene feature updates while still allowing SpriteKit
+    /// actions to advance through the engine's own update cycle.
+    public var featureUpdatesEnabled: Bool = true
 
     /// Root node for all themeable environment visuals (wall, floor, rooms, rugs, furniture, decorations)
     private var environmentRoot: SKNode?
@@ -691,7 +742,7 @@ public class OfficeScene: SKScene {
 
     /// Returns the current hour (0-23).
     private func currentHour() -> Int {
-        Calendar.current.component(.hour, from: Date())
+        Calendar.current.component(.hour, from: dateProvider())
     }
 
     /// 8.4: Applies daylight color to all window decoration nodes.
@@ -1134,9 +1185,87 @@ public class OfficeScene: SKScene {
         agentSprites[id]
     }
 
+    /// Returns the currently visible agent IDs in stable sorted order.
+    public var visibleAgentIDs: [String] {
+        agentSprites.keys.sorted()
+    }
+
     /// Returns the current desk assignments (for cat update)
     public var currentDeskAssignments: [Int: String] {
         deskAssignments
+    }
+
+    /// Moves sprites into a stable post-replay pose for deterministic screenshot capture.
+    public func settleForDeterministicCapture() {
+        featureUpdatesEnabled = false
+
+        for desk in layout.desks {
+            hideDeskLaptop(deskID: desk.id)
+        }
+        deskAssignments.removeAll()
+
+        let sortedSprites = agentSprites.values.sorted { $0.agentInfo.id < $1.agentInfo.id }
+        for (sprite, desk) in zip(sortedSprites, layout.desks.sorted(by: { $0.id < $1.id })) {
+            sprite.assignedDeskID = desk.id
+            deskAssignments[desk.id] = sprite.agentInfo.id
+        }
+
+        for sprite in agentSprites.values {
+            sprite.stopWalking()
+            sprite.cancelIdleRoaming()
+            sprite.cancelDeepThinkingPacing()
+            sprite.cancelDesklessPacing()
+
+            if let deskID = sprite.assignedDeskID,
+               let desk = layout.desks.first(where: { $0.id == deskID }) {
+                sprite.position = desk.chairPosition
+                sprite.dockLaptopAtDesk()
+                applyMonitorState(deskID: deskID, state: sprite.agentInfo.state)
+            }
+
+            sprite.playAnimation(for: sprite.agentInfo.state)
+        }
+
+        cachedAgentInfos = agentSprites.values.map(\.agentInfo)
+        cachedActiveAgentCount = cachedAgentInfos.filter { $0.state.isActive }.count
+        cachedDeskPositions = layout.desks.map { (id: $0.id, position: $0.chairPosition) }
+        cachedActiveDeskIDs = Set(deskAssignments.keys)
+    }
+
+    public func makeManifest(
+        scenarioID: String,
+        seed: UInt64,
+        tickCount: Int
+    ) -> OfficeSceneManifest {
+        let visibleAgentIDs = agentSprites.keys.sorted()
+        let agents = agentSprites.values.map(\.agentInfo)
+        var stateCounts = Dictionary(uniqueKeysWithValues: AgentState.allCases.map { ($0.rawValue, 0) })
+        for agent in agents {
+            stateCounts[agent.state.rawValue, default: 0] += 1
+        }
+        let occupiedDeskAssignments = deskAssignments
+            .map { OfficeSceneManifest.DeskAssignment(deskID: $0.key, agentID: $0.value) }
+            .sorted { $0.deskID < $1.deskID }
+        let featureFlags = [
+            "featureUpdatesEnabled": featureUpdatesEnabled,
+            "hasCatSprite": childNode(withName: "//office_cat") != nil,
+            "hasDogSprite": childNode(withName: "//office_dog") != nil,
+            "hasActiveAgents": agents.contains(where: { $0.state.isActive }),
+            "hasSubagents": agents.contains(where: \.isSubagent),
+            "hasErrors": agents.contains(where: { $0.state == .error }),
+            "hasFinishedAgents": agents.contains(where: { $0.state == .finished }),
+        ]
+
+        return OfficeSceneManifest(
+            scenarioID: scenarioID,
+            worldPreset: worldPreset.rawValue,
+            seed: seed,
+            tickCount: tickCount,
+            visibleAgentIDs: visibleAgentIDs,
+            stateCounts: stateCounts,
+            occupiedDeskAssignments: occupiedDeskAssignments,
+            featureFlags: featureFlags
+        )
     }
 
     // MARK: - Parallax Effect
@@ -1338,6 +1467,8 @@ public class OfficeScene: SKScene {
     public override func update(_ currentTime: TimeInterval) {
         super.update(currentTime)
 
+        guard featureUpdatesEnabled else { return }
+
         // Calculate delta time
         let deltaTime = lastUpdateTime > 0 ? currentTime - lastUpdateTime : 0
         lastUpdateTime = currentTime
@@ -1461,7 +1592,7 @@ public class OfficeScene: SKScene {
 
             // Standup meeting (4B)
             let hour = currentHour()
-            let minute = Calendar.current.component(.minute, from: Date())
+            let minute = Calendar.current.component(.minute, from: dateProvider())
             if let standupAssignments = standupMeetingManager.update(
                 deltaTime: 2.0,
                 currentHour: hour,

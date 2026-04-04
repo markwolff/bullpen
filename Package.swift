@@ -12,8 +12,17 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
+            name: "BullpenScenarioCompiler",
+            dependencies: [
+                "LogReaders",
+                "Models",
+                "Services",
+            ],
+            path: "Sources/BullpenScenarioCompiler"
+        ),
+        .executableTarget(
             name: "BullpenScreenshot",
-            dependencies: ["Models", "SpriteWorld"],
+            dependencies: ["Models", "SpriteWorld", "Services"],
             path: "Sources/BullpenScreenshot"
         ),
         .executableTarget(
