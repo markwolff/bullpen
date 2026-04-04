@@ -23,8 +23,9 @@ Once a GitHub Release exists, users can install Bullpen directly with:
 curl -fsSL https://raw.githubusercontent.com/markwolff/bullpen/main/install.sh | bash
 ```
 
-The installer downloads `Bullpen-macos.zip` and `Bullpen-macos.sha256` from the
-latest GitHub Release, verifies the checksum, extracts `Bullpen.app`, and opens it.
+The installer downloads the latest GitHub Release, verifies the checksum,
+installs `Bullpen.app` into `/Applications` when possible, falls back to
+`~/Applications` if needed, and opens it.
 
 ## Package
 
