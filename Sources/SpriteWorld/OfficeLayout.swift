@@ -578,6 +578,35 @@ public struct OfficeLayout: Sendable {
         }
     }
 
+    public var spaciousPacingPositions: [CGPoint] {
+        let anchors = [
+            CGPoint(x: corridorXPositions[1], y: aisleYPositions[2]),
+            CGPoint(x: corridorXPositions[2], y: aisleYPositions[2]),
+            CGPoint(x: corridorXPositions[3], y: aisleYPositions[2]),
+            CGPoint(x: corridorXPositions[1], y: aisleYPositions[1]),
+            CGPoint(x: corridorXPositions[2], y: aisleYPositions[3]),
+            loungePosition,
+            windowStandPosition,
+            whiteboardStandPosition,
+            CGPoint(x: rooms[0].frame.midX, y: rooms[0].frame.midY),
+            CGPoint(x: rooms.last?.frame.midX ?? 0, y: rooms.last?.frame.midY ?? 0),
+        ]
+        return curatedAnchors(from: anchors)
+    }
+
+    public var deepThinkingPositions: [CGPoint] {
+        let anchors = [
+            windowStandPosition,
+            whiteboardStandPosition,
+            plantStandPositions.first ?? windowStandPosition,
+            plantStandPositions.last ?? whiteboardStandPosition,
+            CGPoint(x: corridorXPositions[1], y: aisleYPositions[1]),
+            CGPoint(x: corridorXPositions[2], y: aisleYPositions[3]),
+            CGPoint(x: rooms[0].frame.midX, y: rooms[0].frame.midY),
+        ]
+        return curatedAnchors(from: anchors)
+    }
+
     public var desklessPacingPositions: [CGPoint] {
         let aisleIntersections = corridorXPositions.flatMap { x in
             aisleYPositions.map { y in CGPoint(x: x, y: y) }
@@ -679,14 +708,14 @@ public struct OfficeLayout: Sendable {
         isWalkablePoint(centerOfCell(cell))
     }
 
-    func isWalkablePoint(_ point: CGPoint, clearance: CGFloat = 6) -> Bool {
+    func isWalkablePoint(_ point: CGPoint, clearance: CGFloat = 12) -> Bool {
         guard walkableArea.insetBy(dx: clearance, dy: clearance).contains(point) else { return false }
         return !collisionObstacles.contains(where: { obstacle in
             obstacle.insetBy(dx: -clearance, dy: -clearance).contains(point)
         })
     }
 
-    func canTravelDirectly(from start: CGPoint, to end: CGPoint, sampleStep: CGFloat = 8) -> Bool {
+    func canTravelDirectly(from start: CGPoint, to end: CGPoint, sampleStep: CGFloat = 12) -> Bool {
         guard isWalkablePoint(start), isWalkablePoint(end) else { return false }
 
         let distance = hypot(end.x - start.x, end.y - start.y)
@@ -796,5 +825,19 @@ public struct OfficeLayout: Sendable {
         }
 
         return PathMovement.deduplicated(result)
+    }
+
+    private func curatedAnchors(from points: [CGPoint]) -> [CGPoint] {
+        var seen: Set<CGPoint> = []
+        var resolved: [CGPoint] = []
+
+        for point in points {
+            let walkable = nearestWalkablePoint(to: point)
+            if seen.insert(walkable).inserted {
+                resolved.append(walkable)
+            }
+        }
+
+        return resolved
     }
 }

@@ -139,6 +139,27 @@ extension WorldLayout {
         return Array(Set(aisleIntersections + roomCenters + poiPositions))
     }
 
+    /// Roomier pacing anchors used for calmer active wandering.
+    public var spaciousPacingPositions: [CGPoint] {
+        let aisleIntersections = corridorXPositions.flatMap { x in
+            aisleYPositions.map { y in CGPoint(x: x, y: y) }
+        }
+        let roomCenters = rooms.map { CGPoint(x: $0.frame.midX, y: $0.frame.midY) }
+        let reflectivePOIs = pointsOfInterest
+            .filter { [.relaxation, .nature, .creative, .reading].contains($0.category) }
+            .map(\.standPosition)
+        return Array(Set(aisleIntersections + roomCenters + reflectivePOIs))
+    }
+
+    /// Reflective anchors used for slower deep-thinking pacing.
+    public var deepThinkingPositions: [CGPoint] {
+        let roomCenters = rooms.map { CGPoint(x: $0.frame.midX, y: $0.frame.midY) }
+        let reflectivePOIs = pointsOfInterest
+            .filter { [.relaxation, .nature, .creative, .reading].contains($0.category) }
+            .map(\.standPosition)
+        return Array(Set(roomCenters + reflectivePOIs))
+    }
+
     // MARK: - Default Pet Positions (no pets)
 
     public var dogBowlPosition: CGPoint? { nil }

@@ -62,9 +62,9 @@ public class IdleBehaviorManager {
     public let isSubagent: Bool
 
     /// Maximum total idle time before the agent should leave the office.
-    /// Subagents leave after 5s; regular agents after 5 minutes.
+    /// Kept deliberately simple so subagents do not instantly disappear.
     public var maxIdleDuration: TimeInterval {
-        isSubagent ? 5 : 300
+        isSubagent ? 45 : 240
     }
 
     /// Accumulated total time spent idle (across all phases).
@@ -93,8 +93,8 @@ public class IdleBehaviorManager {
         self.isSubagent = isSubagent
         self.randomizer = randomizer
         self.deskIdleThreshold = isSubagent
-            ? randomizer.timeInterval(2...4)
-            : randomizer.timeInterval(5...15)
+            ? randomizer.timeInterval(4...8)
+            : randomizer.timeInterval(12...24)
     }
 
     /// How long the agent has been performing the current activity
@@ -121,8 +121,8 @@ public class IdleBehaviorManager {
         currentBehavior = nil
         deskIdleTimer = 0
         deskIdleThreshold = isSubagent
-            ? randomizer.timeInterval(2...4)
-            : randomizer.timeInterval(5...15)
+            ? randomizer.timeInterval(4...8)
+            : randomizer.timeInterval(12...24)
         performTimer = 0
         performDuration = 0
         totalIdleTime = 0
@@ -186,8 +186,8 @@ public class IdleBehaviorManager {
             phase = .atDesk
             deskIdleTimer = 0
             deskIdleThreshold = isSubagent
-                ? randomizer.timeInterval(2...4)
-                : randomizer.timeInterval(8...20)
+                ? randomizer.timeInterval(6...10)
+                : randomizer.timeInterval(18...32)
             currentBehavior = nil
             targetDestination = nil
             actionBubble?.removeFromParent()
@@ -207,7 +207,9 @@ public class IdleBehaviorManager {
         guard let destination = destinationForBehavior(behavior, context: context) else {
             // Can't find a valid destination, try again later
             deskIdleTimer = 0
-            deskIdleThreshold = randomizer.timeInterval(2...4)
+            deskIdleThreshold = isSubagent
+                ? randomizer.timeInterval(4...8)
+                : randomizer.timeInterval(10...16)
             return nil
         }
 
@@ -226,8 +228,8 @@ public class IdleBehaviorManager {
             if recentBehaviors.count > 4 { recentBehaviors.removeFirst() }
         }
 
-        // 60% chance to do another activity, 40% chance to return to desk
-        if randomizer.roll() < 0.6 {
+        // Calm baseline: most breaks end after one stop.
+        if randomizer.roll() < 0.25 {
             return startActivity(context: context)
         } else {
             phase = .walkingBack
@@ -236,7 +238,7 @@ public class IdleBehaviorManager {
     }
 
     private func pickBehavior(context: IdleContext) -> IdleBehavior {
-        var candidates = IdleBehavior.allCases
+        var candidates = Self.calmBehaviors
 
         // Remove petTheCat if no cat position available
         if context.catPosition == nil {
@@ -267,20 +269,19 @@ public class IdleBehaviorManager {
         let excluded = Set(recentBehaviors + [currentBehavior].compactMap { $0 })
         candidates.removeAll { excluded.contains($0) }
 
-        // Social distancing: remove destinations where another agent is nearby,
-        // heading toward, or already performing at (within 60px)
+        // Social distancing: avoid destinations that already feel occupied.
         let allOccupied = context.otherRoamingAgentPositions + context.occupiedActivityPositions
         candidates = candidates.filter { behavior in
             guard let dest = destinationForBehavior(behavior, context: context) else { return true }
             for otherPos in allOccupied {
-                if hypot(dest.x - otherPos.x, dest.y - otherPos.y) < 60 {
+                if hypot(dest.x - otherPos.x, dest.y - otherPos.y) < 110 {
                     return false
                 }
             }
             return true
         }
 
-        return randomizer.chooseBehavior(candidates) ?? .waterCooler
+        return randomizer.chooseBehavior(candidates) ?? .lookOutWindow
     }
 
     private func destinationForBehavior(_ behavior: IdleBehavior, context: IdleContext) -> CGPoint? {
@@ -303,7 +304,7 @@ public class IdleBehaviorManager {
         case .waterPlant:
             base = randomizer.choosePoint(context.plantPositions)
         case .getCoffee:
-            base = context.waterCoolerStandPosition
+            base = context.coffeeStandPosition
         case .loungeCouch:
             base = context.loungePosition
         case .radioArea:
@@ -318,7 +319,7 @@ public class IdleBehaviorManager {
 
         // Offset destination if another agent is already near this spot,
         // walking toward it, or performing there
-        let tooClose: CGFloat = 40
+        let tooClose: CGFloat = 72
         var nearbyCount = 0
         let allOccupied = context.otherRoamingAgentPositions + context.occupiedActivityPositions
         for otherPos in allOccupied {
@@ -329,11 +330,21 @@ public class IdleBehaviorManager {
 
         if nearbyCount > 0 {
             // Spread agents horizontally with alternating sides
-            let offset = CGFloat(nearbyCount) * 35.0 * (nearbyCount.isMultiple(of: 2) ? 1 : -1)
+            let offset = CGFloat(nearbyCount) * 48.0 * (nearbyCount.isMultiple(of: 2) ? 1 : -1)
             return CGPoint(x: point.x + offset, y: point.y)
         }
         return point
     }
+
+    private static let calmBehaviors: [IdleBehavior] = [
+        .lookOutWindow,
+        .browseBookshelf,
+        .waterPlant,
+        .getCoffee,
+        .loungeCouch,
+        .petTheCat,
+        .petTheDog,
+    ]
 }
 
 /// Context information passed to the idle behavior manager each frame.
@@ -347,6 +358,7 @@ public struct IdleContext {
     public let plantPositions: [CGPoint]
     public let catPosition: CGPoint?
     public let dogPosition: CGPoint?
+    public let coffeeStandPosition: CGPoint
     public let otherIdleAgentDeskPositions: [CGPoint]
     public let loungePosition: CGPoint?
     public let radioStandPosition: CGPoint?

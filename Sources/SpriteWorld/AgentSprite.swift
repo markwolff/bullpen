@@ -798,7 +798,7 @@ public class AgentSprite: SKSpriteNode {
         desklessPacingDestination = destination
 
         let path = layout.findPath(from: position, to: destination)
-        walk(to: destination, via: path, speedMultiplier: 1.15) { [weak self] in
+        walk(to: destination, via: path, speedMultiplier: 1.0) { [weak self] in
             self?.desklessPacingDestination = nil
         }
     }
@@ -809,26 +809,32 @@ public class AgentSprite: SKSpriteNode {
     }
 
     private func pickDesklessPacingDestination(in layout: OfficeLayout, occupiedPositions: [CGPoint]) -> CGPoint {
-        let minTravelDistance: CGFloat = 100
-        let minSpacing: CGFloat = 80
-        let shuffledCandidates = layout.desklessPacingPositions.shuffled()
+        let minTravelDistance: CGFloat = 150
+        let minSpacing: CGFloat = 120
+        let candidates = layout.spaciousPacingPositions
 
-        if let candidate = shuffledCandidates.first(where: { candidate in
+        let roomyCandidates = candidates.filter { candidate in
             hypot(candidate.x - position.x, candidate.y - position.y) >= minTravelDistance &&
             !occupiedPositions.contains(where: { other in
                 hypot(candidate.x - other.x, candidate.y - other.y) < minSpacing
             })
+        }
+
+        if let candidate = roomyCandidates.max(by: { lhs, rhs in
+            hypot(lhs.x - position.x, lhs.y - position.y) < hypot(rhs.x - position.x, rhs.y - position.y)
         }) {
             return candidate
         }
 
-        if let candidate = shuffledCandidates.first(where: { candidate in
-            hypot(candidate.x - position.x, candidate.y - position.y) >= minTravelDistance
-        }) {
+        if let candidate = candidates
+            .filter({ hypot($0.x - position.x, $0.y - position.y) >= minTravelDistance })
+            .max(by: { lhs, rhs in
+                hypot(lhs.x - position.x, lhs.y - position.y) < hypot(rhs.x - position.x, rhs.y - position.y)
+            }) {
             return candidate
         }
 
-        return shuffledCandidates.max(by: { lhs, rhs in
+        return candidates.max(by: { lhs, rhs in
             hypot(lhs.x - position.x, lhs.y - position.y) < hypot(rhs.x - position.x, rhs.y - position.y)
         }) ?? position
     }

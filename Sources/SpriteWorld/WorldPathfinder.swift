@@ -79,7 +79,7 @@ public struct WorldPathfinder: Sendable {
     }
 
     /// Tests whether a point is walkable (inside walkable area and not inside any obstacle).
-    public func isWalkablePoint(_ point: CGPoint, clearance: CGFloat = 6) -> Bool {
+    public func isWalkablePoint(_ point: CGPoint, clearance: CGFloat = 12) -> Bool {
         guard walkableArea.insetBy(dx: clearance, dy: clearance).contains(point) else { return false }
         return !collisionObstacles.contains(where: { obstacle in
             obstacle.insetBy(dx: -clearance, dy: -clearance).contains(point)
@@ -87,7 +87,7 @@ public struct WorldPathfinder: Sendable {
     }
 
     /// Tests whether a straight line between two points is free of obstacles.
-    public func canTravelDirectly(from start: CGPoint, to end: CGPoint, sampleStep: CGFloat = 8) -> Bool {
+    public func canTravelDirectly(from start: CGPoint, to end: CGPoint, sampleStep: CGFloat = 12) -> Bool {
         guard isWalkablePoint(start), isWalkablePoint(end) else { return false }
 
         let distance = hypot(end.x - start.x, end.y - start.y)

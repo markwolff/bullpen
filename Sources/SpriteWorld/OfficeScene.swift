@@ -792,9 +792,9 @@ public class OfficeScene: SKScene {
         actors.addChild(dog)
         dogSprite = dog
 
-        // Scatter some toys around the office for Pancake
+        // Keep the dog readable without turning every scene corner into toy clutter.
         let toyTextureNames = [TextureManager.dogToyBall, TextureManager.dogToyBone, TextureManager.dogToyRope]
-        let toyPositions = layout.dogToyPositions
+        let toyPositions = Array(layout.dogToyPositions.prefix(1))
         for (index, toyPos) in toyPositions.enumerated() {
             let textureName = toyTextureNames[index % toyTextureNames.count]
             let toyTexture = TextureManager.shared.texture(for: textureName)
@@ -812,11 +812,11 @@ public class OfficeScene: SKScene {
 
     /// Sets up feature decorations and rebinds stored sprite references.
     private func setupFeatureDecorations(parent: SKNode) {
-        let radio = RadioSprite()
-        radio.position = layout.radioPosition
-        radio.zPosition = 2
-        parent.addChild(radio)
-        radioSprite = radio
+        radioSprite = nil
+        whiteboardOverlay = nil
+        achievementShelf = nil
+        birdCageSprite = nil
+        baristaSprite = nil
 
         let plant = GrowingPlantSprite()
         plant.position = layout.growingPlantPosition
@@ -840,12 +840,6 @@ public class OfficeScene: SKScene {
 
         weekendVibesManager.update(scene: self, catSprite: catSprite)
 
-        let birdCage = BirdCageSprite()
-        birdCage.position = layout.birdCagePosition
-        birdCage.zPosition = 2
-        parent.addChild(birdCage)
-        birdCageSprite = birdCage
-
         let stationTexture = TextureManager.shared.texture(for: TextureManager.decorationCoffeeStation)
         let station = SKSpriteNode(texture: stationTexture, size: CGSize(width: 90, height: 54))
         station.position = layout.coffeeStationPosition
@@ -858,13 +852,6 @@ public class OfficeScene: SKScene {
         barista.zPosition = 2
         parent.addChild(barista)
         baristaSprite = barista
-
-        let rugTexture = TextureManager.shared.texture(for: TextureManager.decorationSmallRug)
-        let rug = SKSpriteNode(texture: rugTexture, size: CGSize(width: 96, height: 48))
-        rug.position = layout.coffeeRugPosition
-        rug.name = "rug_coffee"
-        rug.zPosition = -6
-        parent.addChild(rug)
     }
 
     private func setupCollisionGeometry() {
@@ -1402,6 +1389,7 @@ public class OfficeScene: SKScene {
             plantPositions: layout.plantStandPositions,
             catPosition: catPos,
             dogPosition: dogPos,
+            coffeeStandPosition: layout.baristaCustomerPosition,
             otherIdleAgentDeskPositions: otherIdleDeskPositions,
             loungePosition: layout.loungePosition,
             radioStandPosition: layout.radioStandPosition,
@@ -1419,13 +1407,7 @@ public class OfficeScene: SKScene {
         guard !sprite.isWalking else { return }
 
         // Gather waypoints from recreation areas
-        let waypoints = [
-            layout.waterCoolerStandPosition,
-            layout.bookshelfStandPosition,
-            layout.bulletinBoardStandPosition,
-            layout.windowStandPosition,
-            layout.whiteboardStandPosition,
-        ] + layout.plantStandPositions
+        let waypoints = layout.deepThinkingPositions
 
         // Gather other roaming/pacing agent positions for social distancing
         var otherPositions: [CGPoint] = []
@@ -1552,61 +1534,8 @@ public class OfficeScene: SKScene {
                 }
             }
 
-            // Water cooler chats (3B)
-            if let chatRequest = waterCoolerChatManager.update(
-                deltaTime: 2.0,
-                agents: agents,
-                chatPositions: layout.waterCoolerChatPositions
-            ) {
-                if let spriteA = agentSprites[chatRequest.agentA],
-                   let spriteB = agentSprites[chatRequest.agentB] {
-                    let pathA = layout.findPath(from: spriteA.position, to: chatRequest.posA)
-                    spriteA.walk(to: chatRequest.posA, via: pathA)
-                    let pathB = layout.findPath(from: spriteB.position, to: chatRequest.posB)
-                    spriteB.walk(to: chatRequest.posB, via: pathB)
-                }
-            }
-
-            // Pair programming (3C)
-            if let pairRequest = pairProgrammingManager.update(
-                deltaTime: 2.0,
-                agents: agents,
-                deskAssignments: deskAssignments,
-                layout: layout
-            ) {
-                if let visitor = agentSprites[pairRequest.visitorID] {
-                    let path = layout.findPath(from: visitor.position, to: pairRequest.observePosition)
-                    visitor.walk(to: pairRequest.observePosition, via: path)
-                }
-            }
-
-            // Pizza delivery (4A)
-            pizzaDeliveryManager.update(
-                deltaTime: 2.0,
-                activeAgentCount: activeAgentCount,
-                scene: self,
-                layout: layout,
-                doorPosition: layout.doorPosition,
-                dropPosition: layout.pizzaDropPosition
-            )
-
-            // Standup meeting (4B)
-            let hour = currentHour()
-            let minute = Calendar.current.component(.minute, from: dateProvider())
-            if let standupAssignments = standupMeetingManager.update(
-                deltaTime: 2.0,
-                currentHour: hour,
-                currentMinute: minute,
-                agents: agents,
-                huddlePositions: layout.standupHuddlePositions
-            ) {
-                for assignment in standupAssignments {
-                    if let sprite = agentSprites[assignment.agentID] {
-                        let path = layout.findPath(from: sprite.position, to: assignment.position)
-                        sprite.walk(to: assignment.position, via: path)
-                    }
-                }
-            }
+            // Deliberately keep the ambient office calm: no spontaneous chat,
+            // standup, pairing, or delivery choreography in the baseline scene.
 
             // Achievement tracking (5B)
             let newAchievements = achievementTracker.update(agents: agents)

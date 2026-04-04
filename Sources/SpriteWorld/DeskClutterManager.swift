@@ -14,10 +14,8 @@ public class DeskClutterManager {
 
     /// Thresholds: minutes of work -> clutter items added
     private let thresholds: [(minutes: TimeInterval, items: Int)] = [
-        (2 * 60, 1),   // 2 min -> 1 sticky note
-        (5 * 60, 2),   // 5 min -> 2 sticky notes
-        (10 * 60, 3),  // 10 min -> + paper
-        (20 * 60, 4),  // 20 min -> + crumpled paper
+        (4 * 60, 1),   // 4 min -> 1 sticky note
+        (12 * 60, 2),  // 12 min -> 2 sticky notes
     ]
 
     /// Sticky note texture names for color variety
@@ -63,21 +61,11 @@ public class DeskClutterManager {
         guard let desk = scene.childNode(withName: "desk_\(deskID)") else { return }
 
         for idx in currentLevel..<targetLevel {
-            let itemNode: SKSpriteNode
-            if idx < 3 {
-                // Sticky note with random color
-                let colorName = stickyColors[idx % stickyColors.count]
-                itemNode = SKSpriteNode(
-                    texture: TextureManager.shared.texture(for: colorName),
-                    size: CGSize(width: 12, height: 12)
-                )
-            } else {
-                // Crumpled paper
-                itemNode = SKSpriteNode(
-                    texture: TextureManager.shared.texture(for: TextureManager.itemCrumpledPaper),
-                    size: CGSize(width: 15, height: 12)
-                )
-            }
+            let colorName = stickyColors[idx % stickyColors.count]
+            let itemNode = SKSpriteNode(
+                texture: TextureManager.shared.texture(for: colorName),
+                size: CGSize(width: 12, height: 12)
+            )
 
             // Randomized position on desk surface
             let xOffset = CGFloat.random(in: -18...18)
@@ -101,7 +89,7 @@ public class DeskClutterManager {
     public func clearClutter(forDeskID deskID: Int, scene: SKScene) {
         guard let desk = scene.childNode(withName: "desk_\(deskID)") else { return }
 
-        for idx in 0..<4 {
+        for idx in 0..<2 {
             if let clutter = desk.childNode(withName: "clutter_\(deskID)_\(idx)") {
                 clutter.run(SKAction.sequence([
                     SKAction.fadeOut(withDuration: 0.3),

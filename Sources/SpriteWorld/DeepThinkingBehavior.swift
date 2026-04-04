@@ -37,7 +37,7 @@ public class DeepThinkingBehaviorManager {
     private var lastWaypoint: CGPoint?
 
     public init(
-        pauseDurationProvider: @escaping @Sendable () -> TimeInterval = { TimeInterval.random(in: 2...4) },
+        pauseDurationProvider: @escaping @Sendable () -> TimeInterval = { TimeInterval.random(in: 4...7) },
         waypointChooser: @escaping @Sendable ([CGPoint]) -> CGPoint? = { $0.randomElement() }
     ) {
         self.pauseDurationProvider = pauseDurationProvider
@@ -102,13 +102,13 @@ public class DeepThinkingBehaviorManager {
 
         // Exclude current waypoint
         if let current {
-            candidates.removeAll { hypot($0.x - current.x, $0.y - current.y) < 10 }
+            candidates.removeAll { hypot($0.x - current.x, $0.y - current.y) < 32 }
         }
 
-        // Exclude spots within 60px of other agents
+        // Exclude spots that would still feel crowded.
         candidates = candidates.filter { candidate in
             for agentPos in otherAgents {
-                if hypot(candidate.x - agentPos.x, candidate.y - agentPos.y) < 60 {
+                if hypot(candidate.x - agentPos.x, candidate.y - agentPos.y) < 120 {
                     return false
                 }
             }
