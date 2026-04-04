@@ -77,6 +77,9 @@ public class OfficeScene: SKScene {
     /// The active theme derived from the world preset
     private var activeTheme: WorldTheme
 
+    /// Cached stage for the living office preset so population updates only rebuild when capacity changes.
+    private var livingOfficeStage: OfficeLayout.LivingOfficeStage?
+
     /// Allows deterministic tests and screenshot capture to override wall-clock time.
     public var dateProvider: @Sendable () -> Date = { Date() }
 
@@ -190,6 +193,9 @@ public class OfficeScene: SKScene {
         self.layout = layout ?? OfficeLayout.layout(for: worldPreset)
         self.worldPreset = worldPreset
         self.activeTheme = WorldTheme.theme(for: worldPreset)
+        self.livingOfficeStage = worldPreset == .livingOffice
+            ? OfficeLayout.livingOfficeStage(forAgentCount: 0)
+            : nil
         super.init(size: self.layout.sceneSize)
         self.scaleMode = .aspectFit
         self.backgroundColor = activeTheme.backgroundColor
@@ -249,43 +255,59 @@ public class OfficeScene: SKScene {
     /// swaps to the new layout, and rebuilds the entire scene.
     public func applyWorld(_ preset: WorldPreset) {
         worldPreset = preset
-        layout = OfficeLayout.layout(for: preset)
         activeTheme = WorldTheme.theme(for: preset)
+        livingOfficeStage = preset == .livingOffice
+            ? OfficeLayout.livingOfficeStage(forAgentCount: 0)
+            : nil
+        layout = OfficeLayout.layout(for: preset)
+        applyResolvedWorldChange()
+    }
+
+    private func refreshLivingOfficeIfNeeded(for agents: [AgentInfo]) {
+        guard worldPreset == .livingOffice else { return }
+
+        let nextStage = OfficeLayout.livingOfficeStage(forAgentCount: agents.count)
+        guard nextStage != livingOfficeStage else { return }
+
+        livingOfficeStage = nextStage
+        layout = OfficeLayout.layout(for: worldPreset, agentCount: agents.count)
+        applyResolvedWorldChange()
+    }
+
+    private func applyResolvedWorldChange() {
         backgroundColor = activeTheme.backgroundColor
 
-        // If the scene hasn't been set up yet, didMove(to:) will handle it
+        // If the scene hasn't been set up yet, didMove(to:) will handle it.
         guard isOfficeSetUp else { return }
 
-        // Clear all agents and desk assignments (full restart)
+        resetSceneForWorldChange()
+
+        if let collisionLayer = childNode(withName: "collision_layer") {
+            collisionLayer.removeAllChildren()
+        }
+        setupCollisionGeometry()
+        rebuildEnvironment(for: activeTheme)
+        setupCat()
+        setupDog()
+        applyWindowDaylight(hour: currentHour())
+    }
+
+    private func resetSceneForWorldChange() {
         for (_, sprite) in agentSprites {
             sprite.removeFromParent()
         }
         agentSprites.removeAll()
         deskAssignments.removeAll()
         fadingOutAgentIDs.removeAll()
+        cachedAgentInfos.removeAll()
+        cachedActiveAgentCount = 0
         cachedDeskPositions.removeAll()
         cachedActiveDeskIDs.removeAll()
 
-        // Remove and recreate pets
         catSprite?.removeFromParent()
         catSprite = nil
         dogSprite?.removeFromParent()
         dogSprite = nil
-
-        // Rebuild collision geometry for new layout
-        if let collisionLayer = childNode(withName: "collision_layer") {
-            collisionLayer.removeAllChildren()
-        }
-        setupCollisionGeometry()
-
-        // Rebuild all environment visuals
-        rebuildEnvironment(for: activeTheme)
-
-        // Respawn pets in new layout
-        setupCat()
-        setupDog()
-
-        applyWindowDaylight(hour: currentHour())
     }
 
     /// Removes and recreates all themeable visuals under `environmentRoot`.
@@ -748,7 +770,7 @@ public class OfficeScene: SKScene {
     /// 8.4: Applies daylight color to all window decoration nodes.
     /// Accepts an hour parameter for testability.
     public func applyWindowDaylight(hour: Int) {
-        let color = Self.daylightColor(for: hour, worldPreset: worldPreset)
+        let color = activeTheme.daylightColor(for: hour)
         let blendFactor = activeTheme.windowBlendFactor
         for windowNode in matchingEnvironmentNodes(for: ["window"]).compactMap({ $0 as? SKSpriteNode }) {
             windowNode.removeAction(forKey: "daylight")
@@ -888,6 +910,8 @@ public class OfficeScene: SKScene {
     /// Synchronizes the scene with the current list of agents.
     /// Call this from the main update loop whenever AgentMonitorService publishes changes.
     public func updateAgents(_ agents: [AgentInfo]) {
+        refreshLivingOfficeIfNeeded(for: agents)
+
         // Resume if scene was auto-paused and agents appear
         if !agents.isEmpty && self.isPaused {
             self.isPaused = false
@@ -1180,6 +1204,11 @@ public class OfficeScene: SKScene {
     /// Returns the current desk assignments (for cat update)
     public var currentDeskAssignments: [Int: String] {
         deskAssignments
+    }
+
+    /// Returns the current desk capacity of the rendered world.
+    public var deskCapacity: Int {
+        layout.desks.count
     }
 
     /// Moves sprites into a stable post-replay pose for deterministic screenshot capture.

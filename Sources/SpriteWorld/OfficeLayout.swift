@@ -5,6 +5,20 @@ import Models
 /// Defines the layout of the office world: desk positions, rooms,
 /// collision geometry, and pathfinding for agent sprites.
 public struct OfficeLayout: Sendable {
+    enum LivingOfficeStage: String, CaseIterable, Sendable {
+        case seedling
+        case scaling
+        case bustling
+
+        var tableCount: Int {
+            switch self {
+            case .seedling: return 2
+            case .scaling:  return 4
+            case .bustling: return 6
+            }
+        }
+    }
+
     public enum DeskRenderStyle: Sendable, Equatable {
         case classicBench
         case zenChabudai
@@ -205,10 +219,16 @@ public struct OfficeLayout: Sendable {
 
     /// Returns the layout for a given world preset.
     public static func layout(for preset: WorldPreset) -> OfficeLayout {
+        layout(for: preset, agentCount: 0)
+    }
+
+    /// Returns the layout for a given world preset and population.
+    public static func layout(for preset: WorldPreset, agentCount: Int) -> OfficeLayout {
         switch preset {
         case .classicBullpen: return .defaultLayout
         case .zenStudio:      return .zenStudio
         case .overgrownRuins: return .overgrownRuins
+        case .livingOffice:   return livingOfficeLayout(forAgentCount: agentCount)
         }
     }
 
@@ -218,7 +238,38 @@ public struct OfficeLayout: Sendable {
         case .classicBullpen: return classicBullpenPOIs()
         case .zenStudio:      return ZenStudioLayout.zenStudioPOIs()
         case .overgrownRuins: return overgrownRuinsPOIs()
+        case .livingOffice:   return classicBullpenPOIs()
         }
+    }
+
+    static func livingOfficeStage(forAgentCount agentCount: Int) -> LivingOfficeStage {
+        switch max(agentCount, 0) {
+        case 0...4:
+            return .seedling
+        case 5...11:
+            return .scaling
+        default:
+            return .bustling
+        }
+    }
+
+    private static func livingOfficeLayout(forAgentCount agentCount: Int) -> OfficeLayout {
+        let stage = livingOfficeStage(forAgentCount: agentCount)
+        let base = OfficeLayout.defaultLayout
+        let tables = Array(base.tables.prefix(stage.tableCount))
+        let deskCount = tables.reduce(into: 0) { partialResult, table in
+            partialResult += table.seatXPositions.count
+        }
+
+        return OfficeLayout(
+            preset: .classicBullpen,
+            sceneSize: base.sceneSize,
+            desks: Array(base.desks.prefix(deskCount)),
+            tables: tables,
+            rooms: base.rooms,
+            walkableArea: base.walkableArea,
+            barriers: base.barriers
+        )
     }
 
     public func nextAvailableDesk(occupiedDeskIDs: Set<Int>) -> DeskPosition? {
@@ -251,7 +302,7 @@ public struct OfficeLayout: Sendable {
 
     public var deskRenderStyle: DeskRenderStyle {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return .classicBench
         case .zenStudio:
             return .zenChabudai
@@ -262,7 +313,7 @@ public struct OfficeLayout: Sendable {
 
     public var rugs: [RugSpec] {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return classicBullpenRugs()
         case .zenStudio:
             return ZenStudioLayout.shared.rugs
@@ -273,7 +324,7 @@ public struct OfficeLayout: Sendable {
 
     public var decorations: [DecorationSpec] {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return classicBullpenDecorations()
         case .zenStudio:
             return ZenStudioLayout.shared.decorations
@@ -294,7 +345,7 @@ public struct OfficeLayout: Sendable {
 
     public var waterCoolerStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 700, y: 340)
         case .zenStudio:
             return CGPoint(x: 460, y: 560)
@@ -305,7 +356,7 @@ public struct OfficeLayout: Sendable {
 
     public var bookshelfStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 130, y: 674)
         case .zenStudio:
             return CGPoint(x: 1040, y: 176)
@@ -316,7 +367,7 @@ public struct OfficeLayout: Sendable {
 
     public var bulletinBoardStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 900, y: 386)
         case .zenStudio:
             return CGPoint(x: 80, y: 290)
@@ -327,7 +378,7 @@ public struct OfficeLayout: Sendable {
 
     public var windowStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 904, y: 672)
         case .zenStudio:
             return CGPoint(x: 478, y: 660)
@@ -338,7 +389,7 @@ public struct OfficeLayout: Sendable {
 
     public var whiteboardStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 592, y: 352)
         case .zenStudio:
             return CGPoint(x: 600, y: 356)
@@ -349,7 +400,7 @@ public struct OfficeLayout: Sendable {
 
     public var plantStandPositions: [CGPoint] {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return [
                 CGPoint(x: 86, y: 674),
                 CGPoint(x: 1152, y: 674),
@@ -375,7 +426,7 @@ public struct OfficeLayout: Sendable {
 
     public var loungePosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 280, y: 140)
         case .zenStudio:
             return CGPoint(x: 478, y: 160)
@@ -386,7 +437,7 @@ public struct OfficeLayout: Sendable {
 
     public var dogBowlPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 160, y: 100)
         case .zenStudio:
             return CGPoint(x: 250, y: 88)
@@ -397,7 +448,7 @@ public struct OfficeLayout: Sendable {
 
     public var dogSleepPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 200, y: 90)
         case .zenStudio:
             return CGPoint(x: 300, y: 80)
@@ -408,7 +459,7 @@ public struct OfficeLayout: Sendable {
 
     public var dogToyPositions: [CGPoint] {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return [
                 CGPoint(x: 120, y: 80),
                 CGPoint(x: 170, y: 100),
@@ -431,7 +482,7 @@ public struct OfficeLayout: Sendable {
 
     public var radioStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 116, y: 218)
         case .zenStudio:
             return CGPoint(x: 430, y: 230)
@@ -442,7 +493,7 @@ public struct OfficeLayout: Sendable {
 
     public var printerStandPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 580, y: 110)
         case .zenStudio:
             return CGPoint(x: 1190, y: 94)
@@ -465,7 +516,7 @@ public struct OfficeLayout: Sendable {
 
     public var pizzaDropPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 868, y: 352)
         case .zenStudio:
             return CGPoint(x: 895, y: 574)
@@ -488,7 +539,7 @@ public struct OfficeLayout: Sendable {
 
     public var achievementShelfPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 1060, y: 680)
         case .zenStudio:
             return CGPoint(x: 1192, y: 376)
@@ -503,7 +554,7 @@ public struct OfficeLayout: Sendable {
 
     public var birdCagePosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 1172, y: 690)
         case .zenStudio:
             return CGPoint(x: 1188, y: 700)
@@ -514,7 +565,7 @@ public struct OfficeLayout: Sendable {
 
     public var coffeeStationPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 1060, y: 324)
         case .zenStudio:
             return CGPoint(x: 240, y: 258)
@@ -525,7 +576,7 @@ public struct OfficeLayout: Sendable {
 
     public var baristaPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 1108, y: 324)
         case .zenStudio:
             return CGPoint(x: 286, y: 258)
@@ -536,7 +587,7 @@ public struct OfficeLayout: Sendable {
 
     public var baristaCustomerPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 1012, y: 324)
         case .zenStudio:
             return CGPoint(x: 196, y: 258)
@@ -547,7 +598,7 @@ public struct OfficeLayout: Sendable {
 
     public var coffeeRugPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 1060, y: 304)
         case .zenStudio:
             return CGPoint(x: 240, y: 240)
@@ -558,7 +609,7 @@ public struct OfficeLayout: Sendable {
 
     public var catStartPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 80, y: 100)
         case .zenStudio:
             return CGPoint(x: 280, y: 500)
@@ -569,7 +620,7 @@ public struct OfficeLayout: Sendable {
 
     public var growingPlantPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 760, y: coffeeStationPosition.y - 8)
         case .zenStudio:
             return CGPoint(x: 332, y: 248)
@@ -632,7 +683,7 @@ public struct OfficeLayout: Sendable {
 
     public var wallClockPosition: CGPoint {
         switch preset {
-        case .classicBullpen:
+        case .classicBullpen, .livingOffice:
             return CGPoint(x: 988, y: 720)
         case .zenStudio:
             return CGPoint(x: 1092, y: 704)

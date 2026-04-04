@@ -55,6 +55,7 @@ internal struct WorldTheme {
         case .classicBullpen: return classicBullpen()
         case .zenStudio:      return zenStudio()
         case .overgrownRuins: return overgrownRuins()
+        case .livingOffice:   return livingOffice()
         }
     }
 
@@ -193,6 +194,51 @@ internal struct WorldTheme {
             windowDaylightNight: SKColor(red: 0.30, green: 0.50, blue: 0.45, alpha: 1.0),  // Bioluminescent glow at night
             dustMoteAlpha: 0.35,
             windowBlendFactor: 0.50
+        )
+    }
+
+    // MARK: - Living Office (bright startup shell that scales with the crew)
+
+    private static func livingOffice() -> WorldTheme {
+        WorldTheme(
+            backgroundColor: SKColor(red: 0.88, green: 0.91, blue: 0.94, alpha: 1.0),
+            wallColor: SKColor(red: 0.95, green: 0.97, blue: 0.99, alpha: 1.0),
+            floorColor: SKColor(red: 0.77, green: 0.82, blue: 0.86, alpha: 1.0),
+            trimColor: SKColor(red: 0.24, green: 0.34, blue: 0.42, alpha: 1.0),
+            roomFillColors: [
+                "focus_studio": SKColor(red: 0.88, green: 0.94, blue: 0.96, alpha: 1.0),
+                "recreation_lounge": SKColor(red: 0.90, green: 0.93, blue: 0.88, alpha: 1.0),
+                "collaboration_room": SKColor(red: 0.85, green: 0.91, blue: 0.94, alpha: 1.0),
+                "build_room": SKColor(red: 0.84, green: 0.89, blue: 0.93, alpha: 1.0),
+            ],
+            roomBorderColors: [
+                "recreation_lounge": SKColor(red: 0.29, green: 0.44, blue: 0.41, alpha: 1.0),
+                "collaboration_room": SKColor(red: 0.24, green: 0.34, blue: 0.42, alpha: 1.0),
+            ],
+            roomHeaderColors: [
+                "gallery": SKColor(red: 0.34, green: 0.49, blue: 0.57, alpha: 1.0),
+                "circulation_spine": SKColor(red: 0.34, green: 0.49, blue: 0.57, alpha: 1.0),
+            ],
+            labelTextColor: SKColor(red: 0.16, green: 0.23, blue: 0.28, alpha: 1.0),
+            solidWallColor: SKColor(red: 0.24, green: 0.34, blue: 0.42, alpha: 1.0),
+            glassWallColor: SKColor(red: 0.82, green: 0.91, blue: 0.95, alpha: 1.0),
+            glassStrokeColor: SKColor(red: 0.32, green: 0.50, blue: 0.57, alpha: 0.8),
+            rugColors: [
+                "gallery": SKColor(red: 0.46, green: 0.68, blue: 0.74, alpha: 0.34),
+                "loungeBorder": SKColor(red: 0.24, green: 0.40, blue: 0.34, alpha: 0.30),
+                "lounge": SKColor(red: 0.62, green: 0.82, blue: 0.74, alpha: 0.46),
+                "focus": SKColor(red: 0.58, green: 0.76, blue: 0.82, alpha: 0.46),
+                "build": SKColor(red: 0.50, green: 0.68, blue: 0.80, alpha: 0.44),
+                "collab": SKColor(red: 0.44, green: 0.60, blue: 0.78, alpha: 0.34),
+            ],
+            tableColor: SKColor(red: 0.24, green: 0.34, blue: 0.42, alpha: 1.0),
+            tableAccentColor: SKColor(red: 0.68, green: 0.85, blue: 0.88, alpha: 0.85),
+            windowDaylightMorning: SKColor(red: 0.91, green: 0.96, blue: 1.0, alpha: 1.0),
+            windowDaylightAfternoon: SKColor(red: 0.99, green: 1.0, blue: 1.0, alpha: 1.0),
+            windowDaylightEvening: SKColor(red: 0.95, green: 0.82, blue: 0.67, alpha: 1.0),
+            windowDaylightNight: SKColor(red: 0.76, green: 0.88, blue: 0.95, alpha: 1.0),
+            dustMoteAlpha: 0.18,
+            windowBlendFactor: 0.38
         )
     }
 
