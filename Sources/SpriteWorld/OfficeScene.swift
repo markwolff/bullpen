@@ -128,18 +128,6 @@ public class OfficeScene: SKScene {
     /// Coffee run manager (3A)
     private let coffeeRunManager = CoffeeRunManager()
 
-    /// Water cooler chat manager (3B)
-    private let waterCoolerChatManager = WaterCoolerChatManager()
-
-    /// Pair programming manager (3C)
-    private let pairProgrammingManager = PairProgrammingManager()
-
-    /// Pizza delivery manager (4A)
-    private let pizzaDeliveryManager = PizzaDeliveryManager()
-
-    /// Standup meeting manager (4B)
-    private let standupMeetingManager = StandupMeetingManager()
-
     /// Weekend vibes manager (5A)
     private let weekendVibesManager = WeekendVibesManager()
 
@@ -282,9 +270,6 @@ public class OfficeScene: SKScene {
 
         resetSceneForWorldChange()
 
-        if let collisionLayer = childNode(withName: "collision_layer") {
-            collisionLayer.removeAllChildren()
-        }
         setupCollisionGeometry()
         rebuildEnvironment(for: activeTheme)
         setupCat()
@@ -303,6 +288,8 @@ public class OfficeScene: SKScene {
         cachedActiveAgentCount = 0
         cachedDeskPositions.removeAll()
         cachedActiveDeskIDs.removeAll()
+        coffeeRunManager.reset()
+        deskClutterManager.reset()
 
         catSprite?.removeFromParent()
         catSprite = nil
@@ -884,10 +871,17 @@ public class OfficeScene: SKScene {
         edgeLoop.contactTestBitMask = PhysicsMask.agent
         physicsBody = edgeLoop
 
-        let collisionLayer = SKNode()
-        collisionLayer.name = "collision_layer"
-        collisionLayer.zPosition = 0
-        addChild(collisionLayer)
+        let collisionLayer: SKNode
+        if let existingLayer = childNode(withName: "collision_layer") {
+            existingLayer.removeAllChildren()
+            collisionLayer = existingLayer
+        } else {
+            let newLayer = SKNode()
+            newLayer.name = "collision_layer"
+            newLayer.zPosition = 0
+            addChild(newLayer)
+            collisionLayer = newLayer
+        }
 
         for (index, rect) in layout.collisionObstacles.enumerated() {
             let node = SKNode()

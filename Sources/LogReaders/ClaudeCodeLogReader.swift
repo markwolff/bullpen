@@ -110,33 +110,11 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
     // MARK: - readActivities (task 2.2)
 
-    /// Reads raw file data from the given offset. Extracted for off-main-thread execution.
-    private func readFileData(from fileURL: URL, afterOffset: UInt64) throws -> Data {
-        guard FileManager.default.fileExists(atPath: fileURL.path),
-              let handle = FileHandle(forReadingAtPath: fileURL.path) else {
-            return Data()
-        }
-        defer { handle.closeFile() }
-        handle.seek(toFileOffset: afterOffset)
-        return handle.readDataToEndOfFile()
-    }
-
     public func readActivities(
         from logFileURL: URL,
         afterOffset: UInt64
     ) async throws -> (activities: [AgentActivity], newOffset: UInt64) {
-        // Move large reads off the main thread to avoid blocking UI
-        let data: Data
-        let attrs = try? FileManager.default.attributesOfItem(atPath: logFileURL.path)
-        let fileSize = (attrs?[.size] as? UInt64) ?? 0
-        let readSize = fileSize > afterOffset ? fileSize - afterOffset : 0
-        if readSize > 50_000 {
-            data = try await Task.detached { [self] in
-                try self.readFileData(from: logFileURL, afterOffset: afterOffset)
-            }.value
-        } else {
-            data = try readFileData(from: logFileURL, afterOffset: afterOffset)
-        }
+        let data = try await readLogData(from: logFileURL, afterOffset: afterOffset)
 
         guard !data.isEmpty else {
             return (activities: [], newOffset: afterOffset)
@@ -145,34 +123,21 @@ public struct ClaudeCodeLogReader: AgentLogReader {
         // Derive session ID from filename
         let sessionID = logFileURL.deletingPathExtension().lastPathComponent
 
+        let consumable = consumableJSONLLines(from: data)
         var activities: [AgentActivity] = []
-        var currentOffset = afterOffset
-
-        guard let text = String(data: data, encoding: .utf8) else {
-            return (activities: [], newOffset: afterOffset)
-        }
-
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        for line in lines {
+        for line in consumable.lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Calculate byte length of this line including the newline
-            let lineByteCount = UInt64(line.utf8.count) + 1 // +1 for newline
 
             if trimmed.isEmpty {
-                currentOffset += lineByteCount
                 continue
             }
 
             if let activity = parseLogEntry(trimmed, sessionID: sessionID) {
                 activities.append(activity)
             }
-            // Advance offset regardless of parse success (skip bad lines)
-            currentOffset += lineByteCount
         }
 
-        // Adjust: the last line may not end with a newline, so use actual data length
-        let newOffset = afterOffset + UInt64(data.count)
-
+        let newOffset = afterOffset + consumable.consumedByteCount
         return (activities: activities, newOffset: newOffset)
     }
 
@@ -449,27 +414,8 @@ public struct ClaudeCodeLogReader: AgentLogReader {
 
     // MARK: - Private helpers
 
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     private func parseTimestamp(from string: String?) -> Date {
-        guard let string else { return Date() }
-        if let date = Self.isoFormatterWithFractional.date(from: string) {
-            return date
-        }
-        if let date = Self.isoFormatterBasic.date(from: string) {
-            return date
-        }
-        return Date()
+        parseISO8601Timestamp(string) ?? Date()
     }
 
     private func buildToolSummary(toolName: String, input: [String: Any]) -> String {

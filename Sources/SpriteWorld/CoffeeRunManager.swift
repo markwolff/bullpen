@@ -22,6 +22,12 @@ public class CoffeeRunManager {
 
     public init() {}
 
+    public func reset() {
+        workTimers.removeAll()
+        onCoffeeRun.removeAll()
+        hasCup.removeAll()
+    }
+
     /// Call each frame from OfficeScene.update().
     /// Returns agent IDs that should go on coffee runs this frame.
     public func update(

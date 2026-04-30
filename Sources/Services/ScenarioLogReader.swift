@@ -8,6 +8,7 @@ public struct ScenarioLogReader: DeterministicReplayLogReader, Sendable {
     public let agentType: AgentType
 
     private let sessionsByID: [String: ScenarioSessionSnapshot]
+    private let sessionIDsByPath: [String: String]
 
     private static let repoRoot: URL = {
         URL(fileURLWithPath: #filePath)
@@ -19,6 +20,9 @@ public struct ScenarioLogReader: DeterministicReplayLogReader, Sendable {
     public init(agentType: AgentType, sessions: [ScenarioSessionSnapshot]) {
         self.agentType = agentType
         self.sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.sessionID, $0) })
+        self.sessionIDsByPath = Dictionary(uniqueKeysWithValues: sessions.map { session in
+            (Self.normalizedPath(Self.resolveURL(for: session.filePath)), session.sessionID)
+        })
     }
 
     public func discoverSessions() async throws -> [String: URL] {
@@ -31,7 +35,8 @@ public struct ScenarioLogReader: DeterministicReplayLogReader, Sendable {
         from logFileURL: URL,
         afterOffset: UInt64
     ) async throws -> (activities: [AgentActivity], newOffset: UInt64) {
-        let sessionID = logFileURL.deletingPathExtension().lastPathComponent
+        let sessionID = sessionIDsByPath[Self.normalizedPath(logFileURL)]
+            ?? logFileURL.deletingPathExtension().lastPathComponent
         guard let session = sessionsByID[sessionID] else {
             return (activities: [], newOffset: afterOffset)
         }
@@ -53,5 +58,9 @@ public struct ScenarioLogReader: DeterministicReplayLogReader, Sendable {
             return URL(fileURLWithPath: filePath)
         }
         return repoRoot.appendingPathComponent(filePath)
+    }
+
+    private static func normalizedPath(_ url: URL) -> String {
+        url.standardizedFileURL.path
     }
 }

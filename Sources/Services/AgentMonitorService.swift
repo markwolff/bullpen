@@ -70,9 +70,6 @@ public final class AgentMonitorService: ObservableObject {
     /// Maximum number of simultaneous agents
     private let maxAgents: Int = 1000
 
-    /// Counter for sequential agent naming
-    private var agentCounter: Int = 0
-
     /// Notification service for agent state change alerts (8.6-8.8)
     public let notificationService = NotificationService()
 
@@ -316,27 +313,7 @@ public final class AgentMonitorService: ObservableObject {
     public func checkIdleTimeouts() {
         let now = Date()
         for i in agents.indices {
-            let agent = agents[i]
-            guard agent.state != .finished && agent.state != .idle && agent.state != .deepThinking else { continue }
-            guard !agent.hasActiveChildren else { continue }
-            if now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
-                var updated = agent
-                if agent.state == .thinking {
-                    updated.state = .deepThinking
-                    updated.stateEnteredAt = now
-                    updated.lastUpdatedAt = now
-                    if updated.pid == nil && updated.agentType == .claudeCode {
-                        // Refresh PID cache if empty or stale (>60s)
-                        if sessionPIDs.isEmpty || now.timeIntervalSince(lastPIDRefresh) > 60.0 {
-                            sessionPIDs = livenessChecker.discoverSessionPIDs()
-                            lastPIDRefresh = now
-                        }
-                        updated.pid = sessionPIDs[agent.id]
-                    }
-                } else {
-                    updated.state = .idle
-                    updated.lastUpdatedAt = now
-                }
+            if let updated = idleTimedOutAgent(agents[i], now: now) {
                 agents[i] = updated
             }
         }
@@ -357,27 +334,7 @@ public final class AgentMonitorService: ObservableObject {
     public func checkDeepThinkingTimeouts() {
         let now = Date()
         for i in agents.indices {
-            let agent = agents[i]
-            guard agent.state == .deepThinking else { continue }
-
-            var shouldTransitionToIdle = false
-
-            // Check PID liveness for Claude Code agents
-            if agent.agentType == .claudeCode, let pid = agent.pid {
-                if !livenessChecker.isProcessAlive(pid: pid) {
-                    shouldTransitionToIdle = true
-                }
-            }
-
-            // Check deep thinking timeout
-            if !shouldTransitionToIdle && now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
-                shouldTransitionToIdle = true
-            }
-
-            if shouldTransitionToIdle {
-                var updated = agent
-                updated.state = .idle
-                updated.lastUpdatedAt = now
+            if let updated = resolvedDeepThinkingAgent(agents[i], now: now) {
                 agents[i] = updated
             }
         }
@@ -390,112 +347,115 @@ public final class AgentMonitorService: ObservableObject {
     /// Call directly in tests instead of waiting for timers.
     public func checkAgentRemoval() {
         let now = Date()
-
-        // Collect IDs to remove first (avoid mutating agents during iteration)
-        var idsToRemove: [String] = []
-        for agent in agents {
-            if agent.state == .error { continue }
-            if agent.hasActiveChildren { continue }
-            if now.timeIntervalSince(agent.startedAt) < 10.0 { continue }
-
-            if agent.state == .finished,
-               now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout {
-                idsToRemove.append(agent.id)
-            } else if agent.state == .idle,
-               now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout {
-                idsToRemove.append(agent.id)
-            }
-        }
-
-        // Cleanup and remove
-        for id in idsToRemove {
-            cleanupAgent(sessionID: id)
-        }
-        if !idsToRemove.isEmpty {
-            let removeSet = Set(idsToRemove)
-            agents.removeAll { removeSet.contains($0.id) }
-            rebuildAgentIndexMap()
-        }
-
-        // Periodically purge stale dismissedSessionTimestamps (older than 1 hour)
-        let oneHourAgo = now.addingTimeInterval(-3600)
-        if !dismissedSessionTimestamps.isEmpty {
-            dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
-        }
+        removeAgents(agents.compactMap { shouldRemoveAgent($0, now: now) ? $0.id : nil })
+        purgeStaleDismissals(now: now)
     }
 
     /// Combined timer check: idle timeouts, deep thinking timeouts, and agent removal
     /// in a single pass over the agents array (called every 5 seconds by idleCheckTimer).
     private func performTimerChecks() {
         let now = Date()
-        var idsToRemove: [String] = []
 
         for i in agents.indices {
-            let agent = agents[i]
-
-            // Idle timeout check
-            if agent.state != .finished && agent.state != .idle && agent.state != .deepThinking
-               && !agent.hasActiveChildren
-               && now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout {
-                var updated = agent
-                if agent.state == .thinking {
-                    updated.state = .deepThinking
-                    updated.stateEnteredAt = now
-                    updated.lastUpdatedAt = now
-                    if updated.pid == nil && updated.agentType == .claudeCode {
-                        if sessionPIDs.isEmpty || now.timeIntervalSince(lastPIDRefresh) > 60.0 {
-                            sessionPIDs = livenessChecker.discoverSessionPIDs()
-                            lastPIDRefresh = now
-                        }
-                        updated.pid = sessionPIDs[agent.id]
-                    }
-                } else {
-                    updated.state = .idle
-                    updated.lastUpdatedAt = now
-                }
+            if let updated = idleTimedOutAgent(agents[i], now: now) {
                 agents[i] = updated
                 continue
             }
 
-            // Deep thinking timeout check
-            if agent.state == .deepThinking {
-                var shouldIdle = false
-                if agent.agentType == .claudeCode, let pid = agent.pid,
-                   !livenessChecker.isProcessAlive(pid: pid) {
-                    shouldIdle = true
-                }
-                if !shouldIdle && now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout {
-                    shouldIdle = true
-                }
-                if shouldIdle {
-                    var updated = agent
-                    updated.state = .idle
-                    updated.lastUpdatedAt = now
-                    agents[i] = updated
-                }
-            }
-
-            // Removal check
-            if agent.state != .error && !agent.hasActiveChildren
-               && now.timeIntervalSince(agent.startedAt) >= 10.0 {
-                if (agent.state == .finished && now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout)
-                   || (agent.state == .idle && now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout) {
-                    idsToRemove.append(agent.id)
-                }
+            if let updated = resolvedDeepThinkingAgent(agents[i], now: now) {
+                agents[i] = updated
             }
         }
 
-        for id in idsToRemove { cleanupAgent(sessionID: id) }
-        if !idsToRemove.isEmpty {
-            let removeSet = Set(idsToRemove)
-            agents.removeAll { removeSet.contains($0.id) }
-            rebuildAgentIndexMap()
+        removeAgents(agents.compactMap { shouldRemoveAgent($0, now: now) ? $0.id : nil })
+        purgeStaleDismissals(now: now)
+    }
+
+    private func idleTimedOutAgent(_ agent: AgentInfo, now: Date) -> AgentInfo? {
+        guard agent.state != .finished,
+              agent.state != .idle,
+              agent.state != .deepThinking,
+              !agent.hasActiveChildren,
+              now.timeIntervalSince(agent.lastUpdatedAt) > idleTimeout else {
+            return nil
         }
 
+        var updated = agent
+        if agent.state == .thinking {
+            updated.state = .deepThinking
+            updated.stateEnteredAt = now
+            updated.lastUpdatedAt = now
+            if updated.pid == nil && updated.agentType == .claudeCode {
+                refreshSessionPIDCacheIfNeeded(now: now)
+                updated.pid = sessionPIDs[agent.id]
+            }
+        } else {
+            updated.state = .idle
+            updated.lastUpdatedAt = now
+        }
+        return updated
+    }
+
+    private func resolvedDeepThinkingAgent(_ agent: AgentInfo, now: Date) -> AgentInfo? {
+        guard agent.state == .deepThinking,
+              isDeepThinkingResolved(agent, now: now) else {
+            return nil
+        }
+
+        var updated = agent
+        updated.state = .idle
+        updated.lastUpdatedAt = now
+        return updated
+    }
+
+    private func isDeepThinkingResolved(_ agent: AgentInfo, now: Date) -> Bool {
+        if agent.agentType == .claudeCode,
+           let pid = agent.pid,
+           !livenessChecker.isProcessAlive(pid: pid) {
+            return true
+        }
+
+        return now.timeIntervalSince(agent.stateEnteredAt) > deepThinkingTimeout
+    }
+
+    private func refreshSessionPIDCacheIfNeeded(now: Date) {
+        guard sessionPIDs.isEmpty || now.timeIntervalSince(lastPIDRefresh) > 60.0 else { return }
+        sessionPIDs = livenessChecker.discoverSessionPIDs()
+        lastPIDRefresh = now
+    }
+
+    private func shouldRemoveAgent(_ agent: AgentInfo, now: Date) -> Bool {
+        guard agent.state != .error,
+              !agent.hasActiveChildren,
+              now.timeIntervalSince(agent.startedAt) >= 10.0 else {
+            return false
+        }
+
+        if agent.state == .finished {
+            return now.timeIntervalSince(agent.lastUpdatedAt) > finishedRemovalTimeout
+        }
+        if agent.state == .idle {
+            return now.timeIntervalSince(agent.lastUpdatedAt) > idleRemovalTimeout
+        }
+        return false
+    }
+
+    private func removeAgents(_ idsToRemove: [String]) {
+        guard !idsToRemove.isEmpty else { return }
+
+        for id in idsToRemove {
+            cleanupAgent(sessionID: id)
+        }
+
+        let removeSet = Set(idsToRemove)
+        agents.removeAll { removeSet.contains($0.id) }
+        rebuildAgentIndexMap()
+    }
+
+    private func purgeStaleDismissals(now: Date) {
+        guard !dismissedSessionTimestamps.isEmpty else { return }
         let oneHourAgo = now.addingTimeInterval(-3600)
-        if !dismissedSessionTimestamps.isEmpty {
-            dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
-        }
+        dismissedSessionTimestamps = dismissedSessionTimestamps.filter { $0.value > oneHourAgo }
     }
 
     /// Updates an agent's state based on a new activity.
@@ -898,6 +858,45 @@ public final class AgentMonitorService: ObservableObject {
     private static let planModeRoleTitle = "Planning Lead"
     private static let supervisingRoleTitle = "Team Lead"
     private static let defaultSubagentRoleTitle = "Specialist"
+    private static let curatedAgentRoleTitles: [String: String] = [
+        "analyst": "Analyst",
+        "architect": "Architect",
+        "build-fixer": "Build Engineer",
+        "code-reviewer": "Reviewer",
+        "code-quality-advocate": "Reviewer",
+        "code-simplifier": "Staff Engineer",
+        "codebase-investigator": "Researcher",
+        "critic": "Reviewer",
+        "dependency-expert": "Integration Engineer",
+        "designer": "Designer",
+        "executor": "Engineer",
+        "explore": "Researcher",
+        "explorer": "Researcher",
+        "feature-dev:code-architect": "Architect",
+        "feature-dev:code-explorer": "Researcher",
+        "general-purpose": "Engineer",
+        "git-master": "Release Engineer",
+        "investigator": "Researcher",
+        "plan": "Planner",
+        "planner": "Planner",
+        "product-analyst": "Strategist",
+        "product-manager": "Strategist",
+        "product-thinker": "Strategist",
+        "quality-reviewer": "Reviewer",
+        "qa-tester": "QA Engineer",
+        "researcher": "Researcher",
+        "security-reviewer": "Security Engineer",
+        "sentry:issue-summarizer": "Incident Analyst",
+        "simplicity-champion": "Staff Engineer",
+        "team-executor": "Engineer",
+        "test-engineer": "QA Engineer",
+        "test-runner": "QA Engineer",
+        "ux-researcher": "Strategist",
+        "validator": "QA Engineer",
+        "verifier": "QA Engineer",
+        "worker": "Engineer",
+        "writer": "Technical Writer",
+    ]
 
     /// Generates a stable, person-like display name for an agent session.
     ///
@@ -1085,49 +1084,25 @@ public final class AgentMonitorService: ObservableObject {
     /// The mapping prioritizes well-known types, then falls back to cleaning up
     /// the raw string into a human-readable title.
     static func mapAgentTypeToTitle(_ agentType: String) -> String {
-        // Well-known types with curated display names
-        switch agentType.lowercased() {
-        case "explore", "explorer", "feature-dev:code-explorer",
-            "codebase-investigator", "investigator", "researcher":
-            return "Researcher"
-        case "plan", "planner":
-            return "Planner"
-        case "general-purpose", "worker", "executor", "team-executor":
-            return "Engineer"
-        case "code-reviewer", "code-quality-advocate", "quality-reviewer", "critic":
-            return "Reviewer"
-        case "test-runner", "test-engineer", "qa-tester", "validator", "verifier":
-            return "QA Engineer"
-        case "feature-dev:code-architect", "architect":
-            return "Architect"
-        case "simplicity-champion", "code-simplifier":
-            return "Staff Engineer"
-        case "product-thinker", "product-manager", "product-analyst", "ux-researcher":
-            return "Strategist"
-        case "sentry:issue-summarizer":
-            return "Incident Analyst"
-        case "security-reviewer":
-            return "Security Engineer"
-        case "dependency-expert":
-            return "Integration Engineer"
-        case "build-fixer":
-            return "Build Engineer"
-        case "git-master":
-            return "Release Engineer"
-        case "writer":
-            return "Technical Writer"
-        case "designer":
-            return "Designer"
-        case "analyst":
-            return "Analyst"
-        default:
-            // Fall back to cleaning up the raw type string:
-            // "edge-runtime-expert" → "Edge Runtime Expert"
-            // "feature-dev:code-reviewer" → "Code Reviewer" (take part after colon)
-            let base = agentType.contains(":") ? String(agentType.split(separator: ":").last!) : agentType
-            return base.split(separator: "-")
-                .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-                .joined(separator: " ")
+        let normalized = agentType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let curatedTitle = curatedAgentRoleTitles[normalized] {
+            return curatedTitle
         }
+
+        // Fall back to cleaning up the raw type string:
+        // "edge-runtime-expert" -> "Edge Runtime Expert"
+        // "feature-dev:code-reviewer" -> "Code Reviewer" (take part after colon)
+        let base = normalized
+            .split(separator: ":", omittingEmptySubsequences: false)
+            .last
+            .map(String.init) ?? normalized
+        let words = base.split { character in
+            character == "-" || character == "_" || character.isWhitespace
+        }
+        guard !words.isEmpty else { return defaultSubagentRoleTitle }
+
+        return words
+            .map { word in word.prefix(1).uppercased() + word.dropFirst() }
+            .joined(separator: " ")
     }
 }

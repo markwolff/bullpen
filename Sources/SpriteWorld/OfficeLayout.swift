@@ -80,11 +80,6 @@ public struct OfficeLayout: Sendable {
         }
     }
 
-    private struct GridCell: Hashable {
-        let x: Int
-        let y: Int
-    }
-
     public let preset: WorldPreset
     public let sceneSize: CGSize
     public let desks: [DeskPosition]
@@ -101,6 +96,8 @@ public struct OfficeLayout: Sendable {
 
     /// Pre-computed furniture obstacle rectangles.
     public let furnitureObstacles: [CGRect]
+
+    private let pathfinder: WorldPathfinder
 
     public init(
         preset: WorldPreset,
@@ -120,13 +117,22 @@ public struct OfficeLayout: Sendable {
         self.barriers = barriers
 
         // Pre-compute obstacle arrays once
-        self.deskObstacles = tables.map { table in
+        let deskObstacles = tables.map { table in
             CGRect(x: table.leftX, y: table.centerY - 12, width: table.width, height: 24)
         }
-        self.furnitureObstacles = barriers.compactMap { barrier in
+        let furnitureObstacles = barriers.compactMap { barrier in
             barrier.kind == .furniture ? barrier.rect : nil
         }
-        self.collisionObstacles = barriers.map(\.rect) + self.deskObstacles
+        let collisionObstacles = barriers.map(\.rect) + deskObstacles
+
+        self.deskObstacles = deskObstacles
+        self.furnitureObstacles = furnitureObstacles
+        self.collisionObstacles = collisionObstacles
+        self.pathfinder = WorldPathfinder(
+            sceneSize: sceneSize,
+            walkableArea: walkableArea,
+            collisionObstacles: collisionObstacles
+        )
     }
 
     /// Creates a multi-room office with three desk rooms and a recreation lounge.
@@ -695,187 +701,19 @@ public struct OfficeLayout: Sendable {
     // MARK: - Pathfinding
 
     public func findPath(from start: CGPoint, to end: CGPoint) -> [CGPoint] {
-        let resolvedStart = nearestWalkablePoint(to: start)
-        let resolvedEnd = nearestWalkablePoint(to: end)
-
-        guard hypot(resolvedEnd.x - resolvedStart.x, resolvedEnd.y - resolvedStart.y) > 8 else {
-            return [resolvedEnd]
-        }
-
-        if canTravelDirectly(from: resolvedStart, to: resolvedEnd) {
-            return [resolvedEnd]
-        }
-
-        let startCell = nearestWalkableCell(to: resolvedStart)
-        let endCell = nearestWalkableCell(to: resolvedEnd)
-        let cells = aStarPath(from: startCell, to: endCell)
-
-        guard !cells.isEmpty else { return [resolvedEnd] }
-        return condensedWaypoints(from: cells, start: resolvedStart, end: resolvedEnd)
-    }
-
-    private var cellSize: CGFloat { 32 }
-
-    private var gridWidth: Int {
-        Int(ceil(sceneSize.width / cellSize))
-    }
-
-    private var gridHeight: Int {
-        Int(ceil(sceneSize.height / cellSize))
+        pathfinder.findPath(from: start, to: end)
     }
 
     func nearestWalkablePoint(to point: CGPoint) -> CGPoint {
-        if isWalkablePoint(point) {
-            return point
-        }
-
-        return centerOfCell(nearestWalkableCell(to: point))
-    }
-
-    private func nearestWalkableCell(to point: CGPoint) -> GridCell {
-        var bestCell = GridCell(
-            x: max(0, min(gridWidth - 1, Int(point.x / cellSize))),
-            y: max(0, min(gridHeight - 1, Int(point.y / cellSize)))
-        )
-        var bestDistance = CGFloat.greatestFiniteMagnitude
-
-        for y in 0..<gridHeight {
-            for x in 0..<gridWidth {
-                let cell = GridCell(x: x, y: y)
-                guard isWalkable(cell) else { continue }
-                let center = centerOfCell(cell)
-                let distance = hypot(center.x - point.x, center.y - point.y)
-                if distance < bestDistance {
-                    bestDistance = distance
-                    bestCell = cell
-                }
-            }
-        }
-
-        return bestCell
-    }
-
-    private func isWalkable(_ cell: GridCell) -> Bool {
-        isWalkablePoint(centerOfCell(cell))
+        pathfinder.nearestWalkablePoint(to: point)
     }
 
     func isWalkablePoint(_ point: CGPoint, clearance: CGFloat = 12) -> Bool {
-        guard walkableArea.insetBy(dx: clearance, dy: clearance).contains(point) else { return false }
-        return !collisionObstacles.contains(where: { obstacle in
-            obstacle.insetBy(dx: -clearance, dy: -clearance).contains(point)
-        })
+        pathfinder.isWalkablePoint(point, clearance: clearance)
     }
 
     func canTravelDirectly(from start: CGPoint, to end: CGPoint, sampleStep: CGFloat = 12) -> Bool {
-        guard isWalkablePoint(start), isWalkablePoint(end) else { return false }
-
-        let distance = hypot(end.x - start.x, end.y - start.y)
-        let steps = max(Int(ceil(distance / sampleStep)), 1)
-
-        for step in 0...steps {
-            let progress = CGFloat(step) / CGFloat(steps)
-            let sample = CGPoint(
-                x: start.x + (end.x - start.x) * progress,
-                y: start.y + (end.y - start.y) * progress
-            )
-
-            if !isWalkablePoint(sample) {
-                return false
-            }
-        }
-
-        return true
-    }
-
-    private func centerOfCell(_ cell: GridCell) -> CGPoint {
-        CGPoint(
-            x: CGFloat(cell.x) * cellSize + cellSize / 2,
-            y: CGFloat(cell.y) * cellSize + cellSize / 2
-        )
-    }
-
-    private func neighbors(of cell: GridCell) -> [GridCell] {
-        let candidates = [
-            GridCell(x: cell.x + 1, y: cell.y),
-            GridCell(x: cell.x - 1, y: cell.y),
-            GridCell(x: cell.x, y: cell.y + 1),
-            GridCell(x: cell.x, y: cell.y - 1),
-        ]
-
-        return candidates.filter { candidate in
-            candidate.x >= 0 && candidate.x < gridWidth &&
-            candidate.y >= 0 && candidate.y < gridHeight &&
-            isWalkable(candidate)
-        }
-    }
-
-    private func aStarPath(from start: GridCell, to goal: GridCell) -> [GridCell] {
-        var openSet: Set<GridCell> = [start]
-        var cameFrom: [GridCell: GridCell] = [:]
-        var gScore: [GridCell: Int] = [start: 0]
-        var fScore: [GridCell: Int] = [start: heuristic(from: start, to: goal)]
-
-        while let current = openSet.min(by: {
-            (fScore[$0] ?? .max) < (fScore[$1] ?? .max)
-        }) {
-            if current == goal {
-                return reconstructPath(cameFrom: cameFrom, current: current)
-            }
-
-            openSet.remove(current)
-
-            for neighbor in neighbors(of: current) {
-                let tentative = (gScore[current] ?? .max) + 1
-                if tentative < (gScore[neighbor] ?? .max) {
-                    cameFrom[neighbor] = current
-                    gScore[neighbor] = tentative
-                    fScore[neighbor] = tentative + heuristic(from: neighbor, to: goal)
-                    openSet.insert(neighbor)
-                }
-            }
-        }
-
-        return [start, goal]
-    }
-
-    private func reconstructPath(cameFrom: [GridCell: GridCell], current: GridCell) -> [GridCell] {
-        var path = [current]
-        var cursor = current
-        while let previous = cameFrom[cursor] {
-            cursor = previous
-            path.append(previous)
-        }
-        return path.reversed()
-    }
-
-    private func heuristic(from start: GridCell, to end: GridCell) -> Int {
-        abs(start.x - end.x) + abs(start.y - end.y)
-    }
-
-    private func condensedWaypoints(from cells: [GridCell], start: CGPoint, end: CGPoint) -> [CGPoint] {
-        let checkpoints = PathMovement.deduplicated([start] + cells.map(centerOfCell) + [end])
-        return smoothedPath(checkpoints)
-    }
-
-    private func smoothedPath(_ checkpoints: [CGPoint]) -> [CGPoint] {
-        guard checkpoints.count > 1 else { return checkpoints }
-
-        var result: [CGPoint] = []
-        var anchorIndex = 0
-
-        while anchorIndex < checkpoints.count - 1 {
-            var furthestReachable = anchorIndex + 1
-
-            while furthestReachable + 1 < checkpoints.count,
-                  canTravelDirectly(from: checkpoints[anchorIndex], to: checkpoints[furthestReachable + 1]) {
-                furthestReachable += 1
-            }
-
-            result.append(checkpoints[furthestReachable])
-            anchorIndex = furthestReachable
-        }
-
-        return PathMovement.deduplicated(result)
+        pathfinder.canTravelDirectly(from: start, to: end, sampleStep: sampleStep)
     }
 
     private func curatedAnchors(from points: [CGPoint]) -> [CGPoint] {

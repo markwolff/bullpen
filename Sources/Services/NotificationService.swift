@@ -107,12 +107,11 @@ public class NotificationService {
         lastErrorNotificationTime[agent.id] = now
 
         await ensurePermission()
-        let errorSummary = String(agent.currentTaskDescription.prefix(100))
         let dir = agent.workspacePath.flatMap { URL(fileURLWithPath: $0).lastPathComponent } ?? "session"
         let message = NotificationMessage(
             identifier: "error-\(agent.id)",
             title: "Agent error",
-            body: "\(agent.name) in \(dir): \(errorSummary)",
+            body: "\(agent.name) needs attention in \(dir)",
             usesDefaultSound: true
         )
         try? await notificationPoster(message)

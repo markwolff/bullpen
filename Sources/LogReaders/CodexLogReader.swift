@@ -45,39 +45,13 @@ public struct CodexLogReader: AgentLogReader, Sendable {
         return sessions
     }
 
-    /// Reads raw file data from the given offset. Extracted for off-main-thread execution.
-    private func readFileData(from fileURL: URL, afterOffset: UInt64) throws -> Data {
-        guard FileManager.default.fileExists(atPath: fileURL.path),
-              let handle = FileHandle(forReadingAtPath: fileURL.path) else {
-            return Data()
-        }
-        defer { handle.closeFile() }
-        handle.seek(toFileOffset: afterOffset)
-        return handle.readDataToEndOfFile()
-    }
-
     public func readActivities(
         from logFileURL: URL,
         afterOffset: UInt64
     ) async throws -> (activities: [AgentActivity], newOffset: UInt64) {
-        // Move large reads off the main thread
-        let data: Data
-        let attrs = try? FileManager.default.attributesOfItem(atPath: logFileURL.path)
-        let fileSize = (attrs?[.size] as? UInt64) ?? 0
-        let readSize = fileSize > afterOffset ? fileSize - afterOffset : 0
-        if readSize > 50_000 {
-            data = try await Task.detached { [self] in
-                try self.readFileData(from: logFileURL, afterOffset: afterOffset)
-            }.value
-        } else {
-            data = try readFileData(from: logFileURL, afterOffset: afterOffset)
-        }
+        let data = try await readLogData(from: logFileURL, afterOffset: afterOffset)
 
         guard !data.isEmpty else {
-            return (activities: [], newOffset: afterOffset)
-        }
-
-        guard let text = String(data: data, encoding: .utf8) else {
             return (activities: [], newOffset: afterOffset)
         }
 
@@ -86,8 +60,8 @@ public struct CodexLogReader: AgentLogReader, Sendable {
 
         var activities: [AgentActivity] = []
 
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        for line in lines {
+        let consumable = consumableJSONLLines(from: data)
+        for line in consumable.lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
 
@@ -96,7 +70,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
             }
         }
 
-        let newOffset = afterOffset + UInt64(data.count)
+        let newOffset = afterOffset + consumable.consumedByteCount
         return (activities: activities, newOffset: newOffset)
     }
 
@@ -547,9 +521,9 @@ public struct CodexLogReader: AgentLogReader, Sendable {
 
     private func summarizeMCPTool(name: String, arguments: [String: Any]) -> String {
         let parts = name.split(separator: "__")
-        guard parts.count >= 3 else { return "Using \(name)" }
+        guard parts.count >= 3, let rawToolName = parts.last else { return "Using \(name)" }
 
-        let toolName = String(parts.last!)
+        let toolName = String(rawToolName)
         switch toolName {
         case "read_file":
             let path = arguments["relative_path"] as? String ?? "file"
@@ -606,21 +580,7 @@ public struct CodexLogReader: AgentLogReader, Sendable {
 
     // truncate(_:to:) is provided by the AgentLogReader extension
 
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     private func parseISO8601(_ string: String?) -> Date? {
-        guard let string else { return nil }
-        if let date = Self.isoFormatterWithFractional.date(from: string) { return date }
-        return Self.isoFormatterBasic.date(from: string)
+        parseISO8601Timestamp(string)
     }
 }

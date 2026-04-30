@@ -1,6 +1,10 @@
 import Foundation
 import Models
 
+public enum ScenarioSnapshotError: Error, Equatable {
+    case unsupportedSchemaVersion(String)
+}
+
 public struct ScenarioSnapshot: Codable, Sendable, Equatable {
     public static let schemaVersionValue = "scenario-snapshot-v1"
 
@@ -38,7 +42,11 @@ public struct ScenarioSnapshot: Codable, Sendable, Equatable {
     public static func load(from url: URL) throws -> ScenarioSnapshot {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(ScenarioSnapshot.self, from: Data(contentsOf: url))
+        let snapshot = try decoder.decode(ScenarioSnapshot.self, from: Data(contentsOf: url))
+        guard snapshot.schemaVersion == Self.schemaVersionValue else {
+            throw ScenarioSnapshotError.unsupportedSchemaVersion(snapshot.schemaVersion)
+        }
+        return snapshot
     }
 
     public func write(to url: URL) throws {

@@ -22,6 +22,54 @@ public protocol AgentLogReader: Sendable {
 // MARK: - Shared Helpers
 
 extension AgentLogReader {
+    /// Reads raw file data from the given byte offset, moving larger reads off
+    /// the caller's executor so UI-bound services do not stall on long logs.
+    func readLogData(
+        from fileURL: URL,
+        afterOffset: UInt64,
+        backgroundReadThreshold: UInt64 = 50_000
+    ) async throws -> Data {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let fileSize = (attrs?[.size] as? UInt64) ?? 0
+        let readSize = fileSize > afterOffset ? fileSize - afterOffset : 0
+
+        if readSize > backgroundReadThreshold {
+            return try await Task.detached {
+                try Self.readFileData(from: fileURL, afterOffset: afterOffset)
+            }.value
+        }
+
+        return try Self.readFileData(from: fileURL, afterOffset: afterOffset)
+    }
+
+    /// Parses common ISO-8601 timestamps emitted by agent runtimes.
+    func parseISO8601Timestamp(_ string: String?) -> Date? {
+        guard let string else { return nil }
+        return LogReaderISO8601.date(from: string)
+    }
+
+    /// Returns JSONL records that are safe to consume plus the number of bytes
+    /// represented by those records. A trailing non-JSON fragment is left
+    /// unread so a live writer can finish it on the next pass.
+    func consumableJSONLLines(from data: Data) -> (lines: [String], consumedByteCount: UInt64) {
+        guard !data.isEmpty,
+              let text = String(data: data, encoding: .utf8) else {
+            return ([], 0)
+        }
+
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var consumedByteCount = UInt64(data.count)
+
+        if data.last != UInt8(ascii: "\n"), let trailingLine = lines.last {
+            let trimmed = trailingLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if Self.looksLikeJSONFragment(trimmed), !Self.isCompleteJSONLine(trimmed) {
+                consumedByteCount -= UInt64(trailingLine.utf8.count)
+                lines.removeLast()
+            }
+        }
+
+        return (lines, consumedByteCount)
+    }
 
     /// Truncates a string to `maxLength` characters, appending "…" if trimmed.
     func truncate(_ string: String, to maxLength: Int) -> String {
@@ -37,5 +85,43 @@ extension AgentLogReader {
             return "User message"
         }
         return truncate(text, to: 60)
+    }
+
+    private static func readFileData(from fileURL: URL, afterOffset: UInt64) throws -> Data {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let handle = FileHandle(forReadingAtPath: fileURL.path) else {
+            return Data()
+        }
+
+        defer { try? handle.close() }
+        try handle.seek(toOffset: afterOffset)
+        return try handle.readToEnd() ?? Data()
+    }
+
+    private static func isCompleteJSONLine(_ line: String) -> Bool {
+        guard let data = line.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) != nil
+    }
+
+    private static func looksLikeJSONFragment(_ line: String) -> Bool {
+        line.first == "{" || line.first == "["
+    }
+}
+
+private enum LogReaderISO8601 {
+    nonisolated(unsafe) static let withFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) static let basic: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static func date(from string: String) -> Date? {
+        withFractionalSeconds.date(from: string) ?? basic.date(from: string)
     }
 }

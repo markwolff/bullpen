@@ -29,6 +29,11 @@ public class DeskClutterManager {
 
     public init() {}
 
+    public func reset() {
+        deskWorkTimers.removeAll()
+        clutterLevels.removeAll()
+    }
+
     /// Call each frame from OfficeScene.update()
     public func update(deltaTime: TimeInterval, agents: [AgentInfo], deskAssignments: [Int: String], scene: SKScene) {
         for (deskID, agentID) in deskAssignments {
