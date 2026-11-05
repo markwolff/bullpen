@@ -36,4 +36,14 @@ jobs:
         run: swift build --build-tests
 
       - name: Test
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+
+      - name: Summarize test run
+        if: always()
+        run: |
+          summary="$(grep -E '^.?.? ?Test run with .* (passed|failed)' "$RUNNER_TEMP/test-output.txt" | tail -1)"
+          summary="${summary:-swift test produced no run summary}"
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=swift test::${summary}"
