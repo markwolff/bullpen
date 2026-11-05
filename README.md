@@ -61,6 +61,6 @@ This script uses the latest packaged zip/checksum and uploads them as:
 - `Bullpen-macos.sha256`
 
 There is also a GitHub Actions workflow at
-[release-macos.yml](/Users/mark.wolff/projects/bullpen/.github/workflows/release-macos.yml)
+[release-macos.yml](.github/workflows/release-macos.yml)
 that signs, notarizes, packages, and uploads assets on tag pushes once the
 required Apple signing secrets are configured.
