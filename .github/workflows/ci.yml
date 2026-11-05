@@ -43,5 +43,6 @@ jobs:
         if: always()
         run: |
           summary="$(grep -E 'Test run with [0-9]+ test' "$RUNNER_TEMP/swift-test.log" | tail -1 || true)"
-          summary="${summary:-swift test produced no run summary}"
+          summary="$(printf '%s' "${summary:-swift test produced no run summary}" | sed 's/^[^A-Za-z]*//')"
           echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=swift test::${summary}"
